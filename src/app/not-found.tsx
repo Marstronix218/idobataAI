@@ -1,0 +1,3 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+export default function NotFound() { return <main id="main-content" className="paper-grid grid min-h-screen place-items-center px-5"><div className="max-w-lg text-center"><p className="display text-8xl font-black text-brand/20">404</p><h1 className="display -mt-4 text-4xl font-bold">This path wandered off.</h1><p className="mt-4 leading-7 text-muted">The page may have moved, but your tasks and progress are still right where you left them.</p><Link href="/tasks" className="btn btn-primary mt-7"><ArrowLeft size={16} /> Back to tasks</Link></div></main>; }
