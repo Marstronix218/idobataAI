@@ -12,12 +12,14 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 
 - Email/password authentication and onboarding with username, goal, interests, and task-privacy default
 - Private task management, categories, due dates, recurring chores/routines, streak feedback, and focused time filters
-- Optional completion-post images stored privately and delivered through short-lived, visibility-scoped links
-- Independent public task progress and explicit completion-post composer
-- Cursor-ready Community and My Posts feeds with likes and threaded replies
-- Shared, database-backed AI companion directory with visible AI labeling and mute controls
-- Optional likes and replies from clearly labeled AI followers
-- Optional OpenAI-compatible reply enhancement behind a server-only provider abstraction
+- Explicit completion-post composer with per-post audience selection and up to four optional images
+- Private completion-post media delivered through short-lived, visibility-scoped links
+- Independent public task progress that never publishes a social post on its own
+- Cursor-paginated feeds, post permalinks, likes, threaded replies, and human social profiles
+- Editable profile identity, privacy, interests, bio, and built-in or uploaded avatars
+- Shared, database-backed AI companion directory with dedicated profiles, visible AI labeling, and mute controls
+- Private one-to-one chat with people or AI companions, protected by RLS, blocking, muting, and rate limits
+- Optional companion posts, likes, replies, and OpenAI-compatible response enhancement behind server-only boundaries
 - Durable PostgreSQL jobs with atomic claims, expiring leases, retry ceilings, and idempotency
 - Scheduled companion activity for Vercel Cron with curated provider-free fallback content
 - Notifications, reporting, blocking, companion muting, and content-status foundations
@@ -29,7 +31,7 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 
 The application uses Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, Supabase Auth, and Supabase PostgreSQL.
 
-The security boundary is PostgreSQL, not the browser. User requests are authenticated with the Supabase bearer token; RLS remains active for ordinary operations; the service role is confined to server-only AI worker, cron, and deletion paths. Database constraints and functions own privacy projection, publishing idempotency, engagement guarantees, reaction uniqueness, scheduled source keys, and job leases.
+The security boundary is PostgreSQL, not the browser. User requests are authenticated with the Supabase bearer token, and RLS remains active for ordinary operations. The service role is restricted to narrow server-only media, AI, cron, and deletion paths. Database constraints and functions own privacy projection, chat participation, publishing idempotency, reaction uniqueness, scheduled source keys, and job leases.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design and [DESIGN.md](./DESIGN.md) for the product/interaction contract.
 
@@ -39,7 +41,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design and [DESIGN.md](.
 src/app/                 pages, layouts, and route handlers
 src/components/          accessible reusable product UI
 src/data/                realistic local preview data
-src/lib/domain/          pure privacy, idempotency, fallback, and lease logic
+src/lib/domain/          pure privacy, media, idempotency, fallback, and lease logic
 src/lib/supabase/        browser, token-scoped, and server-only clients
 src/lib/server/          authenticated services and request validation
 src/lib/ai/              provider abstraction, safety, scheduling, and worker
@@ -54,10 +56,9 @@ tests/                   Vitest domain and component coverage
 
 Requirements:
 
-- Node.js 20 or newer
+- Node.js 20.9 or newer (CI uses Node.js 22)
 - npm
-- Supabase CLI
-- Docker Desktop or another Docker-compatible runtime for the local Supabase stack
+- Supabase CLI and Docker Desktop (or another Docker-compatible runtime) for persistent local development
 
 Install dependencies and create the local environment file:
 
@@ -66,29 +67,30 @@ npm install
 cp .env.example .env.local
 ```
 
-Start and reset Supabase, then copy the local API URL and keys printed by the CLI into `.env.local`:
-
-```bash
-supabase start
-supabase db reset --local
-```
-
-Start the web application:
+For a UI-only preview with demo data, leave `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` and start the app:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000`. The local demo is enabled only when `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` outside production. Vercel production fails closed when Supabase is missing; never set the demo flag there.
+For the full persistent stack, start and reset Supabase, copy the local API URL and keys printed by the CLI into `.env.local`, then remove `NEXT_PUBLIC_ENABLE_DEMO_MODE` or set it to `false`:
+
+```bash
+supabase start
+supabase db reset --local
+npm run dev
+```
+
+Open `http://localhost:3000`. Demo mode is available only outside production and does not persist mutations. Vercel production fails closed when Supabase is missing; never set the demo flag there.
 
 ## Environment
 
 `.env.example` is the canonical key list. Important boundaries:
 
 - only `NEXT_PUBLIC_*` values are sent to the browser;
-- `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, and provider keys are server-only;
+- `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `WORKER_SECRET`, and provider keys are server-only;
 - provider configuration is optional—the durable companion fallbacks remain functional without it;
-- set `APP_URL` to the canonical deployment URL for auth redirects and metadata.
+- set `APP_URL` to the canonical deployment URL for auth redirects and metadata;
 - `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` is for local UI preview only; leave it unset in Vercel Preview and Production so missing Supabase configuration fails closed.
 
 Never expose the service-role or AI-provider key through a public environment variable.
@@ -112,7 +114,7 @@ supabase db lint --local
 supabase test db
 ```
 
-The database suite is intended to prove privacy projection, RLS visibility, completion-post and recurrence idempotency, like uniqueness, lease recovery, provider-failure fallback, and account-deletion behavior. RLS tests must execute as authenticated users rather than only through the service role.
+The database suite is intended to prove privacy projection, RLS visibility, completion-post and recurrence idempotency, chat isolation, like uniqueness, lease recovery, provider-failure fallback, and account-deletion behavior. RLS tests must execute as authenticated users rather than only through the service role.
 
 CI runs the application gates and a separate Docker-backed Supabase job. The latter applies the migration from a clean database, lints SQL, and executes both ACL/schema checks and authenticated behavioral RLS/idempotency/lease tests.
 
@@ -123,7 +125,7 @@ CI runs the application gates and a separate Docker-backed Supabase job. The lat
 3. Configure the production Site URL and allowed redirect URLs in Supabase Auth.
 4. Import the repository into Vercel and add every value from `.env.example` for the appropriate environments.
    Do not add `NEXT_PUBLIC_ENABLE_DEMO_MODE` to Vercel.
-5. Generate a long random `CRON_SECRET`. Vercel Cron uses it for scheduled companion enqueue/drain endpoints. The checked-in schedule is once daily per route so it is valid on Vercel Hobby; increase the worker frequency when using a plan that supports it.
+5. Generate distinct long random values for `CRON_SECRET` and `WORKER_SECRET`. Vercel uses `CRON_SECRET` for scheduled requests; `WORKER_SECRET` also authorizes manual worker calls. The checked-in schedule is once daily per route so it is valid on Vercel Hobby; increase the worker frequency when using a plan that supports it.
 6. Leave provider variables empty to launch with curated companion fallbacks, or configure an OpenAI-compatible provider for optional reply enhancement.
 7. Run a production deployment and confirm signup, onboarding, task privacy, explicit sharing, AI labels, and account-deletion policy in the deployed environment.
 
@@ -132,8 +134,9 @@ Before enabling paid subscriptions, implement the billing cancellation adapter a
 ## Operational guarantees
 
 - AI content is always represented with an AI actor and visible labels.
-- Publishing a human post commits the visible fallback engagements before any provider request.
-- Provider failure never removes fallback engagement.
+- Publishing a human post is independent from optional companion engagement and never waits on an AI provider.
+- When companion engagement has been scheduled, provider failure leaves its persisted fallback content available.
+- Human and companion chat threads are visible only to their human participants.
 - At-least-once cron/worker delivery is safe because visible writes use stable database keys.
 - A public-to-private task change removes the public projection synchronously.
 - Feed pagination uses the `(created_at, id)` cursor pair to avoid gaps on timestamp ties.
