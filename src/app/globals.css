@@ -193,6 +193,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background: var(--surface-raised); color: var(--ink); padding: .7rem .85rem; outline: none;
   transition: box-shadow 160ms ease, border-color 160ms ease;
 }
+.field-prefixed { padding-left: 2.25rem; }
 .field::placeholder { color: var(--ink-subtle); }
 .field:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent); }
 
