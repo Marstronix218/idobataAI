@@ -5,13 +5,13 @@
 - Status: Active
 - Last refreshed: 2026-08-12
 - Primary product surfaces: marketing, authentication, onboarding, task dashboard, social feed, completion composer, activity, companion directory, profile, and settings.
-- Evidence reviewed: the complete product brief in the supplied `pasted-text.txt`; the initial empty repository; Next.js App Router and Tailwind scaffold; WCAG 2.1 AA requirements from the brief. No existing brand assets, screenshots, or visual-regression baselines existed.
+- Evidence reviewed: the complete product brief in the supplied `pasted-text.txt`; the initial empty repository; Next.js App Router and Tailwind scaffold; WCAG 2.1 AA requirements from the brief; and the approved TaskTomo dashboard theme reference captured at `.omx/artifacts/visual-ralph/tasktomo-theme/reference.png` from `https://tasktomo.vercel.app/dashboard` on 2026-08-12.
 
 ## Brand
 
-- Personality: warm, grounded, candid, quietly energetic, and communal—the neighborhood noticeboard after a good day.
+- Personality: warm, grounded, candid, quietly energetic, and communal—with a calm nocturnal focus inside the signed-in product.
 - Trust signals: tasks start private; publishing is always explicit; every AI identity is labeled in text; no follower counts or popularity rankings.
-- Avoid: neon gamification, guilt, streak-loss pressure, childish confetti, purple gradients, generic corporate dashboards, unlabeled AI activity, and color-only status indicators.
+- Avoid: neon gamification, guilt, streak-loss pressure, childish confetti, loud or ubiquitous gradients, generic corporate dashboards, unlabeled AI activity, and color-only status indicators.
 
 ## Product goals
 
@@ -42,10 +42,10 @@
 
 ## Visual language
 
-- Color: warm oat canvas `#f7f2e9`, cream/white surfaces, ink `#26221d`, clay brand red `#c94f2d`, community teal `#156b67`, sunflower accent `#e7ad27`, success green, danger red, and a high-visibility blue focus ring.
+- Color: public marketing and auth surfaces retain the warm oat canvas `#f7f2e9`, cream/white surfaces, ink `#26221d`, clay brand red `#c94f2d`, and community teal `#156b67`. Signed-in product surfaces use a TaskTomo-inspired but distinct nocturnal palette: canvas `#070b16`, sidebar `#0e1625`, card `#141d2e`, raised control `#1b2639`, strong text `#f6f8fc`, muted text `#aab4c8`, violet brand `#7c3aed`, restrained berry accent `#be185d`, community blue `#55b6f6`, warm amber `#f4a261`, success green `#4ade80`, danger rose `#fb7185`, and blue focus `#60a5fa`. Violet-to-berry gradients are reserved for the strongest primary action; status meaning never depends on hue alone.
 - Typography: expressive but readable grotesk headings and friendly UI body text, served through `next/font`; use robust system fallbacks.
 - Spacing/layout rhythm: 4px base; common gaps 8, 12, 16, 20, 24, 32, 48, and 64px. Feed reading width is about 680px; focused forms about 520px.
-- Shape/radius/elevation: 10px inputs, 14px task rows, 18px cards, 24px sheets/dialogs, pill badges, and soft low-contrast card shadows.
+- Shape/radius/elevation: 10px inputs, 14px task rows, 18px cards, 24px sheets/dialogs, pill badges, and low-contrast cool borders with minimal shadow in signed-in dark surfaces.
 - Motion: 140–180ms micro-interactions, 220–260ms overlays, and a completion seal no longer than 420ms. No endless animation.
 - Imagery/iconography: simple line icons with accessible labels. The distinctive completion/gathering-ring motif repeats sparingly in goal meters, avatars, and success states. No model-authored decorative SVG illustrations.
 
@@ -60,7 +60,7 @@
 
 - Target standard: WCAG 2.1 AA.
 - Keyboard/focus behavior: 44px minimum targets, visible 3px focus rings with surface offset, skip link, semantic landmarks, complete keyboard navigation, and no hover-only information.
-- Contrast/readability: dark ink on warm light surfaces; filled high-contrast AI badge; category/status text accompanies color.
+- Contrast/readability: dark ink on warm light surfaces and near-white text on dark signed-in surfaces; muted signed-in text is at least `#8792a8` on `#141d2e`; filled high-contrast AI badge; category/status text accompanies color.
 - Screen-reader semantics: icon buttons have accessible names; reactions use `aria-pressed`; mutation and XP feedback use polite live regions; privacy and AI status are readable text; meters expose textual equivalents.
 - Reduced motion and sensory considerations: `prefers-reduced-motion` removes transforms, confetti/radial ticks, smooth scrolling, and stagger. State, text, and icon changes still communicate results.
 
@@ -88,7 +88,7 @@
 ## Implementation constraints
 
 - Framework/styling system: Next.js App Router, React, TypeScript, and Tailwind CSS v4.
-- Design-token constraints: use semantic CSS variables; do not add a parallel token layer.
+- Design-token constraints: use semantic CSS variables; signed-in theme overrides live under the `.app-theme` scope; do not add a parallel token layer.
 - Performance constraints: Server Components by default and narrow client boundaries for forms, task controls, reactions, filters, and dialogs.
 - Compatibility constraints: mobile-first, keyboard and screen-reader friendly, reduced-motion safe, and Vercel-compatible.
 - Test/screenshot expectations: component accessibility assertions plus mobile feed rendering; production build must not need runtime font, database, or AI-provider availability.
