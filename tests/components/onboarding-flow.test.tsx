@@ -25,4 +25,29 @@ describe("OnboardingFlow", () => {
 
     expect(username).toHaveValue("someone");
   });
+
+  it("replaces avatar URL entry with optional preset choices", () => {
+    render(<OnboardingFlow />);
+
+    expect(screen.queryByLabelText(/Avatar URL/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add avatar URL/i)).not.toBeInTheDocument();
+
+    const initials = screen.getByRole("radio", { name: "Use initials" });
+    const acorn = screen.getByRole("radio", { name: "Acorn avatar" });
+    expect(initials).toBeChecked();
+    expect(acorn).not.toBeChecked();
+
+    fireEvent.click(acorn);
+
+    expect(acorn).toBeChecked();
+    expect(initials).not.toBeChecked();
+  });
+
+  it("updates the initials fallback as the username changes", () => {
+    render(<OnboardingFlow />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
+
+    expect(screen.getByText("NO")).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Bell, Bot, CheckSquare2, Flame, LayoutList, Plus, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/logo";
+import { Avatar } from "@/components/ui/avatar";
 import { apiRequest, isPreviewMode } from "@/lib/client/api";
 import type { UserProfile } from "@/types";
 
@@ -44,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <Link href="/tasks" className="btn btn-primary mt-4"><Plus size={17} /> Add task</Link>
         <div className="mt-auto flex items-center gap-3 border-t border-line pt-5">
-          <span className="avatar avatar-human h-10 w-10 text-xs">{initials}</span>
+          <Avatar initials={initials} avatarUrl={isPreviewMode ? null : profile?.avatar_url} name={username ?? "Your profile"} />
           <div><p className="text-sm font-bold">{username ? `@${username}` : "Your profile"}</p><p className="text-xs text-muted">{isPreviewMode ? 6 : profile?.current_streak ?? 0}-day streak</p></div>
         </div>
       </aside>

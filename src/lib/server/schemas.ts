@@ -1,7 +1,13 @@
 import { z } from "zod";
 
+import { AVATAR_PATHS, type AvatarPath } from "@/lib/domain/avatar-options";
+
 const clean = (max: number) => z.string().trim().min(1).max(max);
 const optionalClean = (max: number) => z.string().trim().max(max).nullable().optional();
+const avatarUrl = z.string().max(1000).refine(
+  (value) => AVATAR_PATHS.includes(value as AvatarPath) || z.url().safeParse(value).success,
+  "Choose an available avatar or provide a valid absolute URL.",
+);
 
 export const taskCreateSchema = z.object({
   title: clean(160),
@@ -46,7 +52,7 @@ export const progressPostSchema = z.object({
 
 export const profileSchema = z.object({
   username: z.string().trim().regex(/^[A-Za-z0-9_]{3,24}$/).optional(),
-  avatarUrl: z.url().max(1000).nullable().optional(),
+  avatarUrl: avatarUrl.nullable().optional(),
   dailyGoal: z.number().int().min(1).max(50).optional(),
   interests: z.array(clean(48)).max(20).optional(),
   defaultTaskVisibility: z.enum(["private", "public"]).optional(),
