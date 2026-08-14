@@ -1,7 +1,7 @@
-import { Bot, Globe2, LockKeyhole, Sparkles } from "lucide-react";
+import { Globe2, LockKeyhole, Sparkles } from "lucide-react";
 
 export function AIBadge({ generated = false }: { generated?: boolean }) {
-  return <span className="badge badge-ai">{generated ? <Sparkles size={12} /> : <Bot size={12} />}{generated ? "AI-generated" : "AI companion"}</span>;
+  return <span className="badge badge-ai">{generated && <Sparkles size={12} />}{generated ? "AI-generated" : "AI"}</span>;
 }
 
 export function PrivacyBadge({ isPublic }: { isPublic: boolean }) {

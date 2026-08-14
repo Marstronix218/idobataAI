@@ -40,8 +40,9 @@ do $$ begin
 end $$;
 
 update public.tasks set status='completed' where id='aaaaaaaa-0000-4000-8000-000000000003';
-select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', 'A completed test.', 'public', null);
-select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', 'A completed test.', 'public', null);
+select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', 'A completed test.', 'private', null);
+select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', 'A completed test.', 'private', null);
+select public.publish_progress_post('Some visible progress.', 'public', 'optional-ai-engagement-test', null, null, null);
 
 update public.tasks set status='completed' where id='aaaaaaaa-0000-4000-8000-000000000004';
 select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000004', 'Recurring completion.', 'public', current_date::text);
@@ -51,17 +52,25 @@ update public.tasks set status='completed' where id='aaaaaaaa-0000-4000-8000-000
 
 reset role;
 do $$
-declare published_id uuid;
+declare published_id uuid; progress_id uuid;
 begin
   select id into published_id from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and task_id='aaaaaaaa-0000-4000-8000-000000000003';
+  select id into progress_id from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and idempotency_key='progress:optional-ai-engagement-test';
   if published_id is null then raise exception 'completion post was not created'; end if;
+  if not exists(select 1 from public.social_posts where id=published_id and visibility='private') then raise exception 'completion publisher did not enforce the profile privacy preference'; end if;
+  if progress_id is null then raise exception 'progress post was not created'; end if;
   if (select count(*) from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and task_id='aaaaaaaa-0000-4000-8000-000000000003') <> 1 then raise exception 'completion publishing was not idempotent'; end if;
-  if (select count(*) from public.social_ai_engagements where post_id=published_id) <> 3 then raise exception 'three durable AI engagements were not created'; end if;
-  if (select count(distinct companion_id) from public.social_ai_engagements where post_id=published_id) <> 3 then raise exception 'AI engagements did not use distinct companions'; end if;
-  if (select count(*) from public.social_replies where post_id=published_id and companion_id is not null) <> 2 then raise exception 'two fallback replies were not created'; end if;
-  if (select count(*) from public.social_reactions where post_id=published_id and companion_id is not null) <> 1 then raise exception 'one fallback reaction was not created'; end if;
+  if exists(select 1 from public.social_ai_engagements where post_id=published_id) then raise exception 'completion publishing automatically created AI engagement'; end if;
+  if exists(select 1 from public.social_replies where post_id=published_id and companion_id is not null) then raise exception 'completion publishing automatically created an AI reply'; end if;
+  if exists(select 1 from public.social_reactions where post_id=published_id and companion_id is not null) then raise exception 'completion publishing automatically created an AI reaction'; end if;
+  if exists(select 1 from public.ai_jobs where payload->>'postId'=published_id::text) then raise exception 'completion publishing automatically queued AI work'; end if;
+  if exists(select 1 from public.social_ai_engagements where post_id=progress_id) then raise exception 'progress publishing automatically created AI engagement'; end if;
+  if exists(select 1 from public.social_replies where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reply'; end if;
+  if exists(select 1 from public.social_reactions where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reaction'; end if;
+  if exists(select 1 from public.ai_jobs where payload->>'postId'=progress_id::text) then raise exception 'progress publishing automatically queued AI work'; end if;
   if (select count(*) from public.task_completion_awards where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion awarded twice in one occurrence'; end if;
   if (select count(*) from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion published twice in one occurrence'; end if;
+  if not exists(select 1 from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004' and visibility='public') then raise exception 'completion publisher ignored the explicitly confirmed audience'; end if;
   if not exists(select 1 from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000004' and recurrence_instance_id=current_date::text) then raise exception 'recurring task did not use its canonical occurrence key'; end if;
 end $$;
 
@@ -86,12 +95,12 @@ do $$ begin
   end;
 end $$;
 
-select public.set_human_reaction('aaaaaaaa-1000-4000-8000-000000000002','cheer');
-select public.set_human_reaction('aaaaaaaa-1000-4000-8000-000000000002','respect');
+select public.set_human_reaction('aaaaaaaa-1000-4000-8000-000000000002','like');
+select public.set_human_reaction('aaaaaaaa-1000-4000-8000-000000000002','like');
 reset role;
 do $$ begin
   if (select count(*) from public.social_reactions where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') <> 1 then raise exception 'reaction uniqueness/upsert failed'; end if;
-  if not exists(select 1 from public.social_reactions where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and reaction='respect') then raise exception 'reaction change failed'; end if;
+  if not exists(select 1 from public.social_reactions where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and reaction='like') then raise exception 'like upsert failed'; end if;
 end $$;
 
 insert into public.account_deletion_requests(user_id,status)

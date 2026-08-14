@@ -5,10 +5,11 @@ import { describe, expect, it } from "vitest";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
 
 describe("AIBadge", () => {
-  it("visibly identifies an AI companion", () => {
+  it("renders a compact AI identity tag", () => {
     render(<AIBadge />);
 
-    expect(screen.getByText("AI companion")).toBeVisible();
+    expect(screen.getByText("AI")).toBeVisible();
+    expect(screen.queryByText("AI companion")).not.toBeInTheDocument();
   });
 
   it("visibly identifies generated AI content", () => {

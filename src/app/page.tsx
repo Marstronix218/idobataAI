@@ -21,7 +21,7 @@ export default function Home() {
             Small wins feel <span className="relative whitespace-nowrap text-brand">better<span className="absolute -bottom-1 left-0 h-2 w-full -rotate-1 rounded-full bg-sun/70" aria-hidden="true" /></span> together.
           </h1>
           <p className="mt-7 max-w-xl text-lg leading-8 text-muted">
-            Keep your tasks private. Share the wins you choose. Get thoughtful encouragement from people and clearly labeled AI companions.
+            Keep your tasks private. Share the wins you choose. Connect with people and clearly labeled AI followers.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/sign-up" className="btn btn-primary px-6 py-3">Make today’s first win <ArrowRight size={17} /></Link>
@@ -45,12 +45,12 @@ export default function Home() {
               <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-raised p-3.5">
                 <span className="grid h-7 w-7 place-items-center rounded-full bg-success text-canvas"><Check size={15} strokeWidth={3} /></span>
                 <div className="min-w-0 flex-1"><p className="font-bold line-through decoration-ink/25">Book the dentist</p><span className="badge badge-private mt-1"><LockKeyhole size={11} /> Private</span></div>
-                <span className="badge badge-xp">+10 XP</span>
+                <span className="badge badge-streak">3-day streak</span>
               </div>
               <div className="flex items-center gap-3 rounded-2xl border-2 border-brand bg-brand-soft/40 p-3.5 shadow-[0_8px_24px_rgb(201_79_45/10%)]">
                 <span className="grid h-7 w-7 place-items-center rounded-full border-2 border-brand bg-surface-raised"><CheckCircle2 size={17} className="text-brand" /></span>
                 <div className="min-w-0 flex-1"><p className="font-bold">Draft the kickoff outline</p><span className="badge badge-public mt-1"><Globe2 size={11} /> Public progress</span></div>
-                <span className="badge badge-xp">+25 XP</span>
+                <span className="badge badge-streak">Today</span>
               </div>
               <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-raised p-3.5 opacity-75">
                 <span className="h-7 w-7 rounded-full border-2 border-line-strong" /><div><p className="font-bold">Walk for 20 minutes</p><p className="text-xs text-muted">Wellbeing · 6:00 PM</p></div>
@@ -71,8 +71,8 @@ export default function Home() {
           <div className="mt-12 grid gap-4 md:grid-cols-3">
             {[
               ["01", "Make a small promise", "Add the next task that matters. New tasks start private, every time."],
-              ["02", "Finish, then celebrate", "A warm completion seal marks the win and adds a little XP—without pressure."],
-              ["03", "Share only if you want", "Preview your post, choose its audience, and get specific encouragement."],
+              ["02", "Finish, then celebrate", "A warm completion seal marks the win and keeps your streak easy to understand."],
+              ["03", "Share only if you want", "Add an optional note or photos, preview the post, and confirm its audience."],
             ].map(([n, title, copy]) => <article key={n} className="soft-card relative overflow-hidden p-6"><span className="display text-5xl font-black text-brand/15">{n}</span><h3 className="display mt-5 text-2xl font-bold">{title}</h3><p className="mt-3 leading-7 text-muted">{copy}</p></article>)}
           </div>
         </div>
@@ -87,10 +87,10 @@ export default function Home() {
         </div>
         <div className="px-1 sm:px-8">
           <p className="eyebrow">Clear from the first glance</p>
-          <h2 className="display mt-3 text-4xl font-bold">AI companions never pretend to be people.</h2>
-          <p className="mt-4 leading-7 text-muted">Every AI post, reaction, and reply carries a persistent label. Mute any companion at any time. The community stays active even when the AI provider is unavailable.</p>
+          <h2 className="display mt-3 text-4xl font-bold">AI followers never pretend to be people.</h2>
+          <p className="mt-4 leading-7 text-muted">Every AI identity carries an AI tag, and generated posts and replies include an additional disclosure. AI followers may post, like, or reply based on your settings, and you can mute any of them.</p>
           <ul className="mt-7 space-y-4">
-            {["Visible AI companion badges", "No guilt, pressure, or manipulative praise", "Thoughtful fallback encouragement", "Mute controls you can reverse anytime"].map((item) => <li key={item} className="flex items-center gap-3 font-bold"><span className="grid h-7 w-7 place-items-center rounded-full bg-community-soft text-community"><Check size={15} strokeWidth={3} /></span>{item}</li>)}
+            {["Compact AI identity tags", "Clear AI-generated disclosures", "No guilt, pressure, or manipulative praise", "Mute controls you can reverse anytime"].map((item) => <li key={item} className="flex items-center gap-3 font-bold"><span className="grid h-7 w-7 place-items-center rounded-full bg-community-soft text-community"><Check size={15} strokeWidth={3} /></span>{item}</li>)}
           </ul>
         </div>
       </section>

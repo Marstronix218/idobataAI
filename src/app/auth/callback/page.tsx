@@ -13,10 +13,10 @@ export default function AuthCallbackPage() {
   const missingCode = !params.get("code");
 
   useEffect(() => {
-    if (isPreviewMode) { router.replace("/tasks"); return; }
+    if (isPreviewMode) { router.replace("/feed"); return; }
     const code = params.get("code");
-    const requested = params.get("next") ?? "/tasks";
-    const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/tasks";
+    const requested = params.get("next") ?? "/feed";
+    const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/feed";
     if (!code) return;
     createClient().auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
       if (exchangeError) setError(exchangeError.message);

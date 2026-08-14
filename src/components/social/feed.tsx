@@ -1,33 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, ChevronDown, HeartHandshake, MessageCircle, RefreshCw, Send, Sparkles, Trash2 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Bot, CheckSquare2, ChevronDown, Heart, MessageCircle, RefreshCw, Send, Sparkles, Trash2 } from "lucide-react";
+import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
 import { posts as demoPosts } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
+import { PostMediaGrid } from "@/components/social/post-media-grid";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import { createClient } from "@/lib/supabase/client";
-import type { FeedPost, ReactionKind, SocialReaction, SocialReply } from "@/types";
-
-const reactionInfo: Record<ReactionKind, { icon: string; label: string }> = {
-  cheer: { icon: "👏", label: "Cheer" }, respect: { icon: "🫡", label: "Respect" },
-  relatable: { icon: "🤝", label: "Relatable" }, inspired: { icon: "💡", label: "Inspired" },
-};
+import type { FeedPost, ReactionKind, SocialReaction, SocialReply, UserProfile } from "@/types";
 
 type Reply = FeedPost["social_replies"][number];
 type FeedPage = { items: FeedPost[]; nextCursor: string | null };
+type FeedTab = "for-you" | "following";
 type PublicProgressItem = { task_id: string; username: string; task_title: string; category: string | null; status: "pending" | "completed"; xp_value: number | null; updated_at: string };
+const previewInterests = ["Fitness", "Design", "Space", "Books"];
 
-const previewFeed: FeedPost[] = demoPosts.map((post, index) => ({
-  id: post.id, author_id: post.ai ? null : index === 0 ? "preview-user" : `preview-user-${index}`, companion_id: post.ai ? "preview-ai" : null, task_id: null,
-  kind: post.ai ? "ai_progress" : post.type.includes("Completed") ? "human_completion" : "human_progress",
+function makeFeedParams(tab: FeedTab, category: string, cursor?: string | null) {
+  return new URLSearchParams({ scope: tab, limit: "10", ...(category ? { category } : {}), ...(cursor ? { cursor } : {}) });
+}
+
+const previewFeed: FeedPost[] = demoPosts.map((post) => ({
+  id: post.id, author_id: null, companion_id: `preview-ai-${post.authorSlug}`, task_id: null,
+  kind: "ai_completion",
   visibility: "public", content_status: "active", content: post.message, task_title: post.task, category: post.category,
-  xp_earned: post.xp ?? null, streak: post.streak ?? null, completed_at: null, idempotency_key: null, source_key: null,
-  is_ai_generated: post.ai, created_at: new Date(Date.now() - index * 1_800_000).toISOString(), updated_at: new Date().toISOString(),
-  user_profiles: post.ai ? null : { username: post.author, avatar_url: null },
-  social_companions: post.ai ? { name: post.author, slug: post.author.toLowerCase(), avatar_url: null } : null,
-  social_reactions: Object.entries(post.reactions).flatMap(([reaction, count]) => Array.from({ length: count }, (_, i) => ({ id: `${post.id}-${reaction}-${i}`, reaction: reaction.toLowerCase() as ReactionKind, actor_id: null, companion_id: "preview" }))),
+  xp_earned: post.xp, streak: null, completed_at: new Date(Date.now() - post.minutesAgo * 60_000).toISOString(), idempotency_key: null, source_key: `preview-completion:${post.authorSlug}`, image_paths: [], image_urls: [],
+  is_ai_generated: true, created_at: new Date(Date.now() - post.minutesAgo * 60_000).toISOString(), updated_at: new Date().toISOString(),
+  user_profiles: null,
+  social_companions: { name: post.author, slug: post.authorSlug, avatar_url: null },
+  social_reactions: Array.from({ length: post.likes }, (_, i) => ({ id: `${post.id}-like-${i}`, reaction: "like", actor_id: null, companion_id: "preview" })),
   social_replies: [],
 }));
 
@@ -43,24 +45,24 @@ function PostCard({ post, currentUserId, onChange, onNotice }: { post: FeedPost;
   const ai = Boolean(post.companion_id); const name = post.social_companions?.name ?? post.user_profiles?.username ?? "Community member";
   const avatarUrl = post.social_companions?.avatar_url ?? post.user_profiles?.avatar_url ?? null;
   const profileHref = post.social_companions?.slug ? `/companions/${post.social_companions.slug}` : post.user_profiles?.username ? `/u/${post.user_profiles.username}` : null;
-  const selected = post.social_reactions.find((item) => item.actor_id === currentUserId)?.reaction ?? null;
-  const counts = useMemo(() => Object.keys(reactionInfo).reduce((all, key) => ({ ...all, [key]: post.social_reactions.filter((item) => item.reaction === key).length }), {} as Record<ReactionKind, number>), [post.social_reactions]);
-  const aiCounts = useMemo(() => Object.keys(reactionInfo).reduce((all, key) => ({ ...all, [key]: post.social_reactions.filter((item) => item.reaction === key && item.companion_id).length }), {} as Record<ReactionKind, number>), [post.social_reactions]);
+  const selected = currentUserId ? post.social_reactions.find((item) => item.actor_id === currentUserId)?.reaction ?? null : null;
+  const likeCount = post.social_reactions.length;
+  const aiLikeCount = post.social_reactions.filter((item) => item.companion_id).length;
 
-  async function toggle(reaction: ReactionKind) {
+  async function toggleLike() {
     if (busy) return; setBusy(true);
     const prior = post.social_reactions; const existing = prior.find((item) => item.actor_id === currentUserId);
-    const optimistic = selected === reaction ? prior.filter((item) => item !== existing) : [...prior.filter((item) => item !== existing), { id: `optimistic-${reaction}`, reaction, actor_id: currentUserId, companion_id: null }];
+    const optimistic = selected === "like" ? prior.filter((item) => item !== existing) : [...prior.filter((item) => item !== existing), { id: "optimistic-like", reaction: "like" as ReactionKind, actor_id: currentUserId, companion_id: null }];
     onChange({ ...post, social_reactions: optimistic });
     try {
       if (!isPreviewMode) {
-        if (selected === reaction) await apiRequest<void>(`/api/posts/${post.id}/reactions`, { method: "DELETE" });
+        if (selected === "like") await apiRequest<void>(`/api/posts/${post.id}/reactions`, { method: "DELETE" });
         else {
-          const saved = await apiRequest<SocialReaction>(`/api/posts/${post.id}/reactions`, { method: "PUT", body: JSON.stringify({ reaction }) });
+          const saved = await apiRequest<SocialReaction>(`/api/posts/${post.id}/reactions`, { method: "PUT", body: JSON.stringify({ reaction: "like" }) });
           onChange({ ...post, social_reactions: [...prior.filter((item) => item !== existing), saved] });
         }
       }
-      onNotice(`${reactionInfo[reaction].label} reaction ${selected === reaction ? "removed" : "saved"}.`);
+      onNotice(`Like ${selected === "like" ? "removed" : "saved"}.`);
     } catch (error) { onChange({ ...post, social_reactions: prior }); onNotice(errorMessage(error)); }
     finally { setBusy(false); }
   }
@@ -96,52 +98,108 @@ function PostCard({ post, currentUserId, onChange, onNotice }: { post: FeedPost;
     } catch (error) { onNotice(errorMessage(error)); }
   }
 
-  return <article className={`card overflow-hidden ${ai ? "border-community/35" : ""}`}>
-    {ai && <div className="flex items-center justify-between bg-community-soft px-4 py-2 text-xs font-bold text-community"><span className="flex items-center gap-2"><Sparkles size={14} /> Shared AI community character</span><span>AI-generated</span></div>}
-    <div className="p-4 sm:p-5"><header className="flex items-start gap-3"><Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{post.author_id === currentUserId && <PrivacyBadge isPublic={post.visibility === "public"} />}</div><p className="mt-0.5 text-xs text-muted">{relativeTime(post.created_at)} · {postType(post.kind)}</p></div></header>
-      <p className="mt-4 text-[.98rem] leading-7">{post.content}</p>{post.task_title && <div className="mt-4 rounded-2xl border border-line bg-canvas/65 p-4"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-1 font-bold">{post.task_title}</p><div className="mt-3 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.xp_earned != null && <span className="badge badge-xp">+{post.xp_earned} XP</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
-      {ai && <p className="mt-3 flex items-center gap-2 text-xs font-bold text-community"><Bot size={14} /> This post was generated by an AI companion.</p>}
-      <div className="mt-4 grid grid-cols-4 gap-1 border-t border-line pt-4" aria-label="Reactions">{(Object.keys(reactionInfo) as ReactionKind[]).map((reaction) => <button key={reaction} type="button" aria-pressed={selected === reaction} onClick={() => void toggle(reaction)} className={`flex min-h-11 flex-col items-center justify-center rounded-xl px-1 text-[.68rem] font-bold sm:text-xs ${selected === reaction ? "bg-brand-soft text-brand" : "text-muted hover:bg-canvas"}`}><span className="flex items-center gap-1"><span aria-hidden>{reactionInfo[reaction].icon}</span><span>{reactionInfo[reaction].label}</span><span>{counts[reaction]}</span></span>{aiCounts[reaction] > 0 && <span className="mt-0.5 text-[.6rem] text-community">{aiCounts[reaction]} AI</span>}</button>)}</div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-1"><button onClick={() => setReplying(!replying)} className="btn btn-ghost px-2"><MessageCircle size={16} /> {post.social_replies.length} replies</button><button onClick={() => setConversation(!conversation)} className="btn btn-ghost px-2">View conversation <ChevronDown size={15} /></button>{post.author_id !== currentUserId && <button onClick={() => void reportPost()} className="btn btn-ghost px-2 text-xs">Report</button>}{post.author_id && post.author_id !== currentUserId && <button onClick={() => void blockAuthor()} className="btn btn-ghost px-2 text-xs text-danger">Block</button>}</div>
-      {conversation && <div className="mt-3 space-y-2 border-l-2 border-line pl-4">{post.social_replies.length ? post.social_replies.map((item) => { const replyName = item.social_companions?.name ?? item.user_profiles?.username ?? "Community member"; return <div key={item.id} className="rounded-xl bg-canvas p-3"><div className="flex items-center gap-2"><strong className="text-sm">{replyName}</strong>{item.companion_id && <AIBadge />}{item.author_id === currentUserId && <button className="ml-auto text-muted hover:text-danger" aria-label="Delete your reply" onClick={() => void deleteReply(item)}><Trash2 size={14} /></button>}</div><p className="mt-1 text-sm leading-6">{item.content}</p></div>; }) : <p className="text-sm text-muted">No replies yet. A thoughtful note can go a long way.</p>}</div>}
+  return <article className={`border-b border-line bg-canvas transition-colors hover:bg-surface/35 ${ai ? "border-l-2 border-l-community" : ""}`}>
+    {ai && <div className="flex items-center justify-between bg-community-soft px-4 py-2 text-xs font-bold text-community"><span className="flex items-center gap-2"><Sparkles size={14} /> AI follower post</span><span>AI-generated</span></div>}
+    <div className="p-4 sm:p-5"><header className="flex items-start gap-3"><Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{post.author_id === currentUserId && <PrivacyBadge isPublic={post.visibility === "public"} />}<span className="text-xs text-muted">· {relativeTime(post.created_at)}</span></div><p className="mt-0.5 text-xs text-muted">{postType(post.kind)}</p></div></header>
+      <p className="mt-4 text-[.98rem] leading-7">{post.content}</p><PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-4" />{post.task_title && <div className="mt-4 rounded-2xl border border-line bg-canvas/65 p-4"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-1 font-bold">{post.task_title}</p><div className="mt-3 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
+      {ai && <p className="mt-3 flex items-center gap-2 text-xs font-bold text-community"><Bot size={14} /> This post was generated by an AI follower.</p>}
+      <div className="mt-4 grid grid-cols-2 gap-1 border-t border-line pt-3" aria-label="Post actions"><button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost min-h-11 ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="text-xs text-community">{aiLikeCount} AI</span>}</button><button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost min-h-11 text-muted"><MessageCircle size={17} /> Reply <span>{post.social_replies.length}</span></button></div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1"><button onClick={() => setConversation(!conversation)} className="btn btn-ghost px-2">View conversation <ChevronDown size={15} /></button>{post.author_id !== currentUserId && <button onClick={() => void reportPost()} className="btn btn-ghost px-2 text-xs">Report</button>}{post.author_id && post.author_id !== currentUserId && <button onClick={() => void blockAuthor()} className="btn btn-ghost px-2 text-xs text-danger">Block</button>}</div>
+      {conversation && <div className="mt-3 space-y-2 border-l-2 border-line pl-4">{post.social_replies.length ? post.social_replies.map((item) => { const replyName = item.social_companions?.name ?? item.user_profiles?.username ?? "Community member"; return <div key={item.id} className="rounded-xl bg-canvas p-3"><div className="flex items-center gap-2"><strong className="text-sm">{replyName}</strong>{item.companion_id && <><AIBadge /><span className="text-xs font-bold text-community">AI-generated</span></>}{item.author_id === currentUserId && <button className="ml-auto text-muted hover:text-danger" aria-label="Delete your reply" onClick={() => void deleteReply(item)}><Trash2 size={14} /></button>}</div><p className="mt-1 text-sm leading-6">{item.content}</p></div>; }) : <p className="text-sm text-muted">No replies yet. A thoughtful note can go a long way.</p>}</div>}
       {replying && <form className="mt-3 flex gap-2" onSubmit={submitReply}><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="field flex-1" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} /><button className="icon-btn border-community bg-community-strong text-white" aria-label="Post reply" disabled={busy}><Send size={17} /></button></form>}
     </div></article>;
 }
 
 export function Feed() {
-  const [tab, setTab] = useState<"community" | "mine">("community"); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : "");
+  const [tab, setTab] = useState<FeedTab>("for-you"); const [category, setCategory] = useState(""); const [categories, setCategories] = useState<string[]>(isPreviewMode ? previewInterests : []); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : "");
   const [progress, setProgress] = useState<PublicProgressItem[]>(isPreviewMode ? [{ task_id: "preview-progress", username: "Jonah Lee", task_title: "Run 3 km before work", category: "Wellbeing", status: "pending", xp_value: 0, updated_at: new Date().toISOString() }] : []);
   async function load({ append = false, signal }: { append?: boolean; signal?: AbortSignal } = {}) {
-    if (isPreviewMode) { setItems(tab === "mine" ? previewFeed.filter((post) => post.author_id === "preview-user") : previewFeed); setCursor(null); return; }
+    if (isPreviewMode) { setStatus("All matching preview progress is loaded."); setCursor(null); return; }
     setLoading(true); const priorStatus = status;
     try {
-      const suffix = new URLSearchParams({ scope: tab, limit: "10", ...(append && cursor ? { cursor } : {}) });
-      const page = await apiRequest<FeedPage>(`/api/feed?${suffix}`, { signal });
+      const page = await apiRequest<FeedPage>(`/api/feed?${makeFeedParams(tab, category, append ? cursor : null)}`, { signal });
       setItems((current) => append ? [...current, ...page.items] : page.items); setCursor(page.nextCursor); setStatus("Up to date · refreshed just now");
-      if (!append && tab === "community") setProgress(await apiRequest<PublicProgressItem[]>("/api/progress?limit=8", { signal }));
+      if (!append && tab === "for-you" && !category) setProgress(await apiRequest<PublicProgressItem[]>("/api/progress?limit=8", { signal }));
     } catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(priorStatus.includes("saved") || priorStatus.includes("posted") ? `${priorStatus} Feed refresh failed: ${errorMessage(error)}` : errorMessage(error)); }
     finally { if (!signal?.aborted) setLoading(false); }
   }
   useEffect(() => {
     if (isPreviewMode) return;
-    const controller = new AbortController();
     createClient().auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
-    Promise.all([apiRequest<FeedPage>(`/api/feed?${new URLSearchParams({ scope: tab, limit: "10" })}`, { signal: controller.signal }), tab === "community" ? apiRequest<PublicProgressItem[]>("/api/progress?limit=8", { signal: controller.signal }) : Promise.resolve<PublicProgressItem[]>([])])
+    apiRequest<UserProfile>("/api/profile")
+      .then((profile) => setCategories(Array.from(new Set(profile.interests))))
+      .catch((error) => setStatus(errorMessage(error)));
+  }, []);
+  useEffect(() => {
+    if (isPreviewMode) return;
+    const controller = new AbortController();
+    Promise.all([apiRequest<FeedPage>(`/api/feed?${makeFeedParams(tab, category)}`, { signal: controller.signal }), tab === "for-you" && !category ? apiRequest<PublicProgressItem[]>("/api/progress?limit=8", { signal: controller.signal }) : Promise.resolve<PublicProgressItem[]>([])])
       .then(([page, loadedProgress]) => { setItems(page.items); setProgress(loadedProgress); setCursor(page.nextCursor); setStatus("Up to date · refreshed just now"); })
       .catch((error) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [tab]);
+  }, [tab, category]);
   function changePost(changed: FeedPost) { setItems((current) => current.map((post) => post.id === changed.id ? changed : post)); }
-  const displayedItems = isPreviewMode && tab === "mine"
-    ? items.filter((post) => post.author_id === "preview-user")
+  function changeTab(nextTab: FeedTab) {
+    if (!isPreviewMode) setLoading(true);
+    setCursor(null);
+    setTab(nextTab);
+  }
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentTab: FeedTab) {
+    let nextTab: FeedTab | null = null;
+    if (event.key === "ArrowRight" || event.key === "End") nextTab = "following";
+    if (event.key === "ArrowLeft" || event.key === "Home") nextTab = "for-you";
+    if (!nextTab || nextTab === currentTab) return;
+    event.preventDefault();
+    changeTab(nextTab);
+    requestAnimationFrame(() => document.getElementById(`feed-${nextTab}-tab`)?.focus());
+  }
+  const displayedItems = isPreviewMode
+    ? items.filter((post) => (tab === "for-you" || previewInterests.includes(post.category ?? "")) && (!category || post.category === category))
     : items;
-  return <div className="grid gap-6 xl:grid-cols-[minmax(0,680px)_300px] xl:justify-center"><div className="min-w-0">
-    {isPreviewMode && <div role="note" className="mb-5 rounded-2xl bg-sun-soft p-4 text-sm"><strong>Preview mode.</strong> Feed interactions use demo data and reset on reload.</div>}
-    <header className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-community">The neighborhood</p><h1 className="page-title mt-1">Community</h1><p className="mt-2 text-muted">Real progress, thoughtful company.</p></div><button className="icon-btn" aria-label="Refresh feed" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button></header>
-    <div className="segmented mt-5" aria-label="Feed view"><button type="button" aria-pressed={tab === "community"} onClick={() => { if (!isPreviewMode) setLoading(true); setTab("community"); }}>Community</button><button type="button" aria-pressed={tab === "mine"} onClick={() => { if (!isPreviewMode) setLoading(true); setTab("mine"); }}>My posts</button></div><p className="mt-3 text-center text-xs font-semibold text-muted" aria-live="polite">{loading ? "Checking for new progress…" : status}</p>
-    {tab === "community" && <section className="soft-card mt-4 p-4" aria-labelledby="public-progress-title"><div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Separate from posts</p><h2 id="public-progress-title" className="display mt-1 text-lg font-bold">Community progress</h2></div><span className="badge badge-public">Public tasks</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{progress.map((item) => <article key={item.task_id} className="rounded-xl border border-line bg-surface p-3"><div className="flex items-center justify-between gap-2"><Link href={`/u/${item.username}`} className="text-xs font-bold text-community hover:underline">@{item.username}</Link><span className={item.status === "completed" ? "badge bg-success-soft text-success" : "badge badge-public"}>{item.status}</span></div><p className="mt-2 text-sm font-bold">{item.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{item.category && <span className="badge badge-category">{item.category}</span>}{item.xp_value != null && <span className="badge badge-xp">{item.xp_value} XP</span>}</div></article>)}{!progress.length && <p className="py-3 text-sm text-muted sm:col-span-2">No public task progress right now.</p>}</div><p className="mt-3 text-xs text-muted">Public progress never creates a feed post automatically.</p></section>}
-    <div className="mt-4 space-y-4">{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} onChange={changePost} onNotice={setStatus} />)}{!loading && !displayedItems.length && <div className="soft-card p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
-    {(cursor || isPreviewMode) && <button className="btn btn-secondary mt-5 w-full" onClick={() => isPreviewMode ? setStatus("All preview progress is loaded.") : void load({ append: true })} disabled={loading}>Show more progress</button>}
-  </div><aside className="hidden space-y-4 xl:block" aria-label="Community overview"><div className="card p-5"><div className="flex items-center justify-between"><h2 className="display text-lg font-bold">Happening now</h2><HeartHandshake size={18} className="text-community" /></div><p className="mt-4 text-sm leading-6 text-muted">Fresh public progress and shared accomplishments appear here without follower counts or rankings.</p></div><div className="rounded-[1.25rem] bg-community-strong p-5 text-white"><Sparkles size={21} /><h2 className="display mt-5 text-xl font-bold">Encouragement with a name tag.</h2><p className="mt-2 text-sm leading-6 text-white/70">Every AI companion is clearly labeled.</p><Link href="/companions" className="btn mt-4 bg-surface-raised text-community">Meet companions</Link></div></aside></div>;
+  return <div className="min-w-0 border-x border-line bg-canvas">
+      <header className="sticky top-0 z-20 border-b border-line bg-canvas/88 backdrop-blur-xl">
+        <div className="flex min-h-14 items-center justify-between px-4">
+          <div><h1 className="display text-xl font-bold">Community</h1><p className="text-xs text-muted">Real progress, thoughtful company.</p></div>
+          <button className="icon-btn border-transparent bg-transparent" aria-label="Refresh feed" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button>
+        </div>
+        <div className="flex border-t border-line">
+          <div className="grid min-w-0 flex-1 grid-cols-2" role="tablist" aria-label="Feed view">
+            <button id="feed-for-you-tab" type="button" role="tab" aria-selected={tab === "for-you"} aria-controls="feed-panel" tabIndex={tab === "for-you" ? 0 : -1} onClick={() => changeTab("for-you")} onKeyDown={(event) => handleTabKeyDown(event, "for-you")} className={`relative min-h-12 text-sm font-bold transition-colors hover:bg-surface/55 ${tab === "for-you" ? "text-ink" : "text-muted"}`}>For you{tab === "for-you" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
+            <button id="feed-following-tab" type="button" role="tab" aria-selected={tab === "following"} aria-controls="feed-panel" tabIndex={tab === "following" ? 0 : -1} onClick={() => changeTab("following")} onKeyDown={(event) => handleTabKeyDown(event, "following")} className={`relative min-h-12 text-sm font-bold transition-colors hover:bg-surface/55 ${tab === "following" ? "text-ink" : "text-muted"}`}>Following{tab === "following" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
+          </div>
+          <label className="relative flex min-w-36 items-center border-l border-line hover:bg-surface/55">
+            <select aria-label="Filter feed by category" value={category} onChange={(event) => { if (!isPreviewMode) setLoading(true); setCursor(null); setCategory(event.target.value); }} className="min-h-12 w-full appearance-none bg-transparent py-2 pl-4 pr-9 text-sm font-bold text-muted outline-none focus-visible:ring-3 focus-visible:ring-focus">
+              <option value="">All categories</option>
+              {categories.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 text-muted" />
+          </label>
+        </div>
+      </header>
+
+      <div id="feed-panel" role="tabpanel" aria-labelledby={`feed-${tab}-tab`}>
+      {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> Feed interactions use demo data and reset on reload.</div>}
+
+      {category && <div className="flex items-center justify-between gap-3 border-b border-line bg-surface/45 px-4 py-2 text-sm"><span className="font-bold text-community">Category: {category}</span><button type="button" className="btn btn-ghost min-h-9 px-3 text-xs" onClick={() => setCategory("")} aria-label={`Clear ${category} category filter`}>Clear</button></div>}
+
+      <section className="flex gap-3 border-b border-line p-4" aria-label="Share progress">
+        <Avatar initials="YO" name="Your profile" />
+        <div className="min-w-0 flex-1">
+          <Link href="/tasks" className="block min-h-11 py-2 text-lg text-muted transition-colors hover:text-ink">What did you make progress on?</Link>
+          <div className="mt-2 flex items-center justify-between border-t border-line pt-3">
+            <span className="flex items-center gap-2 text-xs font-bold text-community"><CheckSquare2 size={16} /> Complete a task to share a win</span>
+            <Link href="/tasks" className="btn btn-primary min-h-9 px-4 py-2 text-xs">Share a win</Link>
+          </div>
+        </div>
+      </section>
+
+      {(loading || status) && <p className="border-b border-line px-4 py-2 text-center text-xs font-semibold text-muted" aria-live="polite">{loading ? "Checking for new progress…" : status}</p>}
+
+      {tab === "for-you" && !category && <section className="border-b border-line p-4" aria-labelledby="public-progress-title"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold text-community">Happening now</p><h2 id="public-progress-title" className="display mt-1 text-lg font-bold">Community progress</h2></div><span className="badge badge-public">Public tasks</span></div><div className="mt-3 flex gap-2 overflow-x-auto pb-1">{progress.map((item) => <article key={item.task_id} className="min-w-[230px] flex-1 rounded-2xl border border-line bg-surface p-3"><div className="flex items-center justify-between gap-2"><Link href={`/u/${item.username}`} className="text-xs font-bold text-community hover:underline">@{item.username}</Link><span className={item.status === "completed" ? "badge bg-success-soft text-success" : "badge badge-public"}>{item.status}</span></div><p className="mt-2 text-sm font-bold">{item.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{item.category && <span className="badge badge-category">{item.category}</span>}</div></article>)}{!progress.length && <p className="py-3 text-sm text-muted">No public task progress right now.</p>}</div><p className="mt-3 text-xs text-muted">Public progress never creates a feed post automatically.</p></section>}
+
+      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} onChange={changePost} onNotice={setStatus} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
+      {(cursor || isPreviewMode) && <div className="border-b border-line p-4"><button className="btn btn-ghost w-full text-community" onClick={() => isPreviewMode ? setStatus("All preview progress is loaded.") : void load({ append: true })} disabled={loading}>Show more progress</button></div>}
+      </div>
+  </div>;
 }

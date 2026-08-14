@@ -5,7 +5,7 @@ create type public.task_status as enum ('pending', 'completed');
 create type public.post_visibility as enum ('private', 'public');
 create type public.post_kind as enum ('human_completion', 'human_progress', 'ai_daily_task', 'ai_progress', 'ai_completion');
 create type public.content_status as enum ('active', 'hidden', 'removed');
-create type public.reaction_kind as enum ('cheer', 'respect', 'relatable', 'inspired');
+create type public.reaction_kind as enum ('like');
 create type public.engagement_kind as enum ('reply', 'reaction');
 create type public.job_status as enum ('pending', 'processing', 'completed', 'failed', 'cancelled');
 
@@ -341,7 +341,7 @@ create trigger tasks_apply_completion before update of status on public.tasks fo
 
 create or replace function public.publish_task_completion(p_task_id uuid, p_message text default null, p_visibility public.post_visibility default 'public', p_recurrence_instance_id text default null)
 returns public.social_posts language plpgsql security definer set search_path = '' as $$
-declare uid uuid := auth.uid(); t public.tasks; profile public.user_profiles; result public.social_posts; idem text; c record; reply public.social_replies; reaction public.social_reactions; fallback text; slot_no integer := 0;
+declare uid uuid := auth.uid(); t public.tasks; profile public.user_profiles; result public.social_posts; idem text;
 begin
   if uid is null then raise exception 'authentication required' using errcode='42501'; end if;
   if not public.check_rate_limit('post:publish',10,60,null) then raise exception 'rate limit exceeded' using errcode='P0001'; end if;
@@ -349,7 +349,6 @@ begin
   if not found then raise exception 'completed task not found' using errcode='P0002'; end if;
   if p_message is not null and char_length(trim(p_message)) > 500 then raise exception 'message too long'; end if;
   if p_recurrence_instance_id is not null and nullif(trim(p_recurrence_instance_id),'') is distinct from nullif(trim(t.recurrence_instance_id),'') then raise exception 'invalid recurrence instance'; end if;
-  if (select count(*) from public.social_companions where active) < 3 then raise exception 'three active companions are required'; end if;
   idem := 'completion:' || uid::text || ':' || t.id::text || ':' || coalesce(nullif(trim(t.recurrence_instance_id), ''), 'single');
   select * into result from public.social_posts where author_id=uid and idempotency_key=idem;
   if found then return result; end if;
@@ -362,30 +361,17 @@ begin
     select * into result from public.social_posts where author_id=uid and idempotency_key=idem;
     return result;
   end;
-  for c in select sc.* from public.social_companions sc where sc.active order by md5(result.id::text || sc.id::text) limit 3 loop
-    slot_no := slot_no + 1;
-    if slot_no < 3 then
-      fallback := coalesce(c.fallback_replies[1], 'You moved “' || t.title || '” forward. That is worth recognizing.');
-      insert into public.social_replies(post_id,companion_id,content,is_ai_generated) values(result.id,c.id,fallback,true) returning * into reply;
-      insert into public.social_ai_engagements(post_id,companion_id,slot,kind,reply_id,fallback_content) values(result.id,c.id,slot_no,'reply',reply.id,fallback);
-      insert into public.ai_jobs(job_type,dedupe_key,payload) values('enhance_reply','enhance:'||reply.id::text,jsonb_build_object('replyId',reply.id,'postId',result.id,'companionId',c.id)) on conflict(dedupe_key) do nothing;
-    else
-      insert into public.social_reactions(post_id,companion_id,reaction) values(result.id,c.id,'cheer') returning * into reaction;
-      insert into public.social_ai_engagements(post_id,companion_id,slot,kind,reaction_id) values(result.id,c.id,slot_no,'reaction',reaction.id);
-    end if;
-  end loop;
   return result;
 end $$;
 
 create or replace function public.publish_progress_post(p_content text, p_visibility public.post_visibility, p_idempotency_key text, p_task_id uuid default null, p_task_title text default null, p_category text default null)
 returns public.social_posts language plpgsql security definer set search_path = '' as $$
-declare uid uuid := auth.uid(); result public.social_posts; idem text; c record; reply public.social_replies; reaction public.social_reactions; fallback text; slot_no integer := 0;
+declare uid uuid := auth.uid(); result public.social_posts; idem text;
 begin
   if uid is null then raise exception 'authentication required' using errcode='42501'; end if;
   if not public.check_rate_limit('post:progress',10,60,null) then raise exception 'rate limit exceeded' using errcode='P0001'; end if;
   if char_length(trim(p_content)) not between 1 and 1200 or char_length(trim(p_idempotency_key)) not between 1 and 160 then raise exception 'invalid content'; end if;
   if p_task_id is not null and not exists(select 1 from public.tasks where id=p_task_id and owner_id=uid) then raise exception 'task not found'; end if;
-  if (select count(*) from public.social_companions where active) < 3 then raise exception 'three active companions are required'; end if;
   idem := 'progress:' || trim(p_idempotency_key);
   select * into result from public.social_posts where author_id=uid and idempotency_key=idem;
   if found then return result; end if;
@@ -397,18 +383,6 @@ begin
     select * into result from public.social_posts where author_id=uid and idempotency_key=idem;
     return result;
   end;
-  for c in select sc.* from public.social_companions sc where sc.active order by md5(result.id::text || sc.id::text) limit 3 loop
-    slot_no := slot_no + 1;
-    if slot_no < 3 then
-      fallback := coalesce(c.fallback_replies[1], 'That progress is worth making visible.');
-      insert into public.social_replies(post_id,companion_id,content,is_ai_generated) values(result.id,c.id,fallback,true) returning * into reply;
-      insert into public.social_ai_engagements(post_id,companion_id,slot,kind,reply_id,fallback_content) values(result.id,c.id,slot_no,'reply',reply.id,fallback);
-      insert into public.ai_jobs(job_type,dedupe_key,payload) values('enhance_reply','enhance:'||reply.id::text,jsonb_build_object('replyId',reply.id,'postId',result.id,'companionId',c.id)) on conflict(dedupe_key) do nothing;
-    else
-      insert into public.social_reactions(post_id,companion_id,reaction) values(result.id,c.id,'cheer') returning * into reaction;
-      insert into public.social_ai_engagements(post_id,companion_id,slot,kind,reaction_id) values(result.id,c.id,slot_no,'reaction',reaction.id);
-    end if;
-  end loop;
   return result;
 end $$;
 

@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }));
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.ComponentProps<"a">) => (
     <a href={href} {...props}>{children}</a>
@@ -8,7 +10,7 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  useRouter: () => router,
 }));
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
@@ -49,5 +51,28 @@ describe("OnboardingFlow", () => {
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
 
     expect(screen.getByText("NO")).toBeInTheDocument();
+  });
+
+  it("offers a completion-post privacy choice during onboarding", () => {
+    render(<OnboardingFlow />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+    expect(screen.getByRole("heading", { name: "Who can see your shared progress?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Private/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/AI accounts stay active either way/)).toBeInTheDocument();
+  });
+
+  it("finishes onboarding in the Feed", () => {
+    render(<OnboardingFlow />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Open my feed/ }));
+
+    expect(router.push).toHaveBeenCalledWith("/feed");
   });
 });

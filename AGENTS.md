@@ -1,3 +1,13 @@
+<!-- BEGIN:mandatory-subagent-routing -->
+
+# Mandatory subagent routing
+
+For every user prompt, use at least one Codex native subagent before delivering the final response. Route the subagent with an installed `agent_type` that matches the work (for example, `explore` for repository discovery, `executor` for implementation, or `verifier` for validation). Give each subagent a concrete, bounded task and use its result in the response or implementation.
+
+This requirement applies even to small or straightforward prompts. The primary agent remains responsible for integrating the result, verifying the final outcome, and answering the user. Do not substitute OMX `team` mode for native subagent routing unless the task independently warrants coordinated team execution. If native subagents are technically unavailable, state that limitation explicitly and complete the task directly.
+
+<!-- END:mandatory-subagent-routing -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

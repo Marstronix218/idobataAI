@@ -1,7 +1,7 @@
 "use client";
 
-import { Bell, CheckCheck, Flame, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
+import { KeyboardEvent, useEffect, useState } from "react";
 import { activity as demoActivity } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
 import { AIBadge } from "@/components/ui/status";
@@ -14,12 +14,13 @@ type ActivityItem = Notification & {
   social_posts: { content: string; task_title: string | null; content_status: string } | null;
 };
 type ActivityPage = { items: ActivityItem[]; nextCursor: string | null };
+type NotificationFilter = "all" | "unread";
 
 const previewItems: ActivityItem[] = demoActivity.map((item, index) => ({
   id: item.id, user_id: "preview", actor_id: item.ai ? null : `preview-${index}`,
   companion_id: item.ai ? `companion-${index}` : null, post_id: index < 3 ? `post-${index}` : null,
   reply_id: item.text.includes("replied") ? `reply-${index}` : null,
-  kind: item.text.includes("replied") ? "reply" : item.text.includes("Respect") || item.text.includes("Cheer") ? "reaction" : "system",
+  kind: item.text.includes("replied") ? "reply" : item.text.includes("liked") ? "reaction" : "system",
   read_at: item.id === "4" ? "2026-08-12T10:00:00.000Z" : null,
   created_at: new Date(Date.now() - (index + 1) * 1_800_000).toISOString(),
   user_profiles: item.ai ? null : { username: item.actor, avatar_url: null },
@@ -37,25 +38,27 @@ function relativeTime(value: string) {
 
 function notificationCopy(item: ActivityItem) {
   if (item.kind === "reply") return "replied to your post";
-  if (item.kind === "reaction") return "encouraged your post";
+  if (item.kind === "reaction") return "liked your post";
   return "shared an update about your progress";
 }
 
 export function ActivityList() {
+  const [filter, setFilter] = useState<NotificationFilter>("all");
   const [items, setItems] = useState<ActivityItem[]>(isPreviewMode ? previewItems : []);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(!isPreviewMode);
-  const [status, setStatus] = useState(isPreviewMode ? "Preview activity is demo data and will reset on reload." : "");
+  const [status, setStatus] = useState(isPreviewMode ? "Preview notifications are demo data and reset on reload." : "");
   const unread = items.filter((item) => !item.read_at);
+  const displayedItems = filter === "unread" ? unread : items;
 
   async function load({ append = false, signal }: { append?: boolean; signal?: AbortSignal } = {}) {
-    if (isPreviewMode) { setStatus("All preview activity is loaded."); return; }
+    if (isPreviewMode) { setStatus("All preview notifications are loaded."); return; }
     setLoading(true); setStatus("");
     try {
       const query = new URLSearchParams({ limit: "30", ...(append && cursor ? { cursor } : {}) });
       const page = await apiRequest<ActivityPage>(`/api/notifications?${query}`, { signal });
       setItems((current) => append ? [...current, ...page.items] : page.items);
-      setCursor(page.nextCursor); setStatus(page.items.length ? "Activity is up to date." : "No activity yet.");
+      setCursor(page.nextCursor); setStatus(page.items.length ? "Notifications are up to date." : "No notifications yet.");
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error));
     } finally { if (!signal?.aborted) setLoading(false); }
@@ -65,7 +68,7 @@ export function ActivityList() {
     if (isPreviewMode) return;
     const controller = new AbortController();
     apiRequest<ActivityPage>("/api/notifications?limit=30", { signal: controller.signal })
-      .then((page) => { setItems(page.items); setCursor(page.nextCursor); setStatus(page.items.length ? "Activity is up to date." : "No activity yet."); })
+      .then((page) => { setItems(page.items); setCursor(page.nextCursor); setStatus(page.items.length ? "Notifications are up to date." : "No notifications yet."); })
       .catch((error) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -78,21 +81,49 @@ export function ActivityList() {
     try {
       if (!isPreviewMode) await apiRequest<{ updated: number }>("/api/notifications", { method: "PATCH", body: JSON.stringify(ids ? { ids } : { all: true }) });
       setItems((current) => current.map((item) => targets.includes(item.id) ? { ...item, read_at: item.read_at ?? readAt } : item));
-      setStatus(`${ids ? "Activity marked" : "All activity marked"} as read.${isPreviewMode ? " Preview only." : ""}`);
+      setStatus(`${ids ? "Notification marked" : "All notifications marked"} as read.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) { setStatus(errorMessage(error)); }
   }
 
-  return <>
-    {isPreviewMode && <div role="note" className="mb-5 rounded-2xl bg-sun-soft p-4 text-sm leading-6"><strong>Preview mode.</strong> Activity below is demo data; read state is not persisted.</div>}
-    <header className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-brand">Encouragement, gathered</p><h1 className="page-title mt-1">Activity</h1><p className="mt-2 text-muted">The thoughtful bits, without the noise.</p></div><div className="flex gap-2"><button className="icon-btn" aria-label="Refresh activity" onClick={() => void load()} disabled={loading}><RefreshCw size={17} className={loading ? "animate-spin" : ""} /></button><button className="btn btn-secondary px-3 sm:px-4" disabled={!unread.length || loading} onClick={() => void markRead()}><CheckCheck size={17} /><span className="hidden sm:inline">Mark all read</span></button></div></header>
-    <p className="mt-4 min-h-5 text-sm font-bold text-muted" aria-live="polite">{loading ? "Loading activity…" : status}</p>
-    {items.length ? <section className="card mt-4 overflow-hidden" aria-label="Recent activity">{items.map((item) => {
-      const ai = Boolean(item.companion_id); const actor = item.social_companions?.name ?? item.user_profiles?.username ?? "idobataAI";
-      const detail = item.social_posts?.task_title ?? item.social_posts?.content ?? (item.kind === "system" ? "A small streak is growing." : "A shared accomplishment");
-      const avatarUrl = item.social_companions?.avatar_url ?? item.user_profiles?.avatar_url ?? null;
-      return <button key={item.id} onClick={() => void markRead([item.id])} disabled={Boolean(item.read_at)} className="relative flex w-full items-start gap-3 border-b border-line p-4 text-left last:border-0 hover:bg-canvas/60 disabled:cursor-default disabled:opacity-80 sm:p-5"><Avatar initials={actor.slice(0, 2).toUpperCase()} ai={ai} avatarUrl={avatarUrl} name={actor} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2 text-sm"><strong>{actor}</strong>{ai && <AIBadge />}<span className="text-muted">{notificationCopy(item)}</span></div><p className="mt-2 rounded-xl bg-canvas px-3 py-2 text-sm leading-5 text-muted">{detail}</p><span className="mt-2 block text-xs font-bold text-muted">{relativeTime(item.created_at)}</span></div>{!item.read_at && <span className="absolute right-4 top-4 h-2.5 w-2.5 rounded-full bg-brand"><span className="sr-only">Unread</span></span>}</button>;
-    })}</section> : !loading && <div className="soft-card mt-6 py-12 text-center"><Bell size={26} className="mx-auto text-community" /><h2 className="display mt-4 text-xl font-bold">Quiet for now</h2><p className="mt-2 text-sm text-muted">Replies, reactions, and progress notes will gather here.</p></div>}
-    {cursor && <button className="btn btn-secondary mt-5 w-full" onClick={() => void load({ append: true })} disabled={loading}>Show earlier activity</button>}
-    <aside className="soft-card mt-6 flex items-start gap-3 p-4"><Flame size={18} className="mt-0.5 text-community" /><div><p className="text-sm font-bold">You’re in control of the pace.</p><p className="mt-1 text-sm leading-6 text-muted">Choose which replies, reactions, and companion updates reach you in Settings.</p></div></aside>
-  </>;
+  function changeFilter(nextFilter: NotificationFilter) {
+    setFilter(nextFilter);
+  }
+
+  function handleFilterKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentFilter: NotificationFilter) {
+    let nextFilter: NotificationFilter | null = null;
+    if (event.key === "ArrowRight" || event.key === "End") nextFilter = "unread";
+    if (event.key === "ArrowLeft" || event.key === "Home") nextFilter = "all";
+    if (!nextFilter || nextFilter === currentFilter) return;
+    event.preventDefault();
+    changeFilter(nextFilter);
+    requestAnimationFrame(() => document.getElementById(`notifications-${nextFilter}-tab`)?.focus());
+  }
+
+  return <div className="min-w-0 border-x border-line bg-canvas">
+      <header className="sticky top-0 z-20 border-b border-line bg-canvas/88 backdrop-blur-xl">
+        <div className="flex min-h-14 items-center justify-between gap-3 px-4">
+          <div><h1 className="display text-xl font-bold">Notifications</h1><p className="text-xs text-muted">Encouragement and progress updates.</p></div>
+          <div className="flex gap-1">
+            <button className="icon-btn border-transparent bg-transparent" aria-label="Refresh notifications" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button>
+            <button className="icon-btn border-transparent bg-transparent" aria-label="Mark all notifications as read" disabled={!unread.length || loading} onClick={() => void markRead()}><CheckCheck size={19} /></button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2" role="tablist" aria-label="Notification view">
+          <button id="notifications-all-tab" type="button" role="tab" aria-selected={filter === "all"} aria-controls="notifications-panel" tabIndex={filter === "all" ? 0 : -1} onClick={() => changeFilter("all")} onKeyDown={(event) => handleFilterKeyDown(event, "all")} className={`relative min-h-12 text-sm font-bold transition-colors hover:bg-surface/55 ${filter === "all" ? "text-ink" : "text-muted"}`}>All{filter === "all" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
+          <button id="notifications-unread-tab" type="button" role="tab" aria-selected={filter === "unread"} aria-controls="notifications-panel" tabIndex={filter === "unread" ? 0 : -1} onClick={() => changeFilter("unread")} onKeyDown={(event) => handleFilterKeyDown(event, "unread")} className={`relative min-h-12 text-sm font-bold transition-colors hover:bg-surface/55 ${filter === "unread" ? "text-ink" : "text-muted"}`}>Unread{unread.length > 0 && <span className="ml-1 text-xs text-brand">{unread.length}</span>}{filter === "unread" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
+        </div>
+      </header>
+
+      <div id="notifications-panel" role="tabpanel" aria-labelledby={`notifications-${filter}-tab`}>
+        {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> Notifications use demo data and read state resets on reload.</div>}
+        {(loading || status) && <p className="border-b border-line px-4 py-2 text-center text-xs font-semibold text-muted" aria-live="polite">{loading ? "Checking for notifications…" : status}</p>}
+        {displayedItems.length ? <section aria-label={filter === "unread" ? "Unread notifications" : "Recent notifications"}>{displayedItems.map((item) => {
+          const ai = Boolean(item.companion_id); const actor = item.social_companions?.name ?? item.user_profiles?.username ?? "idobataAI";
+          const detail = item.social_posts?.task_title ?? item.social_posts?.content ?? (item.kind === "system" ? "A small streak is growing." : "A shared accomplishment");
+          const avatarUrl = item.social_companions?.avatar_url ?? item.user_profiles?.avatar_url ?? null;
+          return <button key={item.id} type="button" onClick={() => void markRead([item.id])} disabled={Boolean(item.read_at)} aria-label={item.read_at ? `${actor}: ${notificationCopy(item)}. Read` : `Mark notification from ${actor} as read`} className={`relative flex w-full items-start gap-3 border-b border-line p-4 text-left transition-colors hover:bg-surface/55 disabled:cursor-default disabled:opacity-80 sm:p-5 ${item.read_at ? "bg-canvas" : "bg-brand-soft/20"}`}><Avatar initials={actor.slice(0, 2).toUpperCase()} ai={ai} avatarUrl={avatarUrl} name={actor} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"><strong>{actor}</strong>{ai && <AIBadge />}<span className="text-muted">{notificationCopy(item)}</span><span className="text-xs text-muted">· {relativeTime(item.created_at)}</span></div><p className="mt-2 border-l-2 border-line pl-3 text-sm leading-6 text-muted">{detail}</p></div>{!item.read_at && <span className="absolute right-4 top-5 h-2.5 w-2.5 rounded-full bg-brand"><span className="sr-only">Unread</span></span>}</button>;
+        })}</section> : !loading && <div className="border-b border-line px-6 py-14 text-center"><Bell size={26} className="mx-auto text-community" /><h2 className="display mt-4 text-xl font-bold">{filter === "unread" ? "You’re all caught up" : "Quiet for now"}</h2><p className="mt-2 text-sm text-muted">{filter === "unread" ? "New likes, replies, and progress notes will appear here." : "Likes, replies, and progress notes will gather here."}</p></div>}
+        {cursor && filter === "all" && <div className="border-b border-line p-4"><button className="btn btn-ghost w-full text-community" onClick={() => void load({ append: true })} disabled={loading}>Show earlier notifications</button></div>}
+      </div>
+  </div>;
 }

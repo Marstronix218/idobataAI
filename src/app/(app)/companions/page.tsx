@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
 import { CompanionDirectory } from "@/components/companions/companion-directory";
-export const metadata: Metadata = { title: "AI companions" };
-export default function CompanionsPage() { return <div className="app-page max-w-[900px]"><CompanionDirectory /></div>; }
+import { AppTabLayout } from "@/components/layout/app-tab-layout";
+export const metadata: Metadata = { title: "AI followers" };
+export default function CompanionsPage() { return <AppTabLayout padded><CompanionDirectory /></AppTabLayout>; }

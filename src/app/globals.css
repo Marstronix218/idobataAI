@@ -82,6 +82,10 @@
 }
 
 @theme inline {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: calc(1 / 0.8125);
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: calc(1.25 / 0.9375);
   --color-canvas: var(--canvas);
   --color-canvas-deep: var(--canvas-deep);
   --color-surface: var(--surface);
@@ -146,7 +150,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .soft-card { border: 1px solid var(--line); border-radius: 1.125rem; background: color-mix(in srgb, var(--surface) 72%, transparent); }
 .eyebrow {
-  font-size: .75rem; line-height: 1rem; font-weight: 850;
+  font-size: .8125rem; line-height: 1rem; font-weight: 850;
   letter-spacing: .1em; text-transform: uppercase; color: var(--brand-text);
 }
 .app-theme .text-brand { color: var(--brand-text); }
@@ -165,7 +169,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .btn {
   display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .5rem;
   border: 1px solid transparent; border-radius: 999px; padding: .65rem 1.1rem;
-  font-size: .9rem; font-weight: 800; line-height: 1.2; cursor: pointer;
+  font-size: .9375rem; font-weight: 800; line-height: 1.333; cursor: pointer;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 .btn:hover { transform: translateY(-1px); }
@@ -187,7 +191,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .icon-btn:hover { color: var(--ink); border-color: var(--line-strong); }
 
-.field-label { display: block; margin-bottom: .45rem; font-size: .875rem; font-weight: 800; }
+.field-label { display: block; margin-bottom: .45rem; font-size: .9375rem; font-weight: 800; }
 .field {
   width: 100%; min-height: 46px; border: 1px solid var(--line-strong); border-radius: .8rem;
   background: var(--surface-raised); color: var(--ink); padding: .7rem .85rem; outline: none;
@@ -199,18 +203,17 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .badge {
   display: inline-flex; min-height: 24px; align-items: center; gap: .3rem; border-radius: 999px;
-  padding: .2rem .55rem; font-size: .72rem; line-height: 1; font-weight: 800; white-space: nowrap;
+  padding: .2rem .55rem; font-size: .8125rem; line-height: 1; font-weight: 800; white-space: nowrap;
 }
 .badge-ai { background: var(--community-strong); color: white; }
 .badge-private { background: var(--neutral-soft); color: var(--neutral-ink); }
 .badge-public { background: var(--community-soft); color: var(--community-ink); }
-.badge-xp { background: var(--sun-soft); color: var(--sun-ink); }
 .badge-category, .badge-streak { background: var(--brand-soft); color: var(--brand-ink); }
 
 .segmented { display: flex; gap: .25rem; padding: .25rem; border-radius: 999px; background: var(--segmented); }
 .segmented button, .segmented a {
   display: flex; min-height: 40px; flex: 1; align-items: center; justify-content: center;
-  border-radius: 999px; padding: .5rem .8rem; color: var(--ink-muted); font-size: .85rem; font-weight: 800;
+  border-radius: 999px; padding: .5rem .8rem; color: var(--ink-muted); font-size: .9375rem; font-weight: 800;
 }
 .segmented [aria-pressed="true"], .segmented .active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
 
@@ -222,6 +225,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .goal-card { border: 1px solid var(--line); background: var(--canvas-deep); color: var(--ink); }
 
 .app-page { width: 100%; max-width: 760px; margin-inline: auto; padding: 1.25rem 1rem 7rem; }
+.share-page { max-width: 1040px; }
 .page-title { font-family: var(--font-display); font-size: clamp(1.8rem, 6vw, 2.5rem); font-weight: 750; letter-spacing: -.04em; line-height: 1.04; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

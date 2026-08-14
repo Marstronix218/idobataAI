@@ -30,8 +30,9 @@ export const taskUpdateSchema = z.object({
 
 export const publishSchema = z.object({
   message: optionalClean(500),
-  visibility: z.enum(["private", "public"]).default("public"),
+  visibility: z.enum(["private", "public"]),
   recurrenceInstanceId: optionalClean(100),
+  imagePaths: z.array(z.string().min(1).max(300)).max(4).optional(),
 }).strict();
 
 export const replySchema = z.object({
@@ -39,7 +40,7 @@ export const replySchema = z.object({
   parentReplyId: z.uuid().nullable().optional(),
 }).strict();
 
-export const reactionSchema = z.object({ reaction: z.enum(["cheer", "respect", "relatable", "inspired"]) }).strict();
+export const reactionSchema = z.object({ reaction: z.literal("like") }).strict();
 
 export const progressPostSchema = z.object({
   content: clean(1200),
@@ -52,10 +53,14 @@ export const progressPostSchema = z.object({
 
 export const profileSchema = z.object({
   username: z.string().trim().regex(/^[A-Za-z0-9_]{3,24}$/).optional(),
+  displayName: optionalClean(50),
+  bio: optionalClean(160),
   avatarUrl: avatarUrl.nullable().optional(),
+  profileVisibility: z.enum(["private", "public"]).optional(),
   dailyGoal: z.number().int().min(1).max(50).optional(),
   interests: z.array(clean(48)).max(20).optional(),
   defaultTaskVisibility: z.enum(["private", "public"]).optional(),
+  completionVisibility: z.enum(["private", "public"]).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "At least one field is required.");
 
 export const notificationReadSchema = z.object({

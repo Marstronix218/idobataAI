@@ -17,4 +17,10 @@ describe("profileSchema avatarUrl", () => {
     expect(profileSchema.safeParse({ avatarUrl: "/avatars/unknown.png" }).success).toBe(false);
     expect(profileSchema.safeParse({ avatarUrl: "avatars/acorn.png" }).success).toBe(false);
   });
+
+  it("accepts social profile fields and enforces their limits", () => {
+    expect(profileSchema.safeParse({ displayName: "Mina Mori", bio: "Quiet progress.", profileVisibility: "public" }).success).toBe(true);
+    expect(profileSchema.safeParse({ displayName: "x".repeat(51) }).success).toBe(false);
+    expect(profileSchema.safeParse({ bio: "x".repeat(161) }).success).toBe(false);
+  });
 });

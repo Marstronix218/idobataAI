@@ -9,7 +9,7 @@ idobataAI is a Next.js App Router application backed by Supabase Auth and Postgr
 3. Browser mutations call Next.js Route Handlers with the Supabase access token.
 4. User-scoped server clients keep PostgreSQL RLS active. Actor/owner IDs come from the verified token, never the request body.
 5. Only server-only cron, AI-worker, and deletion code can use the Supabase service role.
-6. PostgreSQL constraints, functions, and transactions own privacy, idempotency, fallback engagement, and job leasing.
+6. PostgreSQL constraints, functions, and transactions own privacy, idempotency, optional AI engagement records, and job leasing.
 
 ## Data model
 
@@ -17,9 +17,9 @@ idobataAI is a Next.js App Router application backed by Supabase Auth and Postgr
 - Productivity: tasks, recurrence occurrences, XP/activity ledger, and a safe-field public-progress projection.
 - Social: normalized posts, replies, reactions, companions, and companion templates.
 - Safety: reports, user blocks, companion mutes, content status, notifications, and rate-limit events.
-- Reliability: durable AI engagement slots, background jobs, provider attempts, and account-deletion requests.
+- Reliability: durable records for explicitly scheduled AI engagements, background jobs, provider attempts, and account-deletion requests.
 
-UUIDs identify globally shared records. Human and AI actor columns are mutually exclusive. Unique indexes enforce human idempotency keys, one completion post per occurrence, one reaction per actor/post, one companion per engagement guarantee, one engagement per slot, and one scheduled source key per companion/day/slot.
+UUIDs identify globally shared records. Human and AI actor columns are mutually exclusive. Unique indexes enforce human idempotency keys, one completion post per occurrence, one reaction per actor/post, one companion per scheduled engagement, one engagement per slot, and one scheduled source key per companion/day/slot.
 
 ## Privacy and RLS
 
@@ -27,17 +27,17 @@ Every user-facing table enables RLS. Authenticated users can read active public 
 
 A synchronous database function/trigger upserts public progress when a task is public and deletes it in the same transaction when the task becomes private or is removed. Replies and reactions inherit parent-post visibility. Blocking and content status are rechecked before AI enhancement is applied.
 
-## Publishing and guaranteed engagement
+## Publishing and optional AI engagement
 
 Human publishing is one database transaction:
 
 1. Authenticate with `auth.uid()` and verify ownership/content bounds.
 2. insert-or-return the idempotent post; reject a reused key with a different request hash.
-3. deterministically choose three distinct eligible companions.
-4. create two visible fallback replies and one visible fallback reaction.
-5. persist three unique engagement slots and enqueue optional enhancement jobs.
+3. return the post without creating companion replies, reactions, or AI jobs.
 
-Provider calls occur only after commit. If the provider is unavailable, the companion-specific fallback remains valid and visible.
+AI engagement is a separate, optional concern. A scheduler may select active, unmuted companions and persist an engagement slot before enqueueing an enhancement job, but publication itself does not imply eligibility and never guarantees a response. The current schema does not fabricate follower relationships; an explicit follow model should be added before follower-based eligibility is introduced.
+
+Provider calls occur only for an explicitly persisted engagement after commit. If the provider is unavailable, that engagement's companion-specific fallback remains valid and visible.
 
 ## Job leases and provider cost control
 

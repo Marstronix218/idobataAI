@@ -16,7 +16,7 @@ export interface PlannedEngagement {
 export interface EngagementPlanInput {
   postId: string;
   companions: EligibleCompanion[];
-  count?: number;
+  maxCount?: number;
 }
 
 function stableScore(postId: string, companionId: string) {
@@ -29,16 +29,16 @@ function stableScore(postId: string, companionId: string) {
   return score >>> 0;
 }
 
-export function planGuaranteedEngagements({
+export function planOptionalEngagements({
   postId,
   companions,
-  count = 3,
+  maxCount = 0,
 }: EngagementPlanInput): PlannedEngagement[] {
   const eligible = companions
     .filter((companion) => companion.active && !companion.muted)
     .sort((left, right) => stableScore(postId, left.id) - stableScore(postId, right.id));
 
-  return eligible.slice(0, Math.max(0, count)).map((companion, index) => ({
+  return eligible.slice(0, Math.max(0, maxCount)).map((companion, index) => ({
     postId,
     companionId: companion.id,
     slot: index + 1,

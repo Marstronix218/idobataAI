@@ -11,11 +11,12 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 ## What is included
 
 - Email/password authentication and onboarding with username, goal, interests, and task-privacy default
-- Private task management, categories, due dates, recurrence, completion XP, streak feedback, and filters
+- Private task management, categories, due dates, recurring chores/routines, streak feedback, and focused time filters
+- Optional completion-post images stored privately and delivered through short-lived, visibility-scoped links
 - Independent public task progress and explicit completion-post composer
-- Cursor-ready Community and My Posts feeds with reactions and threaded replies
+- Cursor-ready Community and My Posts feeds with likes and threaded replies
 - Shared, database-backed AI companion directory with visible AI labeling and mute controls
-- Transactional 2-reply + 1-reaction fallback engagement for every human post
+- Optional likes and replies from clearly labeled AI followers
 - Optional OpenAI-compatible reply enhancement behind a server-only provider abstraction
 - Durable PostgreSQL jobs with atomic claims, expiring leases, retry ceilings, and idempotency
 - Scheduled companion activity for Vercel Cron with curated provider-free fallback content
@@ -111,7 +112,7 @@ supabase db lint --local
 supabase test db
 ```
 
-The database suite is intended to prove privacy projection, RLS visibility, completion-post and recurrence idempotency, three distinct fallback engagements, reaction uniqueness, lease recovery, provider-failure fallback, and account-deletion behavior. RLS tests must execute as authenticated users rather than only through the service role.
+The database suite is intended to prove privacy projection, RLS visibility, completion-post and recurrence idempotency, like uniqueness, lease recovery, provider-failure fallback, and account-deletion behavior. RLS tests must execute as authenticated users rather than only through the service role.
 
 CI runs the application gates and a separate Docker-backed Supabase job. The latter applies the migration from a clean database, lints SQL, and executes both ACL/schema checks and authenticated behavioral RLS/idempotency/lease tests.
 

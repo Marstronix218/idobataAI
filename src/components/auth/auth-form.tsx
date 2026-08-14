@@ -18,7 +18,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     const form = new FormData(event.currentTarget);
     if (isPreviewMode) {
       setStatus("Preview mode: authentication is simulated and nothing will be saved.");
-      router.push(signup ? "/onboarding" : "/tasks");
+      router.push(signup ? "/onboarding" : "/feed");
       return;
     }
     setBusy(true); setStatus("");
@@ -34,7 +34,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.replace("/tasks");
+        router.replace("/feed");
       }
       router.refresh();
     } catch (error) { setStatus(errorMessage(error)); }
@@ -47,7 +47,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     try {
       const { error } = await createClient().auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback?next=${signup ? "/onboarding" : "/tasks"}` },
+        options: { redirectTo: `${window.location.origin}/auth/callback?next=${signup ? "/onboarding" : "/feed"}` },
       });
       if (error) throw error;
     } catch (error) { setStatus(errorMessage(error)); setBusy(false); }
@@ -58,7 +58,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       <div><label className="field-label" htmlFor="email">Email address</label><input className="field" id="email" name="email" type="email" autoComplete="email" placeholder="mina@example.com" required /></div>
       <div><div className="flex items-center justify-between"><label className="field-label" htmlFor="password">Password</label></div><div className="relative"><input className="field pr-12" id="password" name="password" type={showPassword ? "text" : "password"} autoComplete={signup ? "new-password" : "current-password"} minLength={8} placeholder={signup ? "At least 8 characters" : "Your password"} required /><button type="button" className="absolute right-1 top-1 grid h-11 w-11 place-items-center rounded-xl text-muted hover:text-ink" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>
       {signup && <label className="flex items-start gap-3 text-sm leading-5 text-muted"><input type="checkbox" required className="mt-1 h-4 w-4 accent-[var(--brand)]" /><span>I agree to the <Link href="/terms" className="font-bold text-ink underline">Terms</Link> and <Link href="/privacy" className="font-bold text-ink underline">Privacy Policy</Link>.</span></label>}
-      <button className="btn btn-primary w-full py-3" type="submit" disabled={busy}>{busy ? "Connecting…" : signup ? "Create my private list" : "Open my task list"}<ArrowRight size={17} /></button>
+      <button className="btn btn-primary w-full py-3" type="submit" disabled={busy}>{busy ? "Connecting…" : signup ? "Create my private list" : "Open my feed"}<ArrowRight size={17} /></button>
       <p aria-live="polite" className="min-h-5 text-center text-sm font-bold text-muted">{status}</p>
       <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[.12em] text-muted"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
       <button className="btn btn-secondary w-full" type="button" onClick={googleSignIn} disabled={busy}>Continue with Google</button>

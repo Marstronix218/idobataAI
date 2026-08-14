@@ -5,16 +5,20 @@ export type TaskStatus = "pending" | "completed";
 export type PostVisibility = "private" | "public";
 export type PostKind = "human_completion" | "human_progress" | "ai_daily_task" | "ai_progress" | "ai_completion";
 export type ContentStatus = "active" | "hidden" | "removed";
-export type ReactionKind = "cheer" | "respect" | "relatable" | "inspired";
+export type ReactionKind = "like";
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface UserProfile {
   id: string;
   username: string;
+  display_name: string | null;
+  bio: string | null;
   avatar_url: string | null;
+  profile_visibility: PostVisibility;
   daily_goal: number;
   interests: string[];
   default_task_visibility: TaskVisibility;
+  completion_visibility: PostVisibility;
   xp: number;
   current_streak: number;
   last_completion_date: string | null;
@@ -72,6 +76,7 @@ export interface SocialPost {
   completed_at: string | null;
   idempotency_key: string | null;
   source_key: string | null;
+  image_paths: string[];
   is_ai_generated: boolean;
   created_at: string;
   updated_at: string;
@@ -137,6 +142,32 @@ export interface NotificationPreferences {
   updated_at: string;
 }
 
+export interface ChatThread {
+  id: string;
+  user_one_id: string;
+  user_two_id: string | null;
+  companion_id: string | null;
+  created_by: string;
+  last_message_preview: string | null;
+  last_sender_user_id: string | null;
+  last_sender_companion_id: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  thread_id: string;
+  sender_user_id: string | null;
+  sender_companion_id: string | null;
+  content: string;
+  content_status: ContentStatus;
+  is_ai_generated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>;
   Insert: Insert & Record<string, unknown>;
@@ -164,6 +195,8 @@ export interface Database {
       muted_companions: Table<Record<string, unknown>>;
       content_reports: Table<Record<string, unknown>>;
       api_rate_limits: Table<Record<string, unknown>>;
+      chat_threads: Table<ChatThread, Partial<ChatThread> & Pick<ChatThread, "user_one_id" | "created_by">>;
+      chat_messages: Table<ChatMessage, Partial<ChatMessage> & Pick<ChatMessage, "thread_id" | "content">>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -187,6 +220,9 @@ export interface Database {
       set_user_block: { Args: { p_blocked_id: string; p_blocked: boolean }; Returns: boolean };
       set_companion_mute: { Args: { p_companion_id: string; p_muted: boolean }; Returns: boolean };
       mark_notifications_read: { Args: { p_ids?: string[] | null; p_all?: boolean }; Returns: number };
+      get_or_create_chat_thread: { Args: { p_user_id?: string | null; p_companion_id?: string | null }; Returns: ChatThread };
+      create_chat_message: { Args: { p_thread_id: string; p_content: string }; Returns: ChatMessage };
+      create_companion_chat_message: { Args: { p_thread_id: string; p_companion_id: string; p_content: string }; Returns: ChatMessage };
     };
     Enums: {
       task_visibility: TaskVisibility;
@@ -203,6 +239,7 @@ export interface Database {
 }
 
 export type FeedPost = SocialPost & {
+  image_urls: string[];
   user_profiles: Pick<UserProfile, "username" | "avatar_url"> | null;
   social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
   social_reactions: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id">>;

@@ -10,7 +10,8 @@ begin
   from unnest(array[
     'user_profiles','tasks','public_task_progress','social_posts','social_replies','social_reactions',
     'social_companions','social_ai_engagements','ai_jobs','notifications','notification_preferences',
-    'content_reports','blocked_users','muted_companions','account_deletion_requests','task_completion_awards'
+    'content_reports','blocked_users','muted_companions','account_deletion_requests','task_completion_awards',
+    'chat_threads','chat_messages'
   ]) expected
   where to_regclass('public.' || expected) is null;
   if missing is not null then raise exception 'missing required tables: %', missing; end if;
@@ -24,7 +25,8 @@ begin
   where n.nspname='public' and c.relkind='r' and c.relname in (
     'user_profiles','tasks','public_task_progress','social_posts','social_replies','social_reactions',
     'social_companions','social_ai_engagements','ai_jobs','notifications','notification_preferences',
-    'content_reports','blocked_users','muted_companions','account_deletion_requests','task_completion_awards'
+    'content_reports','blocked_users','muted_companions','account_deletion_requests','task_completion_awards',
+    'chat_threads','chat_messages'
   ) and not c.relrowsecurity;
   if unprotected is not null then raise exception 'RLS disabled on: %', unprotected; end if;
 end $$;
@@ -61,9 +63,67 @@ end $$;
 
 do $$
 begin
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='social_posts' and column_name='image_paths'
+  ) then raise exception 'social_posts is missing private media paths'; end if;
+  if not exists(
+    select 1 from storage.buckets
+    where id='completion-post-media'
+      and public=false
+      and file_size_limit=5242880
+      and allowed_mime_types @> array['image/jpeg','image/png','image/webp']
+  ) then raise exception 'completion post media bucket is missing or unsafe'; end if;
+end $$;
+
+do $$
+begin
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_posts_human_idempotency_key') then raise exception 'missing human post idempotency index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_posts_companion_source_key') then raise exception 'missing scheduled post idempotency index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='ai_jobs_claim_idx') then raise exception 'missing job claim index'; end if;
+end $$;
+
+do $$
+declare
+  scheduled integer;
+  expected integer;
+begin
+  select count(*) into expected from public.social_companions where active and posting_frequency > 0;
+  select public.schedule_companion_posts('2099-01-15'::date) into scheduled;
+
+  if expected <> 20 or scheduled <> expected then
+    raise exception 'expected twenty daily companion completions, got % of %', scheduled, expected;
+  end if;
+  if exists(
+    select 1 from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15'
+      and (kind <> 'ai_completion' or completed_at is null or task_title is null)
+  ) then raise exception 'scheduled companion posts must be complete task records'; end if;
+  if exists(
+    select 1 from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15'
+      and (created_at < '2099-01-15 06:00:00+00' or created_at >= '2099-01-15 23:00:00+00')
+  ) then raise exception 'scheduled companion posts must stay inside the daily time window'; end if;
+  if (
+    select count(distinct created_at) from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15'
+  ) < 2 then raise exception 'companion post times must be varied'; end if;
+  if public.schedule_companion_posts('2099-01-15'::date) <> 0 then
+    raise exception 'daily companion scheduling must be idempotent';
+  end if;
+end $$;
+
+do $$
+begin
+  if (
+    select count(*) from public.social_posts
+    where source_key like 'starter-completion:%'
+  ) <> 20 then raise exception 'starter feed must contain one post for every AI profile'; end if;
+  if exists(
+    select 1 from public.social_posts
+    where source_key like 'starter-completion:%'
+      and (kind <> 'ai_completion' or companion_id is null or completed_at is null or task_title is null)
+  ) then raise exception 'starter feed rows must be complete, attributed AI task posts'; end if;
 end $$;
 
 select pass('schema, RLS, ACL, and index contracts hold');
