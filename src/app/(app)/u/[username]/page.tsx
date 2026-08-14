@@ -206,7 +206,7 @@ export default async function ProfilePage({
       {!useDatabase && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> This profile uses demo accomplishments.</div>}
 
       <section aria-labelledby="profile-name">
-        <div className="relative h-40 overflow-hidden bg-[linear-gradient(125deg,var(--brand-soft),var(--community-soft))] sm:h-48">
+        <div className="relative h-[84px] overflow-hidden bg-[linear-gradient(125deg,var(--brand-soft),var(--community-soft))] sm:h-[108px]">
           <div className="absolute -right-14 -top-24 h-72 w-72 rounded-full border border-brand/25" />
           <div className="absolute right-12 top-10 h-40 w-40 rounded-full border border-community/25" />
           <div className="paper-grid absolute inset-0 opacity-50" />

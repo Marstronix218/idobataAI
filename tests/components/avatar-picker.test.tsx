@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { AvatarPicker } from "@/components/profile/avatar-picker";
 
 describe("AvatarPicker", () => {
+  it("opens the file picker when the displayed profile photo is activated", () => {
+    render(<AvatarPicker value={null} onChange={vi.fn()} initials="MM" onUpload={vi.fn()} />);
+    const fileInput = screen.getByLabelText("Upload profile photo");
+    const openFilePicker = vi.spyOn(fileInput, "click");
+
+    fireEvent.click(screen.getByRole("button", { name: "Change profile photo" }));
+
+    expect(openFilePicker).toHaveBeenCalledOnce();
+  });
+
   it("passes a selected profile photo to the upload handler", () => {
     const onUpload = vi.fn();
     render(<AvatarPicker value={null} onChange={vi.fn()} initials="MM" onUpload={onUpload} />);
@@ -12,6 +22,12 @@ describe("AvatarPicker", () => {
     fireEvent.change(screen.getByLabelText("Upload profile photo"), { target: { files: [file] } });
 
     expect(onUpload).toHaveBeenCalledWith(file);
+  });
+
+  it("keeps the camera affordance visible on the profile photo", () => {
+    render(<AvatarPicker value={null} onChange={vi.fn()} initials="MM" onUpload={vi.fn()} />);
+
+    expect(screen.getByTestId("profile-photo-camera-overlay")).toBeVisible();
   });
 
   it("shows an uploaded custom photo as the selected choice", () => {

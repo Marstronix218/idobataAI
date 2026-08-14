@@ -17,6 +17,8 @@ describe("ProfileEditor", () => {
     expect(screen.getByLabelText("Bio")).toHaveValue("Building calmer routines, one honest win at a time.");
     expect(screen.getByLabelText("Interests")).toHaveValue("Work, Learning, Wellbeing");
     expect(screen.getByLabelText("Upload profile photo")).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+    expect(screen.getByRole("button", { name: "Change profile photo" })).toBeVisible();
+    expect(screen.queryByText("Upload photo")).not.toBeInTheDocument();
 
     expect(screen.queryByLabelText("Daily goal")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Who can open your social profile?")).not.toBeInTheDocument();

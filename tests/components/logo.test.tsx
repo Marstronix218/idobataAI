@@ -11,8 +11,11 @@ describe("Logo", () => {
     const homeLink = screen.getByRole("link", { name: "idobataAI home" });
     expect(homeLink).toHaveAttribute("href", "/");
     expect(homeLink).toHaveTextContent("idobataAI");
-    expect(container.querySelector("img")).toHaveAttribute("src", expect.stringContaining("logo-face.png"));
-    expect(container.querySelector("img")).toHaveAttribute("alt", "");
+    const logoImage = container.querySelector("img");
+    expect(logoImage).toHaveAttribute("src", expect.stringContaining("brand%2Fidobata-logo.png"));
+    expect(logoImage).toHaveAttribute("alt", "");
+    expect(logoImage).toHaveAttribute("width", "48");
+    expect(logoImage).toHaveAttribute("height", "48");
   });
 
   it("keeps the compact mark accessible through its link label", async () => {
