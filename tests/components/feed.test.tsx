@@ -105,6 +105,19 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.getAllByText("AI").length).toBeLessThan(previewFeed.length);
   });
 
+  it("keeps post content compact without shrinking the established type scale", () => {
+    render(<Feed />);
+
+    const post = screen.getByRole("article", { name: "Open post by Mina" });
+    const content = within(post).getByText(/Sent the kickoff agenda/);
+    const taskCard = within(post).getByText("Send the kickoff agenda").parentElement;
+
+    expect(post.firstElementChild).toHaveClass("p-4");
+    expect(post.firstElementChild).not.toHaveClass("sm:p-5");
+    expect(content).toHaveClass("mt-3", "text-[.98rem]", "leading-7");
+    expect(taskCard).toHaveClass("mt-3", "p-3");
+  });
+
   it("lets owners change a post audience after sharing", () => {
     render(<Feed />);
     const post = screen.getByRole("article", { name: "Open post by Mina" });

@@ -39,6 +39,16 @@ describe("ShareComposer", () => {
     expect(screen.getByText(/posted to the community/)).toBeInTheDocument();
   });
 
+  it("previews a human fallback thought in a compact post when the note is blank", () => {
+    render(<ShareComposer taskId="preview-task" />);
+
+    const thought = screen.getByText("Glad to have this one wrapped up.");
+    const taskCard = screen.getByText("Draft the project kickoff outline").parentElement;
+
+    expect(thought).toHaveClass("mt-3", "leading-7");
+    expect(taskCard).toHaveClass("mt-3", "p-3");
+  });
+
   it("previews and removes optional completion photos before posting", () => {
     render(<ShareComposer taskId="preview-task" />);
     const image = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "finished.png", { type: "image/png" });

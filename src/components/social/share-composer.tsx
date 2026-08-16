@@ -14,6 +14,8 @@ import type { SocialPost, Task, UserProfile } from "@/types";
 type Attachment = { id: string; file: File; previewUrl: string };
 type UploadTicket = { path: string; token: string };
 
+const DEFAULT_COMPLETION_NOTE = "Glad to have this one wrapped up.";
+
 const previewTask = (taskId: string): Task => ({
   id: taskId,
   owner_id: "preview",
@@ -161,6 +163,7 @@ export function ShareComposer({ taskId }: { taskId: string }) {
   const name = profile?.username ?? "You";
   const userInitials = name.slice(0, 2).toUpperCase();
   const previewUrls = attachments.map((item) => item.previewUrl);
+  const previewNote = message.trim() || DEFAULT_COMPLETION_NOTE;
 
   return <div className="app-page share-page">
     {isPreviewMode && <div role="note" className="mb-5 rounded-2xl bg-sun-soft p-4 text-sm"><strong>Preview mode.</strong> Publishing is simulated and nothing is persisted.</div>}
@@ -191,7 +194,7 @@ export function ShareComposer({ taskId }: { taskId: string }) {
 
       <aside className="lg:sticky lg:top-6 lg:self-start">
         <div className="mb-3 flex items-center gap-2 text-sm font-bold text-muted"><Eye size={16} /> Post preview</div>
-        <article className="card overflow-hidden"><div className="p-5"><header className="flex items-center gap-3"><Avatar initials={userInitials} avatarUrl={profile?.avatar_url} name={name} /><div><div className="flex items-center gap-2"><p className="font-bold">{name}</p><PrivacyBadge isPublic={audience === "public"} /></div><p className="text-xs text-muted">Just now · Completed a task</p></div></header>{message && <p className="mt-4 leading-7">{message}</p>}<div className="mt-4 rounded-2xl border border-line bg-canvas/65 p-4"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">Completed</p><p className="mt-1 font-bold">{task.title}</p><div className="mt-3 flex flex-wrap gap-2">{task.category && <span className="badge badge-category">{task.category}</span>}{profile && <span className="badge badge-streak">🔥 {profile.current_streak}-day streak</span>}<span className="badge badge-private">{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.completed_at!))}</span></div></div></div><PostMediaGrid urls={previewUrls} alt={`Photo attached to ${task.title}`} className="rounded-none border-x-0 border-b-0" /></article>
+        <article className="card overflow-hidden"><div className="p-4"><header className="flex items-center gap-2.5"><Avatar initials={userInitials} avatarUrl={profile?.avatar_url} name={name} /><div><div className="flex items-center gap-1.5"><p className="font-bold">{name}</p><PrivacyBadge isPublic={audience === "public"} /></div><p className="text-xs text-muted">Just now · Completed a task</p></div></header><p className="mt-3 leading-7">{previewNote}</p><div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">Completed</p><p className="mt-0.5 font-bold">{task.title}</p><div className="mt-2 flex flex-wrap gap-2">{task.category && <span className="badge badge-category">{task.category}</span>}{profile && <span className="badge badge-streak">🔥 {profile.current_streak}-day streak</span>}<span className="badge badge-private">{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.completed_at!))}</span></div></div></div><PostMediaGrid urls={previewUrls} alt={`Photo attached to ${task.title}`} className="rounded-none border-x-0 border-b-0" /></article>
         {posted ? <div className="animate-rise mt-4 rounded-2xl bg-success-soft p-5 text-success" role="status"><div className="flex items-center gap-2 font-bold"><Check size={18} /> Your win is posted.</div><Link href="/feed" className="btn btn-community mt-4 w-full">View in feed</Link></div> : <button className="btn btn-primary mt-4 w-full py-3" onClick={() => void publish()} disabled={busy}><Send size={17} /> {busy ? attachments.length ? "Uploading & posting…" : "Posting…" : `Post ${audience === "public" ? "to Community" : "privately"}`}</button>}
         <Link href="/tasks" className="btn btn-ghost mt-2 w-full">Keep private for now</Link>
       </aside>

@@ -40,6 +40,7 @@ begin
   if has_column_privilege('authenticated','public.social_posts','content','UPDATE') then raise exception 'authenticated can rewrite published post content directly'; end if;
   if has_table_privilege('authenticated','public.ai_jobs','SELECT') then raise exception 'authenticated can read privileged jobs'; end if;
   if has_table_privilege('authenticated','public.social_ai_engagements','SELECT') then raise exception 'authenticated can read internal AI fallback rows'; end if;
+  if not has_function_privilege('authenticated','public.can_read_social_companion(uuid)','EXECUTE') then raise exception 'authenticated cannot resolve readable companion identities'; end if;
   if has_function_privilege('authenticated','public.check_rate_limit(text,integer,integer,text)','EXECUTE') then raise exception 'authenticated can bypass rate limits'; end if;
   if exists(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace,

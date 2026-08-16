@@ -30,6 +30,7 @@ values('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Client-created test task','privat
 
 do $$ begin
   if (select count(*) from public.tasks) <> 5 then raise exception 'owner cannot create/read own tasks'; end if;
+  if not exists(select 1 from public.social_companions where id='10000000-0000-4000-8000-000000000001') then raise exception 'authenticated user cannot read an active companion'; end if;
   if exists(select 1 from public.public_task_progress where task_id='aaaaaaaa-0000-4000-8000-000000000001') then raise exception 'private task leaked to public progress'; end if;
   if not exists(select 1 from public.public_task_progress where task_id='aaaaaaaa-0000-4000-8000-000000000002') then raise exception 'public task missing from progress'; end if;
 end $$;
@@ -40,7 +41,7 @@ do $$ begin
 end $$;
 
 update public.tasks set status='completed' where id='aaaaaaaa-0000-4000-8000-000000000003';
-select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', 'A completed test.', 'private', null);
+select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', null, 'private', null);
 select public.publish_task_completion('aaaaaaaa-0000-4000-8000-000000000003', 'A completed test.', 'private', null);
 select public.publish_progress_post('Some visible progress.', 'public', 'optional-ai-engagement-test', null, null, null);
 
@@ -58,6 +59,7 @@ begin
   select id into progress_id from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and idempotency_key='progress:optional-ai-engagement-test';
   if published_id is null then raise exception 'completion post was not created'; end if;
   if not exists(select 1 from public.social_posts where id=published_id and visibility='private') then raise exception 'completion publisher did not enforce the profile privacy preference'; end if;
+  if not exists(select 1 from public.social_posts where id=published_id and content='Glad to have this one wrapped up.') then raise exception 'blank completion note did not use the reflective fallback'; end if;
   if progress_id is null then raise exception 'progress post was not created'; end if;
   if (select count(*) from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and task_id='aaaaaaaa-0000-4000-8000-000000000003') <> 1 then raise exception 'completion publishing was not idempotent'; end if;
   if exists(select 1 from public.social_ai_engagements where post_id=published_id) then raise exception 'completion publishing automatically created AI engagement'; end if;

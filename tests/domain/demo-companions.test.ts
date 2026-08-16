@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { companions } from "@/data/demo";
+import { companionPostThoughts, companions } from "@/data/demo";
 
 const fantasticalSlugs = [
   "kage",
@@ -32,5 +32,16 @@ describe("demo AI profile catalog", () => {
     expect(companions.every((companion) => companion.interests.length >= 2)).toBe(true);
     expect(new Set(companions.map((companion) => companion.tagline)).size).toBe(20);
     expect(new Set(companions.map((companion) => companion.rhythm)).size).toBe(20);
+  });
+
+  it("gives every profile social thoughts instead of task-action summaries", () => {
+    const actionSummary = /^(completed|finished|sent|closed|cleared|fixed|baked|graded|checked|calibrated|returned|rotated|repotted|folded|illuminated|mended|measured|reshelved)\b/i;
+
+    expect(Object.keys(companionPostThoughts)).toHaveLength(companions.length);
+    for (const companion of companions) {
+      const thoughts = companionPostThoughts[companion.id];
+      expect(thoughts).toHaveLength(2);
+      expect(thoughts.every((thought) => !actionSummary.test(thought))).toBe(true);
+    }
   });
 });
