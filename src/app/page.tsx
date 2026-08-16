@@ -7,10 +7,10 @@ export default function Home() {
   return (
     <main id="main-content" className="app-theme grain min-h-screen overflow-hidden bg-canvas text-ink">
       <header className="mx-auto flex max-w-[1180px] items-center justify-between px-5 py-5 sm:px-8">
-        <Logo />
+        <Logo size="large" />
         <nav className="flex items-center gap-2" aria-label="Main navigation">
           <span className="hidden sm:contents"><Link href="/login" className="btn btn-ghost">Log in</Link></span>
-          <Link href="/sign-up" className="btn btn-primary">Start with one task <ArrowRight size={16} /></Link>
+          <Link href="/sign-up" className="btn btn-primary"><span className="sm:hidden">Start</span><span className="hidden sm:inline">Start with one task</span> <ArrowRight size={16} /></Link>
         </nav>
       </header>
 

@@ -31,4 +31,14 @@ describe("Logo", () => {
 
     expect(screen.getByRole("link", { name: "Open Feed" })).toHaveAttribute("href", "/feed");
   });
+
+  it("supports a larger pre-auth brand treatment", () => {
+    const { container } = render(<Logo size="large" />);
+
+    const homeLink = screen.getByRole("link", { name: "idobataAI home" });
+    expect(homeLink).toHaveClass("sm:gap-3");
+    expect(homeLink.querySelector("span")).toHaveClass("text-[1.75rem]", "sm:text-[2rem]");
+    expect(container.querySelector("img")).toHaveAttribute("width", "64");
+    expect(container.querySelector("img")).toHaveAttribute("height", "64");
+  });
 });
