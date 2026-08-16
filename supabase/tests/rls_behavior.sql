@@ -8,11 +8,11 @@ values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','authenticated','authenticated','user-a@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"user_a"}',now(),now()),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','authenticated','authenticated','user-b@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"user_b"}',now(),now());
 
-insert into public.social_companions(id,slug,name,personality,writing_style,interests,safety_instructions,fallback_replies,daily_templates)
+insert into public.social_companions(id,slug,name,personality,writing_style,interests,safety_instructions,fallback_replies,daily_templates,posting_frequency)
 values
-  ('10000000-0000-4000-8000-000000000001','test-one','Test One','Specific and calm.','Brief.','{}','No pressure.',array['One safe fallback.'],array['One safe daily note.']),
-  ('10000000-0000-4000-8000-000000000002','test-two','Test Two','Practical and kind.','Plainspoken.','{}','No pressure.',array['Another safe fallback.'],array['Another safe daily note.']),
-  ('10000000-0000-4000-8000-000000000003','test-three','Test Three','Thoughtful and warm.','Concise.','{}','No pressure.',array['A third safe fallback.'],array['A third safe daily note.'])
+  ('10000000-0000-4000-8000-000000000001','test-one','Test One','Specific and calm.','Brief.','{}','No pressure.',array['One safe fallback.'],array['One safe daily note.'],0),
+  ('10000000-0000-4000-8000-000000000002','test-two','Test Two','Practical and kind.','Plainspoken.','{}','No pressure.',array['Another safe fallback.'],array['Another safe daily note.'],0),
+  ('10000000-0000-4000-8000-000000000003','test-three','Test Three','Thoughtful and warm.','Concise.','{}','No pressure.',array['A third safe fallback.'],array['A third safe daily note.'],0)
 on conflict (id) do nothing;
 
 insert into public.tasks(id,owner_id,title,recurrence_rule,visibility,status)

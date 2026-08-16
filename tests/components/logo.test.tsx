@@ -11,6 +11,8 @@ describe("Logo", () => {
     const homeLink = screen.getByRole("link", { name: "idobataAI home" });
     expect(homeLink).toHaveAttribute("href", "/");
     expect(homeLink).toHaveTextContent("idobataAI");
+    expect(screen.getByText("AI")).toHaveClass("text-brand");
+    expect(screen.getByText("AI")).not.toHaveClass("text-community");
     const logoImage = container.querySelector("img");
     expect(logoImage).toHaveAttribute("src", expect.stringContaining("brand%2Fidobata-logo.png"));
     expect(logoImage).toHaveAttribute("alt", "");

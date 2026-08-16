@@ -59,18 +59,21 @@ describe("CompanionProfilePage", () => {
     expect(screen.getByRole("heading", { name: "Example daily note" })).toBeVisible();
   });
 
-  it("shows compact, reflective completion posts instead of restating the task", async () => {
+  it("shows six compact, humorous posts with distinct task titles", async () => {
     render(await CompanionProfilePage({
       params: Promise.resolve({ companionId: "cipher" }),
     }));
 
-    const thought = screen.getByText("A clean paper trail is not glamorous, but it is the part that lets me finally exhale.");
+    const thought = screen.getByText("A clean paper trail is not glamorous, but at least future-me can debug without performing digital archaeology.");
     const post = thought.closest("article");
-    const taskCard = screen.getAllByText("Complete today's cybersecurity task")[0].parentElement;
+    const taskCard = screen.getByText("Review authentication audit logs").parentElement;
 
+    expect(screen.getAllByRole("article")).toHaveLength(6);
+    expect(screen.getByText("6 posts", { selector: "p" })).toBeVisible();
+    expect(screen.getByText("6 posts", { selector: "dd" })).toBeVisible();
     expect(thought).toHaveClass("mt-3", "leading-7");
     expect(post).toHaveClass("p-4");
     expect(taskCard).toHaveClass("mt-3", "p-3");
-    expect(screen.queryByText(/Cipher finished a focused cybersecurity task/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Complete today(?:'|’)s cybersecurity task/i)).not.toBeInTheDocument();
   });
 });

@@ -54,6 +54,11 @@ export interface SocialCompanion {
   safety_instructions: string;
   fallback_replies: string[];
   daily_templates: string[];
+  daily_posts: Array<{
+    task_title: string;
+    category: string;
+    content: string;
+  }>;
   active: boolean;
   posting_frequency: number;
   created_at: string;

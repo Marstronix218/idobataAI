@@ -84,6 +84,9 @@ begin
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_posts_human_idempotency_key') then raise exception 'missing human post idempotency index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_posts_companion_source_key') then raise exception 'missing scheduled post idempotency index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='ai_jobs_claim_idx') then raise exception 'missing job claim index'; end if;
+  if has_function_privilege('authenticated', 'public.apply_companion_post_catalog()', 'EXECUTE') then
+    raise exception 'authenticated users must not execute the internal companion catalog helper';
+  end if;
 end $$;
 
 do $$
@@ -91,26 +94,99 @@ declare
   scheduled integer;
   expected integer;
 begin
-  select least(4, count(*)) into expected from public.social_companions where active and posting_frequency > 0;
+  select coalesce(sum(posting_frequency), 0)::integer into expected
+  from public.social_companions
+  where active and posting_frequency > 0;
+
+  if exists(
+    select 1
+    from public.social_companions companion
+    where companion.active and companion.posting_frequency > 0
+      and (
+        select count(*) <> companion.posting_frequency
+          or count(distinct post.task_title) <> companion.posting_frequency
+          or count(distinct post.created_at) <> companion.posting_frequency
+        from public.social_posts post
+        where post.companion_id = companion.id
+          and post.source_key like 'daily-completion:%:' || current_date::text || '%'
+      )
+  ) then raise exception 'migration-day companion slots are missing or repetitive'; end if;
+
   select public.schedule_companion_posts('2099-01-15'::date) into scheduled;
 
-  if expected <> 4 or scheduled <> expected then
-    raise exception 'expected a restrained rotating cast of four daily companion completions, got % of %', scheduled, expected;
+  if exists(select 1 from public.social_companions where active and posting_frequency not between 3 and 12) then
+    raise exception 'active companions must schedule at least three daily posts';
+  end if;
+  if expected < 60 or scheduled <> expected then
+    raise exception 'expected each active companion to reach its daily cadence, got % of %', scheduled, expected;
   end if;
   if exists(
+    select 1
+    from public.social_companions companion
+    where companion.active and companion.posting_frequency > 0
+      and (
+        select count(*)
+        from public.social_posts post
+        where post.companion_id=companion.id
+          and post.source_key like 'daily-completion:%:2099-01-15%'
+      ) <> companion.posting_frequency
+  ) then raise exception 'a companion did not receive its configured daily post count'; end if;
+  if exists(
+    select 1
+    from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15%'
+    group by companion_id
+    having count(distinct task_title) <> count(*) or count(distinct created_at) <> count(*)
+  ) then raise exception 'daily companion tasks and times must be distinct'; end if;
+  if exists(
     select 1 from public.social_posts
-    where source_key like 'daily-completion:%:2099-01-15'
+    where kind = 'ai_completion'
+      and task_title ~* '^complete today(''|’)s .+ task$'
+  ) then raise exception 'scheduled companion posts must use concrete task titles'; end if;
+  if exists(
+    select 1 from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15%'
+      and (content is null or btrim(content)='' or content=task_title)
+  ) then raise exception 'scheduled companion posts must pair tasks with reactions'; end if;
+  if exists(
+    select 1 from public.social_companions
+    where active and posting_frequency > 0
+      and (jsonb_typeof(daily_posts) <> 'array' or jsonb_array_length(daily_posts) < posting_frequency)
+  ) then raise exception 'active companion daily post catalogs cannot satisfy cadence'; end if;
+  if exists(
+    select 1 from public.social_companions companion
+    cross join lateral jsonb_array_elements(companion.daily_posts) post
+    where companion.active and posting_frequency > 0
+      and not (
+        post ? 'task_title' and post ? 'category' and post ? 'content'
+        and length(btrim(post->>'task_title')) > 0
+        and length(btrim(post->>'category')) > 0
+        and length(btrim(post->>'content')) > 0
+      )
+  ) then raise exception 'daily post catalog entries are incomplete'; end if;
+  if exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='social_companions' and column_name='daily_posts'
+      and data_type <> 'jsonb'
+  ) or not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='social_companions' and column_name='daily_posts'
+  ) then raise exception 'social companions are missing the structured daily post catalog'; end if;
+  if exists(
+    select 1 from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15%'
+      and source_key !~ '^daily-completion:[0-9a-f-]+:2099-01-15(:[2-9]|:1[0-2])?$'
+  ) then raise exception 'scheduled companion source keys are not slot-aware'; end if;
+  if exists(
+    select 1 from public.social_posts
+    where source_key like 'daily-completion:%:2099-01-15%'
       and (kind <> 'ai_completion' or completed_at is null or task_title is null)
   ) then raise exception 'scheduled companion posts must be complete task records'; end if;
   if exists(
     select 1 from public.social_posts
-    where source_key like 'daily-completion:%:2099-01-15'
+    where source_key like 'daily-completion:%:2099-01-15%'
       and (created_at < '2099-01-15 06:00:00+00' or created_at >= '2099-01-15 23:00:00+00')
   ) then raise exception 'scheduled companion posts must stay inside the daily time window'; end if;
-  if (
-    select count(distinct created_at) from public.social_posts
-    where source_key like 'daily-completion:%:2099-01-15'
-  ) < 2 then raise exception 'companion post times must be varied'; end if;
   if public.schedule_companion_posts('2099-01-15'::date) <> 0 then
     raise exception 'daily companion scheduling must be idempotent';
   end if;

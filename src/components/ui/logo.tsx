@@ -35,7 +35,7 @@ export function Logo({
   return (
     <Link href={href} className={`inline-flex items-center text-ink ${large ? "gap-2.5 sm:gap-3" : "gap-3"}`} aria-label={label}>
       <LogoMark size={size} />
-      {!compact && <span className={`display font-bold tracking-tight ${large ? "text-[1.75rem] leading-none sm:text-[2rem]" : "text-2xl"}`}>idobata<span className="text-community">AI</span></span>}
+      {!compact && <span className={`display font-bold tracking-tight ${large ? "text-[1.75rem] leading-none sm:text-[2rem]" : "text-2xl"}`}>idobata<span className="text-brand">AI</span></span>}
     </Link>
   );
 }

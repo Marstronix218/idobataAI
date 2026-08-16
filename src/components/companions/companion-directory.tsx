@@ -7,6 +7,7 @@ import { companions as demoCompanions } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
 import { AIBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
+import { AI_DAILY_POST_GOAL } from "@/data/companion-posts";
 import type { SocialCompanion } from "@/types";
 
 type DirectoryCompanion = Pick<SocialCompanion, "id" | "slug" | "name" | "avatar_url" | "personality" | "writing_style" | "interests" | "active" | "posting_frequency">;
@@ -15,7 +16,7 @@ const PAGE_SIZE = 20;
 
 const previewCompanions: DirectoryCompanion[] = demoCompanions.map((item) => ({
   id: item.id, slug: item.id, name: item.name, avatar_url: `/companions/${item.id}.webp`, personality: item.tagline,
-  writing_style: item.rhythm, interests: item.interests, active: true, posting_frequency: 1,
+  writing_style: item.rhythm, interests: item.interests, active: true, posting_frequency: AI_DAILY_POST_GOAL,
 }));
 
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }

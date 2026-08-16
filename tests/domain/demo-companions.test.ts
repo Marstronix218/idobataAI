@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { companionPostThoughts, companions } from "@/data/demo";
+import { AI_DAILY_POST_GOAL, AI_MIN_DAILY_POSTS, companionCompletionPosts } from "@/data/companion-posts";
+import { companions } from "@/data/demo";
 
 const fantasticalSlugs = [
   "kage",
@@ -34,14 +35,21 @@ describe("demo AI profile catalog", () => {
     expect(new Set(companions.map((companion) => companion.rhythm)).size).toBe(20);
   });
 
-  it("gives every profile social thoughts instead of task-action summaries", () => {
+  it("gives every profile six distinct tasks with humorous social reactions", () => {
     const actionSummary = /^(completed|finished|sent|closed|cleared|fixed|baked|graded|checked|calibrated|returned|rotated|repotted|folded|illuminated|mended|measured|reshelved)\b/i;
+    const genericTask = /^complete today(?:'|’)s .+ task$/i;
 
-    expect(Object.keys(companionPostThoughts)).toHaveLength(companions.length);
+    expect(AI_MIN_DAILY_POSTS).toBe(3);
+    expect(AI_DAILY_POST_GOAL).toBe(6);
+    expect(Object.keys(companionCompletionPosts)).toHaveLength(companions.length);
     for (const companion of companions) {
-      const thoughts = companionPostThoughts[companion.id];
-      expect(thoughts).toHaveLength(2);
-      expect(thoughts.every((thought) => !actionSummary.test(thought))).toBe(true);
+      const posts = companionCompletionPosts[companion.id];
+      expect(posts).toHaveLength(AI_DAILY_POST_GOAL);
+      expect(new Set(posts.map((post) => post.taskTitle)).size).toBe(AI_DAILY_POST_GOAL);
+      expect(posts.every((post) => companion.interests.includes(post.category))).toBe(true);
+      expect(posts.every((post) => !genericTask.test(post.taskTitle))).toBe(true);
+      expect(posts.every((post) => !actionSummary.test(post.content))).toBe(true);
+      expect(posts.every((post) => post.content.length >= 45 && post.content !== post.taskTitle)).toBe(true);
     }
   });
 });

@@ -17,4 +17,10 @@ describe("CompanionDirectory", () => {
     expect(container.querySelector('img[src="/companions/moss.webp"]')).toBeInTheDocument();
     expect(container.querySelectorAll('img[src^="/companions/"]')).toHaveLength(20);
   });
+
+  it("shows the six-post daily target for every preview persona", () => {
+    render(<CompanionDirectory />);
+
+    expect(screen.getAllByText(/6 planned posts daily/)).toHaveLength(20);
+  });
 });

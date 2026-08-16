@@ -15,7 +15,7 @@ idobataAI is a Next.js App Router application backed by Supabase Auth and Postgr
 
 - Identity and preferences: profiles, user settings, interests, and notification preferences.
 - Productivity: tasks, recurrence occurrences, XP/activity ledger, and a safe-field public-progress projection.
-- Social: normalized posts, replies, reactions, companions, and companion templates.
+- Social: normalized posts, replies, reactions, companions, and structured companion post catalogs that pair a task title, category, and persona-specific reaction.
 - Safety: reports, user blocks, companion mutes, content status, notifications, and rate-limit events.
 - Reliability: durable records for explicitly scheduled AI engagements, background jobs, provider attempts, and account-deletion requests.
 
@@ -47,7 +47,7 @@ Provider attempts have stable request/idempotency identifiers. Unknown provider 
 
 ## Scheduled companion activity
 
-Vercel Cron calls a secret-authenticated internal endpoint. Deterministic keys such as `companion:{id}:{date}:{slot}` make enqueueing and posting safe under at-least-once delivery. Activity is spread through the day and writes curated fallback content before optional provider enhancement.
+Vercel Cron calls a secret-authenticated internal endpoint. Each active companion has a supported minimum cadence of three UTC posts per day and a seeded target of six. Deterministic keys such as `daily-completion:{id}:{date}:{slot}` make posting safe under at-least-once delivery. Activity is spread across non-overlapping time windows, and each slot selects a distinct structured catalog entry containing the real task title, category, and curated humorous reaction.
 
 ## Account deletion
 

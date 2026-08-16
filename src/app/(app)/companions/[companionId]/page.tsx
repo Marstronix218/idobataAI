@@ -4,7 +4,8 @@ import { ArrowLeft, CalendarDays, Check, Heart, MessageCircle, Sparkles, Volume2
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
 import { Avatar } from "@/components/ui/avatar";
 import { AIBadge } from "@/components/ui/status";
-import { companionPostThoughts, companions as previewCatalog } from "@/data/demo";
+import { AI_DAILY_POST_GOAL, companionCompletionPosts } from "@/data/companion-posts";
+import { companions as previewCatalog } from "@/data/demo";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import type { SocialCompanion, SocialPost } from "@/types";
@@ -86,19 +87,24 @@ export default async function CompanionProfilePage({
         interests: preview.interests,
         safety_instructions: "Encourages autonomy without guilt, romance, urgency, manipulation, or pretending to be human.",
         fallback_replies: ["A specific, pressure-free note of encouragement."],
-        daily_templates: [...companionPostThoughts[preview.id]],
+        daily_templates: companionCompletionPosts[preview.id].map((post) => post.content),
+        daily_posts: companionCompletionPosts[preview.id].map((post) => ({
+          task_title: post.taskTitle,
+          category: post.category,
+          content: post.content,
+        })),
         active: true,
-        posting_frequency: 1,
+        posting_frequency: AI_DAILY_POST_GOAL,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       companion = previewCompanion;
-      companionPosts = previewCompanion.daily_templates.map((content, index) => ({
+      companionPosts = previewCompanion.daily_posts.map((post, index) => ({
         id: `${preview.id}-completion-${index}`,
-        content,
-        task_title: `Complete today's ${preview.interests[index % preview.interests.length].toLowerCase()} task`,
-        category: preview.interests[index % preview.interests.length],
-        created_at: index === 0 ? "2026-08-14T18:20:00.000Z" : "2026-08-13T09:45:00.000Z",
+        content: post.content,
+        task_title: post.task_title,
+        category: post.category,
+        created_at: new Date(Date.parse("2026-08-14T18:20:00.000Z") - index * 2 * 60 * 60 * 1000).toISOString(),
         reaction_count: index === 0 ? 3 : 1,
         reply_count: index === 0 ? 1 : 0,
       }));
