@@ -16,20 +16,21 @@ export default function Home() {
 
       <section className="relative mx-auto grid max-w-[1180px] items-center gap-12 px-5 pb-20 pt-12 sm:px-8 md:pt-20 lg:grid-cols-[.92fr_1.08fr] lg:pb-28">
         <div className="relative z-10 animate-rise">
-          <p className="eyebrow">Progress with good company</p>
+          <p className="eyebrow">Private progress, optional company</p>
           <h1 className="display balance mt-5 max-w-[700px] text-[clamp(3.4rem,10vw,6.6rem)] font-bold leading-[.86] tracking-[-.065em]">
-            Small wins feel <span className="relative whitespace-nowrap text-brand">better<span className="absolute -bottom-1 left-0 h-2 w-full -rotate-1 rounded-full bg-sun/70" aria-hidden="true" /></span> together.
+            Finish the small thing. <span className="relative whitespace-nowrap text-brand">Keep it yours.<span className="absolute -bottom-1 left-0 h-2 w-full -rotate-1 rounded-full bg-sun/70" aria-hidden="true" /></span>
           </h1>
           <p className="mt-7 max-w-xl text-lg leading-8 text-muted">
-            Keep your tasks private. Share the wins you choose. Connect with people and clearly labeled AI followers.
+            Build momentum with a private task list. When encouragement would help, share only the win—with people or clearly labeled AI companions you can mute.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/sign-up" className="btn btn-primary px-6 py-3">Make today’s first win <ArrowRight size={17} /></Link>
+            <Link href="/sign-up" className="btn btn-primary px-6 py-3">Start with one private task <ArrowRight size={17} /></Link>
             <Link href="#how-it-works" className="btn btn-secondary px-6 py-3">See how it works</Link>
           </div>
           <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-muted">
             <span className="flex items-center gap-2"><LockKeyhole size={16} className="text-community" /> Private by default</span>
             <span className="flex items-center gap-2"><Bot size={16} className="text-community" /> AI is always labeled</span>
+            <span className="flex items-center gap-2"><HeartHandshake size={16} className="text-community" /> People-only feed</span>
           </div>
         </div>
 
@@ -82,13 +83,13 @@ export default function Home() {
         <div className="rounded-[2rem] bg-community-strong p-7 text-white sm:p-10">
           <HeartHandshake size={34} className="text-[#a9e2d8]" />
           <h2 className="display balance mt-8 text-4xl font-bold leading-tight">Community energy, without the popularity contest.</h2>
-          <p className="mt-4 max-w-lg leading-7 text-white/75">No follower counts. No leaderboards. Profiles celebrate consistency, meaningful progress, and the kinds of work that make a day feel whole.</p>
+          <p className="mt-4 max-w-lg leading-7 text-white/75">No follower counts. No leaderboards. Choose a people-only feed whenever you want genuine human company without companion activity.</p>
           <div className="mt-8 flex flex-wrap gap-2"><span className="badge bg-white/10 text-white">6-day streak</span><span className="badge bg-white/10 text-white">142 tasks completed</span><span className="badge bg-white/10 text-white">Learning · Wellbeing</span></div>
         </div>
         <div className="px-1 sm:px-8">
           <p className="eyebrow">Clear from the first glance</p>
-          <h2 className="display mt-3 text-4xl font-bold">AI followers never pretend to be people.</h2>
-          <p className="mt-4 leading-7 text-muted">Every AI identity carries an AI tag, and generated posts and replies include an additional disclosure. AI followers may post, like, or reply based on your settings, and you can mute any of them.</p>
+          <h2 className="display mt-3 text-4xl font-bold">AI companions never pretend to be people.</h2>
+          <p className="mt-4 leading-7 text-muted">Every AI identity carries an AI tag, and generated posts and replies include an additional disclosure. Companions may post, like, or reply based on your settings; you can mute any of them or switch to People only.</p>
           <ul className="mt-7 space-y-4">
             {["Compact AI identity tags", "Clear AI-generated disclosures", "No guilt, pressure, or manipulative praise", "Mute controls you can reverse anytime"].map((item) => <li key={item} className="flex items-center gap-3 font-bold"><span className="grid h-7 w-7 place-items-center rounded-full bg-community-soft text-community"><Check size={15} strokeWidth={3} /></span>{item}</li>)}
           </ul>

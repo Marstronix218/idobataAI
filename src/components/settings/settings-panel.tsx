@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Bell, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, Trash2, VolumeX, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { Avatar } from "@/components/ui/avatar";
 import { PrivacyBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import { createClient } from "@/lib/supabase/client";
@@ -14,6 +15,10 @@ type Preferences = {
   companion_activity: boolean;
   email_digest: boolean;
 };
+
+type BlockedPerson = { id: string; name: string; username: string; avatarUrl: string | null };
+type MutedCompanion = { id: string; name: string; slug: string; avatarUrl: string | null };
+type SafetyList<T> = { items: T[] };
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={onChange} className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? "bg-community" : "bg-line-strong"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${checked ? "left-6" : "left-1"}`} /></button>;
@@ -37,9 +42,23 @@ const previewProfile: UserProfile = {
   updated_at: new Date().toISOString(),
 };
 
+const previewBlockedPeople: BlockedPerson[] = [
+  { id: "preview-casey", name: "Casey Park", username: "casey", avatarUrl: null },
+];
+const previewMutedCompanions: MutedCompanion[] = [
+  { id: "preview-orbit", name: "Orbit", slug: "orbit", avatarUrl: "/companions/orbit.webp" },
+];
+
+function initials(name: string) {
+  return name.split(/[\s_-]+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
 export function SettingsPanel() {
   const [profile, setProfile] = useState<UserProfile | null>(isPreviewMode ? previewProfile : null);
   const [prefs, setPrefs] = useState<Preferences>({ reactions: true, replies: true, companion_activity: true, email_digest: false });
+  const [blockedPeople, setBlockedPeople] = useState<BlockedPerson[]>(isPreviewMode ? previewBlockedPeople : []);
+  const [mutedCompanions, setMutedCompanions] = useState<MutedCompanion[]>(isPreviewMode ? previewMutedCompanions : []);
+  const [safetyBusyId, setSafetyBusyId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [status, setStatus] = useState("");
@@ -59,6 +78,18 @@ export function SettingsPanel() {
       if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error));
     }).finally(() => {
       if (!controller.signal.aborted) setBusy(false);
+    });
+
+    Promise.allSettled([
+      apiRequest<SafetyList<BlockedPerson>>("/api/blocks", { signal: controller.signal }),
+      apiRequest<SafetyList<MutedCompanion>>("/api/companion-mutes", { signal: controller.signal }),
+    ]).then(([blocksResult, mutesResult]) => {
+      if (controller.signal.aborted) return;
+      if (blocksResult.status === "fulfilled") setBlockedPeople(blocksResult.value.items);
+      if (mutesResult.status === "fulfilled") setMutedCompanions(mutesResult.value.items);
+      if (blocksResult.status === "rejected" || mutesResult.status === "rejected") {
+        setStatus("Your settings loaded, but some safety lists could not be refreshed.");
+      }
     });
     return () => controller.abort();
   }, []);
@@ -134,6 +165,34 @@ export function SettingsPanel() {
     }
   }
 
+  async function unblock(person: BlockedPerson) {
+    setSafetyBusyId(`person-${person.id}`);
+    setStatus("");
+    try {
+      if (!isPreviewMode) await apiRequest<void>(`/api/blocks/${person.id}`, { method: "DELETE" });
+      setBlockedPeople((current) => current.filter((item) => item.id !== person.id));
+      setStatus(`${person.name} unblocked.${isPreviewMode ? " Preview only." : ""}`);
+    } catch (error) {
+      setStatus(errorMessage(error));
+    } finally {
+      setSafetyBusyId(null);
+    }
+  }
+
+  async function unmute(companion: MutedCompanion) {
+    setSafetyBusyId(`companion-${companion.id}`);
+    setStatus("");
+    try {
+      if (!isPreviewMode) await apiRequest<void>(`/api/companion-mutes/${companion.id}`, { method: "DELETE" });
+      setMutedCompanions((current) => current.filter((item) => item.id !== companion.id));
+      setStatus(`${companion.name} unmuted.${isPreviewMode ? " Preview only." : ""}`);
+    } catch (error) {
+      setStatus(errorMessage(error));
+    } finally {
+      setSafetyBusyId(null);
+    }
+  }
+
   return <>
     {isPreviewMode && <div role="note" className="mb-5 rounded-2xl bg-sun-soft p-4 text-sm"><strong>Preview mode.</strong> Settings use demo values and will not persist.</div>}
     <header className="flex items-start justify-between gap-4">
@@ -159,8 +218,8 @@ export function SettingsPanel() {
 
           <section id="privacy" className="card p-5 sm:p-6">
             <div className="flex items-center gap-2"><LockKeyhole size={19} className="text-brand" /><h2 className="display text-xl font-bold">Privacy and visibility</h2></div>
-            <label className="mt-5 block"><span className="field-label">Who can open your social profile?</span><select className="field" name="profileVisibility" defaultValue={profile.profile_visibility}><option value="private">Only me</option><option value="public">Other signed-in users</option></select></label>
-            <p className="mt-2 text-sm leading-6 text-muted">A public profile shows only posts and task progress you already marked Public. Private tasks and posts stay hidden.</p>
+            <label className="mt-5 block"><span className="field-label">Who can view your profile details and timeline?</span><select className="field" name="profileVisibility" defaultValue={profile.profile_visibility}><option value="private">Only me</option><option value="public">Other signed-in users</option></select></label>
+            <p className="mt-2 text-sm leading-6 text-muted">Your name, handle, and avatar can still appear on posts you share. A public profile also shows only posts and task progress you already marked Public. Private tasks and posts stay hidden.</p>
             <label className="mt-5 block"><span className="field-label">Who can see posted task completions?</span><select className="field" name="completionVisibility" defaultValue={profile.completion_visibility}><option value="private">Only me</option><option value="public">Other signed-in users</option></select></label>
             <div className="mt-3"><PrivacyBadge isPublic={profile.completion_visibility === "public"} /></div>
             <p className="mt-3 text-sm leading-6 text-muted">This applies when you press Post after completing a task. AI accounts remain active in the feed either way.</p>
@@ -174,13 +233,15 @@ export function SettingsPanel() {
         </section>
 
         <section id="muted" className="card p-5 sm:p-6">
-          <div className="flex items-center gap-2"><VolumeX size={19} className="text-muted" /><h2 className="display text-xl font-bold">Muted AI followers</h2></div>
-          <p className="mt-5 text-sm text-muted">Mute controls are available on every AI follower profile.</p>
+          <div className="flex items-center gap-2"><VolumeX size={19} className="text-muted" /><h2 className="display text-xl font-bold">Muted AI companions</h2></div>
+          <p className="mt-2 text-sm text-muted">Muted AI companions stay out of your feed. You can also manage mute controls from their profiles.</p>
+          {mutedCompanions.length ? <ul className="mt-4 divide-y divide-line" aria-label="Muted AI companions">{mutedCompanions.map((companion) => <li key={companion.id} className="flex items-center gap-3 py-4"><Avatar initials={initials(companion.name)} avatarUrl={companion.avatarUrl} name={companion.name} ai /><div className="min-w-0 flex-1"><p className="truncate font-bold">{companion.name}</p><p className="truncate text-sm text-muted">@{companion.slug} · AI companion</p></div><button type="button" className="btn btn-secondary shrink-0" aria-label={`Unmute ${companion.name}`} disabled={safetyBusyId !== null} onClick={() => void unmute(companion)}>{safetyBusyId === `companion-${companion.id}` ? "Unmuting…" : "Unmute"}</button></li>)}</ul> : <p className="soft-card mt-4 p-5 text-center text-sm text-muted">You haven’t muted any AI companions.</p>}
         </section>
 
         <section id="safety" className="card border-danger/25 p-5 sm:p-6">
           <div className="flex items-center gap-2"><ShieldCheck size={19} className="text-danger" /><h2 className="display text-xl font-bold">Account and data</h2></div>
-          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">Delete account</p><p className="mt-1 max-w-lg text-sm leading-6 text-muted">Permanently remove your profile, tasks, posts, replies, and reactions.</p></div><button className="btn btn-danger shrink-0" onClick={() => setDeleteOpen(true)}><Trash2 size={16} /> Delete account</button></div>
+          <div className="mt-5"><h3 className="font-bold">Blocked people</h3><p className="mt-1 text-sm leading-6 text-muted">Blocked people cannot interact with you, and you won’t see each other’s community activity.</p>{blockedPeople.length ? <ul className="mt-3 divide-y divide-line" aria-label="Blocked people">{blockedPeople.map((person) => <li key={person.id} className="flex items-center gap-3 py-4"><Avatar initials={initials(person.name)} avatarUrl={person.avatarUrl} name={person.name} /><div className="min-w-0 flex-1"><p className="truncate font-bold">{person.name}</p><p className="truncate text-sm text-muted">@{person.username}</p></div><button type="button" className="btn btn-secondary shrink-0" aria-label={`Unblock ${person.name}`} disabled={safetyBusyId !== null} onClick={() => void unblock(person)}>{safetyBusyId === `person-${person.id}` ? "Unblocking…" : "Unblock"}</button></li>)}</ul> : <p className="soft-card mt-4 p-5 text-center text-sm text-muted">You haven’t blocked anyone.</p>}</div>
+          <div className="mt-5 flex flex-col gap-4 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">Delete account</p><p className="mt-1 max-w-lg text-sm leading-6 text-muted">Permanently remove your profile, tasks, posts, replies, and reactions.</p></div><button className="btn btn-danger shrink-0" onClick={() => setDeleteOpen(true)}><Trash2 size={16} /> Delete account</button></div>
         </section>
       </div>
     </div>

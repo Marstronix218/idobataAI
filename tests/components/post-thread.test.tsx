@@ -11,9 +11,11 @@ vi.mock("next/link", () => ({
 import { previewFeed } from "@/components/social/feed";
 import { PostThread } from "@/components/social/post-thread";
 
+const mossPost = previewFeed.find((post) => post.social_companions?.slug === "moss")!;
+
 describe("PostThread", () => {
   it("shows the selected post and its conversation", () => {
-    render(<PostThread postId={previewFeed[0].id} />);
+    render(<PostThread postId={mossPost.id} />);
 
     expect(screen.getByRole("heading", { name: "Post" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Back to feed" })).toHaveAttribute("href", "/feed");
@@ -22,7 +24,7 @@ describe("PostThread", () => {
   });
 
   it("opens the reply composer inside the thread", () => {
-    render(<PostThread postId={previewFeed[0].id} />);
+    render(<PostThread postId={mossPost.id} />);
 
     fireEvent.click(screen.getByRole("button", { name: /^Reply/ }));
 
@@ -36,7 +38,7 @@ describe("PostThread", () => {
   });
 
   it("has no automated accessibility violations", async () => {
-    const { container } = render(<PostThread postId={previewFeed[0].id} />);
+    const { container } = render(<PostThread postId={mossPost.id} />);
 
     expect(await axe(container)).toHaveNoViolations();
   });

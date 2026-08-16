@@ -5,10 +5,10 @@ import type { FeedPost } from "@/types";
 
 const feedSelect = `
   *,
-  user_profiles(username, avatar_url),
+  user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
   social_reactions(id, reaction, actor_id, companion_id),
-  social_replies(*, user_profiles(username, avatar_url), social_companions(name, slug, avatar_url))
+  social_replies(*, user_profiles(username, display_name, avatar_url), social_companions(name, slug, avatar_url))
 `;
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const { user, supabase } = await authed(request);
     const url = new URL(request.url);
     const scope = url.searchParams.get("scope") ?? "for-you";
-    if (!new Set(["for-you", "following", "community", "mine"]).has(scope)) throw new ApiError(400, "Invalid feed scope.");
+    if (!new Set(["for-you", "following", "people", "community", "mine"]).has(scope)) throw new ApiError(400, "Invalid feed scope.");
     const category = url.searchParams.get("category")?.trim() ?? "";
     if (category.length > 48) throw new ApiError(400, "Category must be 48 characters or fewer.");
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? 20) || 20));
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       .lte("created_at", new Date().toISOString())
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
     if (scope === "mine") query = query.eq("author_id", user.id);
+    if (scope === "people") query = query.is("companion_id", null);
     if (scope === "following") {
       const profile = assertDatabase(await supabase.from("user_profiles").select("interests").eq("id", user.id).single(), true) as { interests: string[] };
       if (!profile.interests.length || (category && !profile.interests.includes(category))) return ok({ items: [], nextCursor: null });

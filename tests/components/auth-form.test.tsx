@@ -33,4 +33,12 @@ describe("AuthForm", () => {
 
     expect(router.push).toHaveBeenCalledWith("/feed");
   });
+
+  it("links users to password recovery and confirmation resend", () => {
+    const { rerender } = render(<AuthForm mode="login" />);
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password");
+
+    rerender(<AuthForm mode="signup" />);
+    expect(screen.getByRole("link", { name: "Resend confirmation email" })).toHaveAttribute("href", "/resend-confirmation");
+  });
 });

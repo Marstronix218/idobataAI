@@ -36,6 +36,8 @@ begin
   if has_table_privilege('authenticated','public.social_posts','INSERT') then raise exception 'authenticated can bypass post publishing RPC'; end if;
   if not has_table_privilege('authenticated','public.tasks','SELECT') then raise exception 'authenticated cannot read own tasks through RLS'; end if;
   if not has_table_privilege('authenticated','public.social_posts','SELECT') then raise exception 'authenticated cannot read visible posts through RLS'; end if;
+  if not has_column_privilege('authenticated','public.social_posts','visibility','UPDATE') then raise exception 'post owners cannot change audience'; end if;
+  if has_column_privilege('authenticated','public.social_posts','content','UPDATE') then raise exception 'authenticated can rewrite published post content directly'; end if;
   if has_table_privilege('authenticated','public.ai_jobs','SELECT') then raise exception 'authenticated can read privileged jobs'; end if;
   if has_table_privilege('authenticated','public.social_ai_engagements','SELECT') then raise exception 'authenticated can read internal AI fallback rows'; end if;
   if has_function_privilege('authenticated','public.check_rate_limit(text,integer,integer,text)','EXECUTE') then raise exception 'authenticated can bypass rate limits'; end if;
@@ -88,11 +90,11 @@ declare
   scheduled integer;
   expected integer;
 begin
-  select count(*) into expected from public.social_companions where active and posting_frequency > 0;
+  select least(4, count(*)) into expected from public.social_companions where active and posting_frequency > 0;
   select public.schedule_companion_posts('2099-01-15'::date) into scheduled;
 
-  if expected <> 20 or scheduled <> expected then
-    raise exception 'expected twenty daily companion completions, got % of %', scheduled, expected;
+  if expected <> 4 or scheduled <> expected then
+    raise exception 'expected a restrained rotating cast of four daily companion completions, got % of %', scheduled, expected;
   end if;
   if exists(
     select 1 from public.social_posts
@@ -115,15 +117,10 @@ end $$;
 
 do $$
 begin
-  if (
-    select count(*) from public.social_posts
-    where source_key like 'starter-completion:%'
-  ) <> 20 then raise exception 'starter feed must contain one post for every AI profile'; end if;
   if exists(
     select 1 from public.social_posts
     where source_key like 'starter-completion:%'
-      and (kind <> 'ai_completion' or companion_id is null or completed_at is null or task_title is null)
-  ) then raise exception 'starter feed rows must be complete, attributed AI task posts'; end if;
+  ) then raise exception 'a new community must not manufacture an all-AI starter feed'; end if;
 end $$;
 
 select pass('schema, RLS, ACL, and index contracts hold');

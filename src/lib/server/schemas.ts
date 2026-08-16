@@ -42,6 +42,10 @@ export const replySchema = z.object({
 
 export const reactionSchema = z.object({ reaction: z.literal("like") }).strict();
 
+export const postUpdateSchema = z.object({
+  visibility: z.enum(["private", "public"]),
+}).strict();
+
 export const progressPostSchema = z.object({
   content: clean(1200),
   visibility: z.enum(["private", "public"]).default("public"),

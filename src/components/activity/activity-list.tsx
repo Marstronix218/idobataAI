@@ -1,9 +1,11 @@
 "use client";
 
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { KeyboardEvent, useEffect, useState } from "react";
 import { activity as demoActivity } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
+import { RelativeTime } from "@/components/ui/relative-time";
 import { AIBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import type { Notification } from "@/types";
@@ -18,7 +20,7 @@ type NotificationFilter = "all" | "unread";
 
 const previewItems: ActivityItem[] = demoActivity.map((item, index) => ({
   id: item.id, user_id: "preview", actor_id: item.ai ? null : `preview-${index}`,
-  companion_id: item.ai ? `companion-${index}` : null, post_id: index < 3 ? `post-${index}` : null,
+  companion_id: item.ai ? `companion-${index}` : null, post_id: item.postId,
   reply_id: item.text.includes("replied") ? `reply-${index}` : null,
   kind: item.text.includes("replied") ? "reply" : item.text.includes("liked") ? "reaction" : "system",
   read_at: item.id === "4" ? "2026-08-12T10:00:00.000Z" : null,
@@ -28,14 +30,6 @@ const previewItems: ActivityItem[] = demoActivity.map((item, index) => ({
   social_posts: { content: item.detail, task_title: item.detail, content_status: "active" },
 }));
 
-function relativeTime(value: string) {
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
-  return `${Math.floor(minutes / 1440)}d ago`;
-}
-
 function notificationCopy(item: ActivityItem) {
   if (item.kind === "reply") return "replied to your post";
   if (item.kind === "reaction") return "liked your post";
@@ -43,6 +37,7 @@ function notificationCopy(item: ActivityItem) {
 }
 
 export function ActivityList() {
+  const router = useRouter();
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [items, setItems] = useState<ActivityItem[]>(isPreviewMode ? previewItems : []);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -85,6 +80,19 @@ export function ActivityList() {
     } catch (error) { setStatus(errorMessage(error)); }
   }
 
+  async function openNotification(item: ActivityItem) {
+    if (!item.read_at) await markRead([item.id]);
+    if (item.post_id && item.social_posts?.content_status === "active") {
+      router.push(`/posts/${encodeURIComponent(item.post_id)}`);
+      return;
+    }
+    if (item.social_companions?.slug) {
+      router.push(`/companions/${encodeURIComponent(item.social_companions.slug)}`);
+      return;
+    }
+    if (item.user_profiles?.username) router.push(`/u/${encodeURIComponent(item.user_profiles.username)}`);
+  }
+
   function changeFilter(nextFilter: NotificationFilter) {
     setFilter(nextFilter);
   }
@@ -121,7 +129,8 @@ export function ActivityList() {
           const ai = Boolean(item.companion_id); const actor = item.social_companions?.name ?? item.user_profiles?.username ?? "idobataAI";
           const detail = item.social_posts?.task_title ?? item.social_posts?.content ?? (item.kind === "system" ? "A small streak is growing." : "A shared accomplishment");
           const avatarUrl = item.social_companions?.avatar_url ?? item.user_profiles?.avatar_url ?? null;
-          return <button key={item.id} type="button" onClick={() => void markRead([item.id])} disabled={Boolean(item.read_at)} aria-label={item.read_at ? `${actor}: ${notificationCopy(item)}. Read` : `Mark notification from ${actor} as read`} className={`relative flex w-full items-start gap-3 border-b border-line p-4 text-left transition-colors hover:bg-surface/55 disabled:cursor-default disabled:opacity-80 sm:p-5 ${item.read_at ? "bg-canvas" : "bg-brand-soft/20"}`}><Avatar initials={actor.slice(0, 2).toUpperCase()} ai={ai} avatarUrl={avatarUrl} name={actor} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"><strong>{actor}</strong>{ai && <AIBadge />}<span className="text-muted">{notificationCopy(item)}</span><span className="text-xs text-muted">· {relativeTime(item.created_at)}</span></div><p className="mt-2 border-l-2 border-line pl-3 text-sm leading-6 text-muted">{detail}</p></div>{!item.read_at && <span className="absolute right-4 top-5 h-2.5 w-2.5 rounded-full bg-brand"><span className="sr-only">Unread</span></span>}</button>;
+          const destination = item.post_id || item.social_companions?.slug || item.user_profiles?.username;
+          return <button key={item.id} type="button" onClick={() => void openNotification(item)} aria-label={`${destination ? "Open" : "Mark"} notification from ${actor}${item.read_at ? ". Read" : ""}`} className={`relative flex w-full items-start gap-3 border-b border-line p-4 text-left transition-colors hover:bg-surface/55 sm:p-5 ${item.read_at ? "bg-canvas opacity-80" : "bg-brand-soft/20"}`}><Avatar initials={actor.slice(0, 2).toUpperCase()} ai={ai} avatarUrl={avatarUrl} name={actor} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"><strong>{actor}</strong>{ai && <AIBadge />}<span className="text-muted">{notificationCopy(item)}</span><span className="text-xs text-muted">· <RelativeTime value={item.created_at} /></span></div><p className="mt-2 border-l-2 border-line pl-3 text-sm leading-6 text-muted">{detail}</p></div>{!item.read_at && <span className="absolute right-4 top-5 h-2.5 w-2.5 rounded-full bg-brand"><span className="sr-only">Unread</span></span>}</button>;
         })}</section> : !loading && <div className="border-b border-line px-6 py-14 text-center"><Bell size={26} className="mx-auto text-community" /><h2 className="display mt-4 text-xl font-bold">{filter === "unread" ? "You’re all caught up" : "Quiet for now"}</h2><p className="mt-2 text-sm text-muted">{filter === "unread" ? "New likes, replies, and progress notes will appear here." : "Likes, replies, and progress notes will gather here."}</p></div>}
         {cursor && filter === "all" && <div className="border-b border-line p-4"><button className="btn btn-ghost w-full text-community" onClick={() => void load({ append: true })} disabled={loading}>Show earlier notifications</button></div>}
       </div>

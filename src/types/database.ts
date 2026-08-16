@@ -240,11 +240,11 @@ export interface Database {
 
 export type FeedPost = SocialPost & {
   image_urls: string[];
-  user_profiles: Pick<UserProfile, "username" | "avatar_url"> | null;
+  user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
   social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
   social_reactions: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id">>;
   social_replies: Array<SocialReply & {
-    user_profiles: Pick<UserProfile, "username" | "avatar_url"> | null;
+    user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
     social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
   }>;
 };

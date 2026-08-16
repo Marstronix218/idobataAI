@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -21,10 +21,24 @@ describe("SettingsPanel", () => {
   it("controls completion-post visibility independently of posting", () => {
     render(<SettingsPanel />);
 
-    expect(screen.getByLabelText("Who can open your social profile?")).toHaveValue("private");
+    expect(screen.getByLabelText("Who can view your profile details and timeline?")).toHaveValue("private");
     expect(screen.getByLabelText("Who can see posted task completions?")).toHaveValue("private");
     expect(screen.getByText(/shows only posts and task progress you already marked Public/)).toBeInTheDocument();
     expect(screen.getByText(/This applies when you press Post/)).toBeInTheDocument();
     expect(screen.getByText(/AI accounts remain active/)).toBeInTheDocument();
+  });
+
+  it("manages blocked people and muted AI companions in preview mode", () => {
+    render(<SettingsPanel />);
+
+    expect(screen.getByRole("list", { name: "Blocked people" })).toHaveTextContent("Casey Park");
+    expect(screen.getByRole("list", { name: "Muted AI companions" })).toHaveTextContent("Orbit");
+
+    fireEvent.click(screen.getByRole("button", { name: "Unblock Casey Park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Unmute Orbit" }));
+
+    expect(screen.getByText("You haven’t blocked anyone.")).toBeVisible();
+    expect(screen.getByText("You haven’t muted any AI companions.")).toBeVisible();
+    expect(screen.getByText("Orbit unmuted. Preview only.")).toBeVisible();
   });
 });

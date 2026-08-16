@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,7 +27,8 @@ describe("Feed", { timeout: 15_000 }, () => {
 
     expect(screen.getByRole("heading", { name: "Community" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Your interests" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "People only" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("combobox", { name: "Filter feed by category" })).toHaveValue("");
     expect(screen.queryByRole("region", { name: "Share progress" })).not.toBeInTheDocument();
     expect(screen.queryByText("What did you make progress on?")).not.toBeInTheDocument();
@@ -54,8 +55,8 @@ describe("Feed", { timeout: 15_000 }, () => {
   it("offers only Like and Reply as post actions", () => {
     render(<Feed />);
 
-    expect(screen.getAllByRole("button", { name: /Like/ })).toHaveLength(20);
-    expect(screen.getAllByRole("button", { name: /^Reply/ })).toHaveLength(20);
+    expect(screen.getAllByRole("button", { name: /Like/ })).toHaveLength(previewFeed.length);
+    expect(screen.getAllByRole("button", { name: /^Reply/ })).toHaveLength(previewFeed.length);
     expect(screen.queryByRole("button", { name: "View conversation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Cheer|Respect|Relatable|Inspired/ })).not.toBeInTheDocument();
   });
@@ -63,25 +64,26 @@ describe("Feed", { timeout: 15_000 }, () => {
   it("reports AI posts from the top-right overflow menu", () => {
     render(<Feed />);
 
-    const options = screen.getAllByRole("button", { name: /More actions for/ });
-    expect(options).toHaveLength(20);
-    expect(options[0]).toHaveAttribute("aria-expanded", "false");
+    const options = screen.getByRole("button", { name: "More actions for Moss" });
+    expect(screen.getAllByRole("button", { name: /More actions for/ })).toHaveLength(previewFeed.length);
+    expect(options).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.click(options[0]);
+    fireEvent.click(options);
 
-    expect(options[0]).toHaveAttribute("aria-expanded", "true");
+    expect(options).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(screen.getByRole("menuitem", { name: "Report AI post" }));
 
     expect(screen.getByText("Post reported for review. Preview only.")).toBeVisible();
-    expect(options[0]).toHaveAttribute("aria-expanded", "false");
+    expect(options).toHaveAttribute("aria-expanded", "false");
   });
 
   it("opens the conversation thread when the post is clicked", () => {
     render(<Feed />);
 
+    const moss = previewFeed.find((post) => post.social_companions?.slug === "moss")!;
     fireEvent.click(screen.getByRole("article", { name: "Open post by Moss" }));
 
-    expect(push).toHaveBeenCalledWith(`/posts/${encodeURIComponent(previewFeed[0].id)}`);
+    expect(push).toHaveBeenCalledWith(`/posts/${encodeURIComponent(moss.id)}`);
   });
 
   it("keeps post controls independent from thread navigation", () => {
@@ -93,12 +95,39 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("replaces the old preview posts with AI task completions", () => {
+  it("balances human progress with clearly labeled AI progress", () => {
     render(<Feed />);
 
-    expect(screen.getAllByText("Completed a task")).toHaveLength(20);
-    expect(screen.queryByText("Mina Park")).not.toBeInTheDocument();
-    expect(screen.queryByText("Jonah Lee")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Completed a task")).toHaveLength(previewFeed.length);
+    expect(screen.getByRole("article", { name: "Open post by Mina" })).toBeVisible();
+    expect(screen.getByRole("article", { name: "Open post by Jonah" })).toBeVisible();
+    expect(screen.getByRole("article", { name: "Open post by Moss" })).toBeVisible();
+    expect(screen.getAllByText("AI").length).toBeLessThan(previewFeed.length);
+  });
+
+  it("lets owners change a post audience after sharing", () => {
+    render(<Feed />);
+    const post = screen.getByRole("article", { name: "Open post by Mina" });
+
+    fireEvent.click(within(post).getByRole("button", { name: "More actions for Mina" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Make post private" }));
+
+    expect(within(post).getByText("Private")).toBeVisible();
+    expect(screen.getByText("Post is now private. Preview only.")).toBeVisible();
+  });
+
+  it("lets owners retract a shared post", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<Feed />);
+    const post = screen.getByRole("article", { name: "Open post by Mina" });
+
+    fireEvent.click(within(post).getByRole("button", { name: "More actions for Mina" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete post" }));
+
+    expect(confirm).toHaveBeenCalledWith("Delete this post and its replies? This cannot be undone.");
+    expect(screen.queryByRole("article", { name: "Open post by Mina" })).not.toBeInTheDocument();
+    expect(screen.getByText("Post deleted. Preview only.")).toBeVisible();
+    confirm.mockRestore();
   });
 
   it("exposes reaction state with aria-pressed", () => {
@@ -122,7 +151,8 @@ describe("Feed", { timeout: 15_000 }, () => {
 
   it("posts a reply from the primary Reply action", () => {
     render(<Feed />);
-    fireEvent.click(screen.getAllByRole("button", { name: /^Reply/ })[0]);
+    const mossPost = screen.getByRole("article", { name: "Open post by Moss" });
+    fireEvent.click(within(mossPost).getByRole("button", { name: /^Reply/ }));
     const input = screen.getByLabelText("Reply to Moss");
 
     expect(screen.queryByText("No replies yet. A thoughtful note can go a long way.")).not.toBeInTheDocument();
@@ -134,16 +164,19 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.queryByText("Nice progress.")).not.toBeInTheDocument();
   });
 
-  it("shows posts from the user's chosen interests in Following", () => {
+  it("shows human and AI posts from the user's chosen interests", () => {
     render(<Feed />);
-    fireEvent.click(screen.getByRole("tab", { name: "Following" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Your interests" }));
 
-    expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getAllByRole("article")).toHaveLength(4);
+    expect(screen.getByRole("tab", { name: "Your interests" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("article")).toHaveLength(7);
+    expect(screen.getByText("Jonah")).toBeVisible();
+    expect(screen.getByText("Aya")).toBeVisible();
+    expect(screen.getByText("Priya")).toBeVisible();
     expect(screen.getByText("North")).toBeVisible();
     expect(screen.getByText("Pixel")).toBeVisible();
     expect(screen.getByText("Nova Reyes")).toBeVisible();
-    expect(screen.getByText("Barnaby Wisp")).toBeVisible();
+    expect(screen.getByText("Leo")).toBeVisible();
     expect(screen.queryByText("Moss")).not.toBeInTheDocument();
   });
 
@@ -154,16 +187,29 @@ describe("Feed", { timeout: 15_000 }, () => {
       target: { value: "Fitness" },
     });
 
-    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getByText("Jonah")).toBeVisible();
     expect(screen.getByText("North")).toBeVisible();
     expect(screen.getByText("Category: Fitness")).toBeVisible();
+  });
+
+  it("offers a human-only feed without hiding public human progress", () => {
+    render(<Feed />);
+    fireEvent.click(screen.getByRole("tab", { name: "People only" }));
+
+    expect(screen.getByRole("tab", { name: "People only" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("region", { name: "Community progress" })).toBeVisible();
+    expect(screen.getByRole("article", { name: "Open post by Mina" })).toBeVisible();
+    expect(screen.getByRole("article", { name: "Open post by Jonah" })).toBeVisible();
+    expect(screen.queryByRole("article", { name: "Open post by Moss" })).not.toBeInTheDocument();
+    expect(screen.queryByText("AI")).not.toBeInTheDocument();
   });
 
   it("links generated posts to the correct AI profile", () => {
     render(<Feed />);
 
     expect(screen.getByRole("link", { name: "Nova Reyes" })).toHaveAttribute("href", "/companions/nova-reyes");
-    expect(screen.getByRole("link", { name: "Brother Alden" })).toHaveAttribute("href", "/companions/brother-alden");
+    expect(screen.getByRole("link", { name: "Pixel" })).toHaveAttribute("href", "/companions/pixel");
   });
 
   it("supports arrow-key navigation between feed tabs", () => {
@@ -173,7 +219,7 @@ describe("Feed", { timeout: 15_000 }, () => {
     communityTab.focus();
     fireEvent.keyDown(communityTab, { key: "ArrowRight" });
 
-    expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Your interests" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("has no automated accessibility violations", async () => {

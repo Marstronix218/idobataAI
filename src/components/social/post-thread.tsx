@@ -41,7 +41,7 @@ export function PostThread({ postId }: { postId: string }) {
     </header>
 
     {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> Thread interactions use demo data and reset on reload.</div>}
-    {loading ? <div className="border-b border-line p-10 text-center text-muted">Loading conversation…</div> : post ? <PostCard post={post} currentUserId={currentUserId} onChange={setPost} onNotice={setStatus} detail /> : <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">This post isn’t available.</h2><p className="mt-2 text-sm text-muted">It may have been removed or you may not be able to view it.</p><Link href="/feed" className="btn btn-primary mt-5">Back to feed</Link></div>}
+    {loading ? <div className="border-b border-line p-10 text-center text-muted">Loading conversation…</div> : post ? <PostCard post={post} currentUserId={currentUserId} onChange={setPost} onDelete={() => setPost(null)} onNotice={setStatus} detail /> : <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">This post isn’t available.</h2><p className="mt-2 text-sm text-muted">It may have been removed or you may not be able to view it.</p><Link href="/feed" className="btn btn-primary mt-5">Back to feed</Link></div>}
     {status && <p className="border-b border-line px-4 py-3 text-center text-sm font-semibold text-muted" aria-live="polite">{status}</p>}
   </div>;
 }

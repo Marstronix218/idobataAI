@@ -77,7 +77,8 @@ end $$;
 insert into public.social_posts(id,author_id,kind,visibility,content,idempotency_key)
 values
   ('aaaaaaaa-1000-4000-8000-000000000001','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','private','Private post','private-fixture'),
-  ('aaaaaaaa-1000-4000-8000-000000000002','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','public','Public post','public-fixture');
+  ('aaaaaaaa-1000-4000-8000-000000000002','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','public','Public post','public-fixture'),
+  ('aaaaaaaa-1000-4000-8000-000000000003','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','public','Owner controlled post','owner-control-fixture');
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -86,6 +87,28 @@ do $$ begin
   if exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000001') then raise exception 'another user can read a private post'; end if;
   if not exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000002') then raise exception 'authenticated user cannot read a public post'; end if;
 end $$;
+
+update public.social_posts set visibility='private' where id='aaaaaaaa-1000-4000-8000-000000000003';
+delete from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000003';
+reset role;
+do $$ begin
+  if not exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000003' and visibility='public') then raise exception 'another user changed or deleted a post they do not own'; end if;
+end $$;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+update public.social_posts set visibility='private' where id='aaaaaaaa-1000-4000-8000-000000000003';
+do $$ begin
+  if not exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000003' and visibility='private') then raise exception 'post owner could not change audience'; end if;
+end $$;
+delete from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000003';
+reset role;
+do $$ begin
+  if exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000003') then raise exception 'post owner could not delete their post'; end if;
+end $$;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 do $$ begin
   begin

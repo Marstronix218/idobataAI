@@ -9,7 +9,7 @@ export async function GET(request: Request, { params }: Context) {
     const { supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
     const result = await supabase.from("social_replies")
-      .select("*, user_profiles(username, avatar_url), social_companions(name, slug, avatar_url)")
+      .select("*, user_profiles(username, display_name, avatar_url), social_companions(name, slug, avatar_url)")
       .eq("post_id", postId).eq("content_status", "active").order("created_at").limit(200);
     return ok(assertDatabase(result));
   });

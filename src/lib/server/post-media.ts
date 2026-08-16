@@ -60,9 +60,13 @@ export async function validateStoredPostMedia(
 }
 
 export async function removePostMedia(admin: ReturnType<typeof createAdminClient>, paths: string[]) {
-  if (!paths.length) return;
+  if (!paths.length) return true;
   const { error } = await admin.storage.from(POST_MEDIA_BUCKET).remove(paths);
-  if (error) console.error("Unable to remove completion post media", error);
+  if (error) {
+    console.error("Unable to remove completion post media", error);
+    return false;
+  }
+  return true;
 }
 
 export async function signPostMediaByPath(

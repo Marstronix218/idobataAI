@@ -2,6 +2,8 @@
 
 idobataAI is a private-first productivity network. People manage their own tasks, deliberately share the completions they choose, and receive encouragement from humans and clearly labeled shared AI companions.
 
+> Finish the small thing. Keep the details private. Share the win only when encouragement would help.
+
 The core loop is:
 
 > Create a task → complete it → celebrate → optionally post it → receive encouragement → keep moving
@@ -10,18 +12,19 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 
 ## What is included
 
-- Email/password authentication and onboarding with username, goal, interests, and task-privacy default
+- Email/password authentication, secure password recovery, confirmation resend, and onboarding with username, goal, interests, and task-privacy default
 - Private task management, categories, due dates, recurring chores/routines, streak feedback, and focused time filters
 - Explicit completion-post composer with per-post audience selection and up to four optional images
 - Private completion-post media delivered through short-lived, visibility-scoped links
 - Independent public task progress that never publishes a social post on its own
-- Cursor-paginated feeds, post permalinks, likes, threaded replies, and human social profiles
+- Cursor-paginated feeds with “For you,” “Your interests,” and “People only,” plus post permalinks, likes, threaded replies, and human social profiles
+- Owner-controlled post audience changes and deletion
 - Editable profile identity, privacy, interests, bio, and built-in or uploaded avatars
 - Shared, database-backed AI companion directory with dedicated profiles, visible AI labeling, and mute controls
 - Private one-to-one chat with people or AI companions, protected by RLS, blocking, muting, and rate limits
 - Optional companion posts, likes, replies, and OpenAI-compatible response enhancement behind server-only boundaries
 - Durable PostgreSQL jobs with atomic claims, expiring leases, retry ceilings, and idempotency
-- Scheduled companion activity for Vercel Cron with curated provider-free fallback content
+- Scheduled companion activity for a small rotating daily cast, with curated provider-free fallback content
 - Notifications, reporting, blocking, companion muting, and content-status foundations
 - Row Level Security for user-facing tables and narrow privileged server routes
 - A resumable, subscription-aware account-deletion foundation
@@ -33,7 +36,7 @@ The application uses Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v
 
 The security boundary is PostgreSQL, not the browser. User requests are authenticated with the Supabase bearer token, and RLS remains active for ordinary operations. The service role is restricted to narrow server-only media, AI, cron, and deletion paths. Database constraints and functions own privacy projection, chat participation, publishing idempotency, reaction uniqueness, scheduled source keys, and job leases.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design and [DESIGN.md](./DESIGN.md) for the product/interaction contract.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design, [DESIGN.md](./DESIGN.md) for the product/interaction contract, and [PRODUCT.md](./PRODUCT.md) for the market position, activation metric, experiments, and launch decision.
 
 ## Project structure
 
@@ -122,12 +125,12 @@ CI runs the application gates and a separate Docker-backed Supabase job. The lat
 
 1. Create a production Supabase project.
 2. Apply `supabase/migrations` and `supabase/seed.sql` to that project.
-3. Configure the production Site URL and allowed redirect URLs in Supabase Auth.
+3. Configure the production Site URL and exact allowed redirect URLs in Supabase Auth, including `/auth/callback`; configure custom SMTP and ensure custom email templates preserve `{{ .RedirectTo }}`.
 4. Import the repository into Vercel and add every value from `.env.example` for the appropriate environments.
    Do not add `NEXT_PUBLIC_ENABLE_DEMO_MODE` to Vercel.
 5. Generate distinct long random values for `CRON_SECRET` and `WORKER_SECRET`. Vercel uses `CRON_SECRET` for scheduled requests; `WORKER_SECRET` also authorizes manual worker calls. The checked-in schedule is once daily per route so it is valid on Vercel Hobby; increase the worker frequency when using a plan that supports it.
 6. Leave provider variables empty to launch with curated companion fallbacks, or configure an OpenAI-compatible provider for optional reply enhancement.
-7. Run a production deployment and confirm signup, onboarding, task privacy, explicit sharing, AI labels, and account-deletion policy in the deployed environment.
+7. Run a production deployment and confirm signup, confirmation resend, password recovery, onboarding, task privacy, explicit sharing, owner audience/deletion controls, AI labels, the people-only feed, and account-deletion policy in the deployed environment.
 
 Before enabling paid subscriptions, implement the billing cancellation adapter and verify it completes before auth-user deletion. The deletion workflow intentionally refuses to orphan an active subscription.
 
@@ -146,7 +149,7 @@ Before enabling paid subscriptions, implement the billing cancellation adapter a
 
 AI prompts treat post text as untrusted data, use bounded context and output, and never receive tools or secrets. AI work is skipped or cancelled for hidden, removed, reported, or otherwise unsafe content. Companion instructions prohibit guilt, pressure, manipulation, and romantic motivation.
 
-The moderation foundation includes post/reply reporting, user blocking, companion muting, server-side mutation limits, and auditable content status. Production teams should connect these primitives to their own review and incident processes before a broad public launch.
+The moderation foundation includes post/reply reporting, user blocking, companion muting, server-side mutation limits, and auditable content status. A supervised private beta still needs a named report-review owner. A broad public launch additionally requires a working moderation queue, response SLA, escalation and appeal rules, age policy, incident process, and counsel-reviewed terms and privacy notice. See [PRODUCT.md](./PRODUCT.md#launch-gates).
 
 ## License
 

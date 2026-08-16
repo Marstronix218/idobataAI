@@ -7,20 +7,18 @@ import { tasks as demoTasks } from "@/data/demo";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import type { Task, UserProfile } from "@/types";
 
-type RailTask = Pick<Task, "id" | "title" | "due_at" | "status" | "completed_at">;
+type RailTask = Pick<Task, "id" | "title" | "due_at" | "status" | "completed_at"> & {
+  previewDueLabel?: string;
+};
 
-const previewTasks: RailTask[] = demoTasks.map((task) => {
-  const due = new Date();
-  if (task.due === "Tomorrow") due.setDate(due.getDate() + 1);
-  const hasDueDate = task.due !== "No due date";
-  return {
-    id: task.id,
-    title: task.title,
-    due_at: hasDueDate ? due.toISOString() : null,
-    status: task.completed ? "completed" : "pending",
-    completed_at: task.completed ? new Date().toISOString() : null,
-  };
-});
+const previewTasks: RailTask[] = demoTasks.map((task) => ({
+  id: task.id,
+  title: task.title,
+  due_at: null,
+  status: task.completed ? "completed" : "pending",
+  completed_at: null,
+  previewDueLabel: task.due,
+}));
 
 const previewProfile: Pick<UserProfile, "daily_goal" | "current_streak"> = {
   daily_goal: 3,
@@ -56,10 +54,10 @@ export function MomentumRail() {
   }, []);
 
   const todayTasks = useMemo(() => tasks
-    .filter((task) => task.status === "pending" && isToday(task.due_at))
+    .filter((task) => task.status === "pending" && (isPreviewMode ? !["Tomorrow", "No due date"].includes(task.previewDueLabel ?? "") : isToday(task.due_at)))
     .sort((a, b) => new Date(a.due_at ?? 0).getTime() - new Date(b.due_at ?? 0).getTime())
     .slice(0, 3), [tasks]);
-  const completedToday = tasks.filter((task) => task.status === "completed" && isToday(task.completed_at));
+  const completedToday = tasks.filter((task) => task.status === "completed" && (isPreviewMode || isToday(task.completed_at)));
   const completedCount = completedToday.length;
   const dailyGoal = Math.max(1, profile?.daily_goal ?? 3);
   const progress = Math.min(100, Math.round((completedCount / dailyGoal) * 100));
@@ -71,7 +69,7 @@ export function MomentumRail() {
           <div><p className="text-xs font-bold text-community">Your Tasks</p><h2 id="today-focus-heading" className="display mt-1 text-xl font-bold">Today’s tasks</h2><p className="mt-1 text-xs leading-5 text-muted">Plan and complete them in the task workspace.</p></div>
           <ListChecks size={19} className="mt-0.5 shrink-0 text-community" />
         </div>
-        {loading ? <p className="px-4 py-5 text-sm text-muted">Loading today’s tasks…</p> : todayTasks.length ? <ul className="divide-y divide-line">{todayTasks.map((task) => <li key={task.id}><Link href="/tasks" aria-label={`Open ${task.title} in Your Tasks`} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--hover)]"><Circle size={16} className="mt-0.5 shrink-0 text-brand" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-5">{task.title}</span><span className="mt-1 block text-xs text-muted">Due {dueTime(task.due_at)} · Open in Your Tasks</span></span></Link></li>)}</ul> : <div className="px-4 py-5 text-center"><span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-success-soft text-success"><Check size={17} /></span><p className="mt-3 text-sm font-bold">Nothing due today</p><p className="mt-1 text-xs leading-5 text-muted">Open Your Tasks to plan what comes next.</p></div>}
+        {loading ? <p className="px-4 py-5 text-sm text-muted">Loading today’s tasks…</p> : todayTasks.length ? <ul className="divide-y divide-line">{todayTasks.map((task) => <li key={task.id}><Link href="/tasks" aria-label={`Open ${task.title} in Your Tasks`} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--hover)]"><Circle size={16} className="mt-0.5 shrink-0 text-brand" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-5">{task.title}</span><span className="mt-1 block text-xs text-muted">Due {task.previewDueLabel ?? dueTime(task.due_at)} · Open in Your Tasks</span></span></Link></li>)}</ul> : <div className="px-4 py-5 text-center"><span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-success-soft text-success"><Check size={17} /></span><p className="mt-3 text-sm font-bold">Nothing due today</p><p className="mt-1 text-xs leading-5 text-muted">Open Your Tasks to plan what comes next.</p></div>}
         <Link href="/tasks" className="flex min-h-11 items-center justify-between border-t border-line px-4 text-sm font-bold text-community transition-colors hover:bg-[var(--hover)]">Go to Your Tasks <ArrowRight size={16} /></Link>
       </section>
 
