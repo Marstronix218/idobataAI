@@ -25,6 +25,7 @@ const previewTask = (taskId: string): Task => ({
   due_at: null,
   recurrence_rule: null,
   recurrence_instance_id: null,
+  priority: 4,
   visibility: "public",
   status: "completed",
   xp_earned: 25,

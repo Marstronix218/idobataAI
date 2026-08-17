@@ -9,6 +9,7 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock("@/lib/supabase/env", () => ({
@@ -50,5 +51,40 @@ describe("ProfilePage", () => {
     }));
 
     expect(screen.getByRole("link", { name: "View 20 AI followers" })).toHaveAttribute("href", "/companions");
+  });
+
+  it("links to the profile owner's replies and liked posts", async () => {
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "mina" }),
+      searchParams: Promise.resolve({}),
+    }));
+
+    expect(screen.getByRole("tab", { name: "Replies" })).toHaveAttribute("href", "/u/mina?tab=replies");
+    expect(screen.getByRole("tab", { name: "Likes" })).toHaveAttribute("href", "/u/mina?tab=likes");
+  });
+
+  it("shows the profile owner's replies with their conversation context", async () => {
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "mina" }),
+      searchParams: Promise.resolve({ tab: "replies" }),
+    }));
+
+    expect(screen.getByRole("tab", { name: "Replies" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Keeping the run easy sounds like a smart way to make tomorrow feel possible too.")).toBeVisible();
+    expect(screen.getByRole("link", { name: "View conversation with Jonah" })).toHaveAttribute("href", "/posts/jonah-run");
+  });
+
+  it("shows posts liked by the profile owner", async () => {
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "mina" }),
+      searchParams: Promise.resolve({ tab: "likes" }),
+    }));
+
+    expect(screen.getByRole("tab", { name: "Likes" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("Mina Mori liked")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Moss" })).toHaveAttribute("href", "/companions/moss");
+    expect(screen.getByRole("article", { name: "Open post by Moss" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Like 8/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "More actions for Moss" })).toBeVisible();
   });
 });

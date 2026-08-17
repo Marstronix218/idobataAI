@@ -4,8 +4,10 @@ import Link from "next/link";
 import {
   CalendarDays,
   Check,
+  ChevronDown,
   Circle,
   Flame,
+  Flag,
   LockKeyhole,
   MoreHorizontal,
   Plus,
@@ -13,18 +15,28 @@ import {
   Repeat2,
   SlidersHorizontal,
   Sparkles,
+  Tag,
   Trash2,
   Undo2,
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { tasks as demoTasks } from "@/data/demo";
+import { TaskCategoryManager } from "@/components/tasks/task-category-manager";
 import { PrivacyBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
-import type { Task, UserProfile } from "@/types";
+import type { Task, TaskCategory, TaskPriority, UserProfile } from "@/types";
 
 type Filter = "Today" | "Upcoming" | "All" | "Completed";
 type TaskGroup = { key: string; title: string; hint: string; tasks: Task[] };
+
+const EDIT_CATEGORIES_VALUE = "__edit_categories__";
+const priorityOptions: Array<{ value: TaskPriority; label: string; shortLabel: string }> = [
+  { value: 1, label: "P1 — Highest", shortLabel: "P1" },
+  { value: 2, label: "P2 — High", shortLabel: "P2" },
+  { value: 3, label: "P3 — Medium", shortLabel: "P3" },
+  { value: 4, label: "P4 — Low", shortLabel: "P4" },
+];
 
 const todayInputValue = () => {
   const now = new Date();
@@ -45,6 +57,7 @@ const previewTasks: Task[] = demoTasks.map((task, index) => ({
       : null,
   recurrence_rule: task.recurring ? "weekdays" : null,
   recurrence_instance_id: null,
+  priority: 4,
   visibility: task.isPublic ? "public" : "private",
   status: task.completed ? "completed" : "pending",
   xp_earned: task.xp,
@@ -58,6 +71,20 @@ const previewProfile = {
   current_streak: 6,
   default_task_visibility: "private",
 } satisfies Pick<UserProfile, "daily_goal" | "current_streak" | "default_task_visibility">;
+
+const previewCategories: TaskCategory[] = Array.from(new Set(previewTasks.flatMap((task) => task.category ?? [])))
+  .sort((left, right) => left.localeCompare(right))
+  .map((name, index) => ({
+    id: `preview-category-${index}`,
+    owner_id: "preview",
+    name,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }));
+
+function sortCategories(categories: TaskCategory[]) {
+  return [...categories].sort((left, right) => left.name.localeCompare(right.name));
+}
 
 function dayBoundary(offsetDays = 0, end = false) {
   const value = new Date();
@@ -78,6 +105,12 @@ function dueLabel(value: string | null) {
 function recurrenceLabel(value: string) {
   if (value === "weekdays") return "Weekdays";
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function priorityTitle(priority: TaskPriority) {
+  if (priority === 1) return "Priority 1 (highest)";
+  if (priority === 4) return "Priority 4 (lowest)";
+  return `Priority ${priority}`;
 }
 
 function groupsFor(filter: Filter, tasks: Task[]): TaskGroup[] {
@@ -104,6 +137,7 @@ function groupsFor(filter: Filter, tasks: Task[]): TaskGroup[] {
 
 export function TaskBoard() {
   const [items, setItems] = useState<Task[]>(isPreviewMode ? previewTasks : []);
+  const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(isPreviewMode ? previewCategories : []);
   const [profile, setProfile] = useState<Pick<UserProfile, "daily_goal" | "current_streak" | "default_task_visibility"> | null>(isPreviewMode ? previewProfile : null);
   const [filter, setFilter] = useState<Filter>("Today");
   const [category, setCategory] = useState("All");
@@ -111,22 +145,27 @@ export function TaskBoard() {
   const [quickDue, setQuickDue] = useState(todayInputValue);
   const [quickCategory, setQuickCategory] = useState("");
   const [quickRecurrence, setQuickRecurrence] = useState("");
+  const [quickPriority, setQuickPriority] = useState<TaskPriority>(4);
   const [justCompleted, setJustCompleted] = useState<Task | null>(null);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [loading, setLoading] = useState(!isPreviewMode);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [categoryBusyId, setCategoryBusyId] = useState<string | null>(null);
 
   async function load(signal?: AbortSignal) {
     if (isPreviewMode) return;
     setLoading(true);
     try {
-      const [tasks, loadedProfile] = await Promise.all([
+      const [tasks, loadedProfile, loadedCategories] = await Promise.all([
         apiRequest<Task[]>("/api/tasks", { signal }),
         apiRequest<UserProfile>("/api/profile", { signal }),
+        apiRequest<TaskCategory[]>("/api/task-categories", { signal }),
       ]);
       setItems(tasks);
       setProfile(loadedProfile);
+      setTaskCategories(loadedCategories);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) setAnnouncement(errorMessage(error));
     } finally {
@@ -140,10 +179,12 @@ export function TaskBoard() {
     Promise.all([
       apiRequest<Task[]>("/api/tasks", { signal: controller.signal }),
       apiRequest<UserProfile>("/api/profile", { signal: controller.signal }),
+      apiRequest<TaskCategory[]>("/api/task-categories", { signal: controller.signal }),
     ])
-      .then(([tasks, loadedProfile]) => {
+      .then(([tasks, loadedProfile, loadedCategories]) => {
         setItems(tasks);
         setProfile(loadedProfile);
+        setTaskCategories(loadedCategories);
       })
       .catch((error) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) setAnnouncement(errorMessage(error));
@@ -154,10 +195,13 @@ export function TaskBoard() {
     return () => controller.abort();
   }, []);
 
-  const categories = useMemo(
-    () => ["All", ...Array.from(new Set(items.map((task) => task.category).filter(Boolean) as string[]))],
-    [items],
-  );
+  const categories = useMemo(() => [
+    "All",
+    ...Array.from(new Set([
+      ...taskCategories.map((taskCategory) => taskCategory.name),
+      ...items.flatMap((task) => task.category ?? []),
+    ])).sort((left, right) => left.localeCompare(right)),
+  ], [items, taskCategories]);
   const counts = useMemo(() => ({
     Today: items.filter((task) => task.status === "pending" && task.due_at && new Date(task.due_at).getTime() <= dayBoundary(0, true)).length,
     Upcoming: items.filter((task) => task.status === "pending" && task.due_at && new Date(task.due_at).getTime() > dayBoundary(0, true)).length,
@@ -179,6 +223,7 @@ export function TaskBoard() {
           : task.status === "pending" && dueTime !== null && dueTime > dayBoundary(0, true);
     return statusMatch && (category === "All" || task.category === category);
   }).sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
     const left = a.due_at ? new Date(a.due_at).getTime() : Number.MAX_SAFE_INTEGER;
     const right = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER;
     return left - right;
@@ -195,6 +240,8 @@ export function TaskBoard() {
         : await apiRequest<Task>(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
       setItems((current) => current.map((item) => item.id === task.id ? updated : item));
       setJustCompleted(next === "completed" ? updated : null);
+      setCategory("All");
+      setFilter(next === "completed" ? "Completed" : "All");
       setAnnouncement(next === "completed" ? `${task.title} completed. Nothing was posted.` : `${task.title} moved back to open tasks.`);
     } catch (error) {
       setAnnouncement(errorMessage(error));
@@ -220,6 +267,7 @@ export function TaskBoard() {
             category: quickCategory.trim() || null,
             due_at: dueAt,
             recurrence_rule: recurrenceRule,
+            priority: quickPriority,
             visibility: profile?.default_task_visibility ?? "private",
             status: "pending",
             completed_at: null,
@@ -229,12 +277,13 @@ export function TaskBoard() {
           } as Task
         : await apiRequest<Task>("/api/tasks", {
             method: "POST",
-            body: JSON.stringify({ title, category: quickCategory.trim() || null, dueAt, recurrenceRule }),
+            body: JSON.stringify({ title, category: quickCategory.trim() || null, dueAt, recurrenceRule, priority: quickPriority }),
           });
       setItems((current) => [created, ...current]);
       setDraft("");
       setQuickCategory("");
       setQuickRecurrence("");
+      setQuickPriority(4);
       setAnnouncement(`${title} added ${created.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
       setAnnouncement(errorMessage(error));
@@ -253,12 +302,13 @@ export function TaskBoard() {
       category: String(data.get("category")) || null,
       dueAt: data.get("dueAt") ? new Date(`${data.get("dueAt")}T12:00:00`).toISOString() : null,
       recurrenceRule: recurrence ? recurrence as "daily" | "weekdays" | "weekly" : null,
+      priority: Number(data.get("priority")) as TaskPriority,
       visibility: String(data.get("visibility")) as "private" | "public",
     };
     setBusyId(editing.id);
     try {
       const updated = isPreviewMode
-        ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, recurrence_rule: patch.recurrenceRule, visibility: patch.visibility }
+        ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, recurrence_rule: patch.recurrenceRule, priority: patch.priority, visibility: patch.visibility }
         : await apiRequest<Task>(`/api/tasks/${editing.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       setItems((current) => current.map((task) => task.id === updated.id ? updated : task));
       setEditing(null);
@@ -284,6 +334,81 @@ export function TaskBoard() {
     }
   }
 
+  async function addCategory(name: string) {
+    const cleanName = name.trim();
+    if (!cleanName) return false;
+    if (taskCategories.some((taskCategory) => taskCategory.name.toLowerCase() === cleanName.toLowerCase())) {
+      setAnnouncement(`You already have a category named ${cleanName}.`);
+      return false;
+    }
+    setCategoryBusyId("new");
+    setAnnouncement("");
+    try {
+      const now = new Date().toISOString();
+      const created = isPreviewMode
+        ? { id: `preview-category-${Date.now()}`, owner_id: "preview", name: cleanName, created_at: now, updated_at: now }
+        : await apiRequest<TaskCategory>("/api/task-categories", { method: "POST", body: JSON.stringify({ name: cleanName }) });
+      setTaskCategories((current) => sortCategories([...current, created]));
+      setAnnouncement(`${created.name} category added.${isPreviewMode ? " Preview only." : ""}`);
+      return true;
+    } catch (error) {
+      setAnnouncement(errorMessage(error));
+      return false;
+    } finally {
+      setCategoryBusyId(null);
+    }
+  }
+
+  async function renameCategory(taskCategory: TaskCategory, name: string) {
+    const cleanName = name.trim();
+    if (!cleanName) return false;
+    if (taskCategory.name === cleanName) return true;
+    if (taskCategories.some((candidate) => candidate.id !== taskCategory.id && candidate.name.toLowerCase() === cleanName.toLowerCase())) {
+      setAnnouncement(`You already have a category named ${cleanName}.`);
+      return false;
+    }
+    setCategoryBusyId(taskCategory.id);
+    setAnnouncement("");
+    try {
+      const updated = isPreviewMode
+        ? { ...taskCategory, name: cleanName, updated_at: new Date().toISOString() }
+        : await apiRequest<TaskCategory>(`/api/task-categories/${taskCategory.id}`, { method: "PATCH", body: JSON.stringify({ name: cleanName }) });
+      setTaskCategories((current) => sortCategories(current.map((candidate) => candidate.id === updated.id ? updated : candidate)));
+      setItems((current) => current.map((task) => task.category?.toLowerCase() === taskCategory.name.toLowerCase() ? { ...task, category: updated.name } : task));
+      setCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? updated.name : current);
+      setQuickCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? updated.name : current);
+      setEditing((current) => current?.category?.toLowerCase() === taskCategory.name.toLowerCase() ? { ...current, category: updated.name } : current);
+      setAnnouncement(`${taskCategory.name} renamed to ${updated.name}.${isPreviewMode ? " Preview only." : ""}`);
+      return true;
+    } catch (error) {
+      setAnnouncement(errorMessage(error));
+      return false;
+    } finally {
+      setCategoryBusyId(null);
+    }
+  }
+
+  async function deleteCategory(taskCategory: TaskCategory) {
+    const affectedTasks = items.filter((task) => task.category?.toLowerCase() === taskCategory.name.toLowerCase()).length;
+    setCategoryBusyId(taskCategory.id);
+    setAnnouncement("");
+    try {
+      if (!isPreviewMode) await apiRequest<void>(`/api/task-categories/${taskCategory.id}`, { method: "DELETE" });
+      setTaskCategories((current) => current.filter((candidate) => candidate.id !== taskCategory.id));
+      setItems((current) => current.map((task) => task.category?.toLowerCase() === taskCategory.name.toLowerCase() ? { ...task, category: null } : task));
+      setCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? "All" : current);
+      setQuickCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? "" : current);
+      setEditing((current) => current?.category?.toLowerCase() === taskCategory.name.toLowerCase() ? { ...current, category: null } : current);
+      setAnnouncement(`${taskCategory.name} deleted and cleared from ${affectedTasks} current ${affectedTasks === 1 ? "task" : "tasks"}.${isPreviewMode ? " Preview only." : ""}`);
+      return true;
+    } catch (error) {
+      setAnnouncement(errorMessage(error));
+      return false;
+    } finally {
+      setCategoryBusyId(null);
+    }
+  }
+
   return <>
     <div className="min-w-0">
       {isPreviewMode && <div role="note" className="mb-5 rounded-2xl bg-sun-soft p-4 text-sm leading-6"><strong>Preview mode.</strong> Tasks use demo data and reset when you reload.</div>}
@@ -292,7 +417,6 @@ export function TaskBoard() {
         <div>
           <p className="text-sm font-bold text-brand">{new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</p>
           <h1 className="page-title mt-1">Your Tasks</h1>
-          <p className="mt-2 text-muted">Plan what matters, then leave the rest for later.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="min-w-32 rounded-2xl border border-line bg-surface px-4 py-3">
@@ -310,11 +434,12 @@ export function TaskBoard() {
           <input id="quick-task" value={draft} onChange={(event) => setDraft(event.target.value)} className="field min-w-0 flex-1 border-0 bg-transparent text-base shadow-none" placeholder="Add a task…" maxLength={160} />
           <button className="btn btn-primary shrink-0 px-4" disabled={busyId === "new" || !draft.trim()}><Plus size={18} /><span className="hidden sm:inline">Add task</span></button>
         </div>
-        <div className="grid gap-2 border-t border-line bg-canvas/55 p-3 sm:grid-cols-[150px_minmax(140px,1fr)_150px_auto] sm:items-center sm:px-4">
-          <label className="relative"><span className="sr-only">Due date</span><CalendarDays aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><input type="date" className="field min-h-10 py-2 pl-9 text-xs font-bold" value={quickDue} onChange={(event) => setQuickDue(event.target.value)} /></label>
-          <label><span className="sr-only">Category</span><input list="task-categories" className="field min-h-10 py-2 text-xs font-bold" placeholder="List or category" value={quickCategory} onChange={(event) => setQuickCategory(event.target.value)} maxLength={48} /><datalist id="task-categories">{categories.filter((value) => value !== "All").map((value) => <option key={value} value={value} />)}</datalist></label>
-          <label className="relative"><span className="sr-only">Repeat schedule</span><Repeat2 aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field min-h-10 appearance-none py-2 pl-9 pr-8 text-xs font-bold" value={quickRecurrence} onChange={(event) => setQuickRecurrence(event.target.value)}><option value="">Doesn’t repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select></label>
-          <span className="flex items-center gap-1.5 px-1 text-xs font-bold text-muted"><LockKeyhole size={13} /> Starts {profile?.default_task_visibility ?? "private"}</span>
+        <div className="grid gap-2 border-t border-line bg-canvas/55 p-3 sm:grid-cols-2 sm:items-center sm:px-4 md:grid-cols-[175px_minmax(150px,1fr)_180px_125px]">
+          <label><span className="sr-only">Due date</span><input type="date" className="field min-h-10 py-2 text-xs font-bold" value={quickDue} onChange={(event) => setQuickDue(event.target.value)} /></label>
+          <label className="relative min-w-0"><span className="sr-only">Category (optional)</span><Tag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickCategory} onChange={(event) => { const value = event.target.value; if (value === EDIT_CATEGORIES_VALUE) { setAnnouncement(""); setCategoryManagerOpen(true); return; } setQuickCategory(value); }}><option value="">No category</option>{taskCategories.map((taskCategory) => <option key={taskCategory.id} value={taskCategory.name}>{taskCategory.name}</option>)}<option value={EDIT_CATEGORIES_VALUE}>Edit categories…</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
+          <label className="relative"><span className="sr-only">Repeat schedule</span><Repeat2 aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickRecurrence} onChange={(event) => setQuickRecurrence(event.target.value)}><option value="">Doesn’t repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
+          <label className="relative"><span className="sr-only">Priority</span><Flag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickPriority} onChange={(event) => setQuickPriority(Number(event.target.value) as TaskPriority)}>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.shortLabel}</option>)}</select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
+          <span className="flex items-center gap-1.5 px-1 text-xs font-bold text-muted sm:col-span-2 md:col-span-4"><LockKeyhole size={13} /> Starts {profile?.default_task_visibility ?? "private"}</span>
         </div>
       </form>
 
@@ -322,17 +447,48 @@ export function TaskBoard() {
         <div className="segmented min-w-0 flex-1 overflow-x-auto" aria-label="Task view">
           {(["Today", "Upcoming", "All", "Completed"] as Filter[]).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}><span>{value}</span><span className="ml-1 text-xs opacity-65">{counts[value]}</span></button>)}
         </div>
-        <label className="relative min-w-44"><span className="sr-only">Filter by category</span><SlidersHorizontal aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field min-h-12 appearance-none py-2 pl-9 pr-8 text-sm font-bold" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value} value={value}>{value === "All" ? "All categories" : value}</option>)}</select></label>
+        <label className="relative min-w-44"><span className="sr-only">Filter by category</span><SlidersHorizontal aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-12 appearance-none py-2 text-sm font-bold" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value} value={value}>{value === "All" ? "All categories" : value}</option>)}</select><ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
       </div>
 
       {justCompleted && <section className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-5"><div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-success text-canvas"><Sparkles size={21} /></span><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[.1em] text-success">Task complete</p><h2 className="display mt-1 text-xl font-bold">{justCompleted.title}</h2><p className="mt-1 text-sm text-muted">Nothing was posted. Add a note or photos only if you want to share this win.</p><div className="mt-4 flex flex-wrap gap-2"><Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-primary">Post a win</Link><button className="btn btn-secondary" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 size={16} /> Undo</button><button className="btn btn-ghost" onClick={() => setJustCompleted(null)}>Not now</button></div></div></div></section>}
 
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
-        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.hint} · {group.tasks.length}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post a win</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
+        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.hint} · {group.tasks.length}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2"><span className="badge badge-priority" title={priorityTitle(task.priority)}>P{task.priority}</span>{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post a win</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
       </section>
-      <p className="mt-4 min-h-5 text-sm font-bold text-muted" aria-live="polite">{announcement}</p>
+      <p className="mt-4 min-h-5 text-sm font-bold text-muted" aria-live="polite">{categoryManagerOpen ? "" : announcement}</p>
     </div>
 
-    {editing && <div className="fixed inset-0 z-50 grid place-items-center bg-overlay/70 p-4"><form onSubmit={saveEdit} className="card w-full max-w-lg p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Task details</p><h2 className="display mt-1 text-2xl font-bold">Edit task</h2></div><button type="button" className="icon-btn" onClick={() => setEditing(null)} aria-label="Close"><X size={18} /></button></div><label className="field-label mt-5" htmlFor="edit-title">Title</label><input className="field" id="edit-title" name="title" defaultValue={editing.title} required maxLength={160} /><div className="mt-4 grid gap-4 sm:grid-cols-2"><div><label className="field-label" htmlFor="edit-category">Category</label><input className="field" id="edit-category" name="category" defaultValue={editing.category ?? ""} maxLength={48} /></div><div><label className="field-label" htmlFor="edit-due">Due date</label><input className="field" id="edit-due" name="dueAt" type="date" defaultValue={editing.due_at?.slice(0, 10) ?? ""} /></div><div><label className="field-label" htmlFor="edit-recurring">Repeat</label><select className="field" id="edit-recurring" name="recurrenceRule" defaultValue={editing.recurrence_rule ?? ""}><option value="">Does not repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select></div><div><label className="field-label" htmlFor="edit-visibility">Visibility</label><select className="field" id="edit-visibility" name="visibility" defaultValue={editing.visibility}><option value="private">Private</option><option value="public">Public progress</option></select></div></div><p className="mt-4 text-xs leading-5 text-muted">Repeating tasks work well for chores and routines. Posting remains a separate choice after completion.</p><div className="mt-6 flex justify-between gap-3"><button type="button" className="btn btn-danger" onClick={() => void remove(editing)}><Trash2 size={16} /> Delete</button><button className="btn btn-primary" disabled={busyId === editing.id}>Save changes</button></div></form></div>}
+    {editing && <div className="fixed inset-0 z-50 grid place-items-center bg-overlay/70 p-4">
+      <form onSubmit={saveEdit} className="card w-full max-w-lg p-6">
+        <div className="flex items-center justify-between">
+          <div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Task details</p><h2 className="display mt-1 text-2xl font-bold">Edit task</h2></div>
+          <button type="button" className="icon-btn" onClick={() => setEditing(null)} aria-label="Close"><X size={18} /></button>
+        </div>
+        <label className="field-label mt-5" htmlFor="edit-title">Title</label>
+        <input className="field" id="edit-title" name="title" defaultValue={editing.title} required maxLength={160} />
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="field-label" htmlFor="edit-category">Category <span className="font-medium normal-case tracking-normal text-muted">(optional)</span></label>
+            <div className="relative">
+              <select key={`${editing.id}-${editing.category ?? "none"}`} className="field field-suffixed appearance-none" id="edit-category" name="category" defaultValue={editing.category ?? ""} onChange={(event) => { if (event.target.value !== EDIT_CATEGORIES_VALUE) return; event.currentTarget.value = editing.category ?? ""; setAnnouncement(""); setCategoryManagerOpen(true); }}>
+                <option value="">No category</option>
+                {editing.category && !taskCategories.some((taskCategory) => taskCategory.name === editing.category) && <option value={editing.category}>{editing.category}</option>}
+                {taskCategories.map((taskCategory) => <option key={taskCategory.id} value={taskCategory.name}>{taskCategory.name}</option>)}
+                <option value={EDIT_CATEGORIES_VALUE}>Edit categories…</option>
+              </select>
+              <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+            </div>
+          </div>
+          <div><label className="field-label" htmlFor="edit-due">Due date</label><input className="field" id="edit-due" name="dueAt" type="date" defaultValue={editing.due_at?.slice(0, 10) ?? ""} /></div>
+          <div><label className="field-label" htmlFor="edit-priority">Priority</label><select className="field" id="edit-priority" name="priority" defaultValue={editing.priority ?? 4}>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div><label className="field-label" htmlFor="edit-recurring">Repeat</label><select className="field" id="edit-recurring" name="recurrenceRule" defaultValue={editing.recurrence_rule ?? ""}><option value="">Does not repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select></div>
+          <div><label className="field-label" htmlFor="edit-visibility">Visibility</label><select className="field" id="edit-visibility" name="visibility" defaultValue={editing.visibility}><option value="private">Private</option><option value="public">Public progress</option></select></div>
+        </div>
+        <p className="mt-4 text-xs leading-5 text-muted">P1 is the highest priority and P4 is the lowest. Posting remains a separate choice after completion.</p>
+        <div className="mt-6 flex justify-between gap-3"><button type="button" className="btn btn-danger" onClick={() => void remove(editing)}><Trash2 size={16} /> Delete</button><button className="btn btn-primary" disabled={busyId === editing.id}>Save changes</button></div>
+      </form>
+    </div>}
+
+    {categoryManagerOpen && <TaskCategoryManager categories={taskCategories} taskCount={(name) => items.filter((task) => task.category?.toLowerCase() === name.toLowerCase()).length} busyId={categoryBusyId} status={announcement} onAdd={addCategory} onRename={renameCategory} onDelete={deleteCategory} onClose={() => { setCategoryManagerOpen(false); setAnnouncement(""); }} />}
   </>;
 }

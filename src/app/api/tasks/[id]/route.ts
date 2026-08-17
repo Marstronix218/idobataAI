@@ -16,6 +16,7 @@ export async function PATCH(request: Request, { params }: Context) {
       ...(input.category !== undefined && { category: input.category }),
       ...(input.dueAt !== undefined && { due_at: input.dueAt }),
       ...(input.recurrenceRule !== undefined && { recurrence_rule: input.recurrenceRule }),
+      ...(input.priority !== undefined && { priority: input.priority }),
       ...(input.visibility !== undefined && { visibility: input.visibility }),
       ...(input.status !== undefined && { status: input.status }),
     };

@@ -24,23 +24,23 @@ describe("Feed production data loading", () => {
     push.mockReset();
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/profile") return Promise.resolve({ interests: ["Work"] });
-      if (path.startsWith("/api/progress")) return Promise.resolve([{ task_id: "progress-1", username: "mina", task_title: "Ship the review", category: "Work", status: "completed", xp_value: 0, updated_at: "2026-08-14T12:00:00.000Z" }]);
       if (path.startsWith("/api/feed")) return Promise.resolve({ items: [], nextCursor: null });
       return Promise.reject(new Error(`Unexpected path: ${path}`));
     });
   });
 
-  it("preserves public human progress when switching to People only", async () => {
+  it("loads feed posts without requesting a separate progress interstitial", async () => {
     render(<Feed />);
-    await screen.findByText("Ship the review");
+    await screen.findByRole("heading", { name: "No posts here yet." });
 
     fireEvent.click(screen.getByRole("tab", { name: "People only" }));
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(
-      "/api/progress?limit=8",
+      "/api/feed?scope=people&limit=10",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ));
-    await waitFor(() => expect(apiRequest.mock.calls.filter(([path]) => path === "/api/progress?limit=8")).toHaveLength(2));
-    expect(screen.getByText("Ship the review")).toBeVisible();
+    expect(apiRequest.mock.calls.some(([path]) => path.startsWith("/api/progress"))).toBe(false);
+    expect(screen.queryByText("Up to date · refreshed just now")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Community progress" })).not.toBeInTheDocument();
   });
 });

@@ -185,6 +185,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .btn-ghost { background: transparent; color: var(--ink-muted); }
 .btn-ghost:hover { background: var(--hover); color: var(--ink); }
 .btn-danger { background: var(--danger-soft); color: var(--danger); }
+.post-action {
+  position: relative; min-height: 36px; padding-block: .375rem;
+}
+.post-action::before { content: ""; position: absolute; inset: -8px 0 0; }
+.post-menu-trigger {
+  position: relative; display: inline-grid; width: 36px; height: 36px; place-items: center;
+  appearance: none; border: 0; padding: 0; background: transparent; color: var(--ink-muted); cursor: pointer;
+}
+.post-menu-trigger::before { content: ""; position: absolute; inset: -4px; }
+.post-menu-trigger:hover { color: var(--ink); }
 .icon-btn {
   display: inline-grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--line);
   border-radius: 999px; background: var(--surface); color: var(--ink-muted); cursor: pointer;
@@ -197,7 +207,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background: var(--surface-raised); color: var(--ink); padding: .7rem .85rem; outline: none;
   transition: box-shadow 160ms ease, border-color 160ms ease;
 }
-.field-prefixed { padding-left: 2.25rem; }
+.field-prefixed { padding-left: 2.5rem; }
+.field-suffixed { padding-right: 2.5rem; }
 .field::placeholder { color: var(--ink-subtle); }
 .field:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent); }
 
@@ -209,6 +220,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .badge-private { background: var(--neutral-soft); color: var(--neutral-ink); }
 .badge-public { background: var(--community-soft); color: var(--community-ink); }
 .badge-category, .badge-streak { background: var(--brand-soft); color: var(--brand-ink); }
+.badge-priority { background: var(--sun-soft); color: var(--sun-ink); }
 
 .segmented { display: flex; gap: .25rem; padding: .25rem; border-radius: 999px; background: var(--segmented); }
 .segmented button, .segmented a {

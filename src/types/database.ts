@@ -2,6 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type TaskVisibility = "private" | "public";
 export type TaskStatus = "pending" | "completed";
+export type TaskPriority = 1 | 2 | 3 | 4;
 export type PostVisibility = "private" | "public";
 export type PostKind = "human_completion" | "human_progress" | "ai_daily_task" | "ai_progress" | "ai_completion";
 export type ContentStatus = "active" | "hidden" | "removed";
@@ -35,10 +36,19 @@ export interface Task {
   due_at: string | null;
   recurrence_rule: string | null;
   recurrence_instance_id: string | null;
+  priority: TaskPriority;
   visibility: TaskVisibility;
   status: TaskStatus;
   xp_earned: number;
   completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskCategory {
+  id: string;
+  owner_id: string;
+  name: string;
   created_at: string;
   updated_at: string;
 }
@@ -185,6 +195,7 @@ export interface Database {
     Tables: {
       user_profiles: Table<UserProfile, Partial<UserProfile> & Pick<UserProfile, "id" | "username">>;
       tasks: Table<Task, Partial<Task> & Pick<Task, "owner_id" | "title">>;
+      task_categories: Table<TaskCategory, Partial<TaskCategory> & Pick<TaskCategory, "owner_id" | "name">>;
       public_task_progress: Table<Record<string, unknown>>;
       social_companions: Table<SocialCompanion>;
       social_posts: Table<SocialPost, Partial<SocialPost> & Pick<SocialPost, "content" | "kind">>;
@@ -221,6 +232,8 @@ export interface Database {
         Args: { p_content: string; p_visibility: PostVisibility; p_idempotency_key: string; p_task_id?: string | null; p_task_title?: string | null; p_category?: string | null };
         Returns: SocialPost;
       };
+      rename_task_category: { Args: { p_category_id: string; p_name: string }; Returns: TaskCategory };
+      delete_task_category: { Args: { p_category_id: string }; Returns: boolean };
       report_content: { Args: { p_post_id?: string | null; p_reply_id?: string | null; p_reason: string }; Returns: string };
       set_user_block: { Args: { p_blocked_id: string; p_blocked: boolean }; Returns: boolean };
       set_companion_mute: { Args: { p_companion_id: string; p_muted: boolean }; Returns: boolean };

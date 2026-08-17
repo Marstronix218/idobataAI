@@ -196,7 +196,7 @@ export function SettingsPanel() {
   return <>
     {isPreviewMode && <div role="note" className="mb-5 rounded-2xl bg-sun-soft p-4 text-sm"><strong>Preview mode.</strong> Settings use demo values and will not persist.</div>}
     <header className="flex items-start justify-between gap-4">
-      <div><p className="text-sm font-bold text-brand">Your space, your rules</p><h1 className="page-title mt-1">Settings</h1><p className="mt-2 text-muted">Choose the pace, privacy, and notifications that feel right.</p></div>
+      <div><p className="text-sm font-bold text-brand">Your space, your rules</p><h1 className="page-title mt-1">Settings</h1></div>
       <button className="btn btn-secondary" onClick={() => void logout()} disabled={busy}><LogOut size={16} /> Log out</button>
     </header>
 

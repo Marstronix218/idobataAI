@@ -93,6 +93,9 @@ Open `http://localhost:3000`. Demo mode is available only outside production and
 - only `NEXT_PUBLIC_*` values are sent to the browser;
 - `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `WORKER_SECRET`, and provider keys are server-only;
 - provider configuration is optional—the durable companion fallbacks remain functional without it;
+- private AI chat uses `AI_CHAT_MODEL` (default `gpt-5.6-luna`) and `AI_CHAT_REASONING_EFFORT` (default `low` for GPT-5.6 models);
+- short provider-enhanced companion replies use `AI_UTILITY_MODEL` (default `gpt-4o-mini`) and retry once with the chat model before using the durable fallback;
+- `AI_MODEL` remains an optional global compatibility fallback when a purpose-specific model is unset;
 - set `APP_URL` to the canonical deployment URL for auth redirects and metadata;
 - `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` is for local UI preview only; leave it unset in Vercel Preview and Production so missing Supabase configuration fails closed.
 
@@ -129,7 +132,7 @@ CI runs the application gates and a separate Docker-backed Supabase job. The lat
 4. Import the repository into Vercel and add every value from `.env.example` for the appropriate environments.
    Do not add `NEXT_PUBLIC_ENABLE_DEMO_MODE` to Vercel.
 5. Generate distinct long random values for `CRON_SECRET` and `WORKER_SECRET`. Vercel uses `CRON_SECRET` for scheduled requests; `WORKER_SECRET` also authorizes manual worker calls. The checked-in schedule is once daily per route so it is valid on Vercel Hobby; increase the worker frequency when using a plan that supports it.
-6. Leave provider variables empty to launch with curated companion fallbacks, or configure an OpenAI-compatible provider for optional reply enhancement.
+6. Leave provider variables empty to launch with curated companion fallbacks, or configure an OpenAI-compatible provider and the purpose-specific chat and utility models for optional reply enhancement.
 7. Run a production deployment and confirm signup, confirmation resend, password recovery, onboarding, task privacy, explicit sharing, owner audience/deletion controls, AI labels, the people-only feed, and account-deletion policy in the deployed environment.
 
 Before enabling paid subscriptions, implement the billing cancellation adapter and verify it completes before auth-user deletion. The deletion workflow intentionally refuses to orphan an active subscription.

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,7 +25,7 @@ describe("TaskBoard", () => {
     render(<TaskBoard />);
 
     fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Take the bins out" } });
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Life admin" } });
+    fireEvent.change(screen.getByLabelText("Category (optional)"), { target: { value: "Life admin" } });
     fireEvent.change(screen.getByLabelText("Repeat schedule"), { target: { value: "weekly" } });
     fireEvent.click(screen.getByRole("button", { name: "Add task" }));
 
@@ -34,14 +34,60 @@ describe("TaskBoard", () => {
     expect(screen.getByText(/added privately/)).toBeVisible();
   });
 
+  it("keeps category optional and reuses user-created categories from a dropdown", async () => {
+    render(<TaskBoard />);
+
+    const categorySelect = screen.getByRole("combobox", { name: "Category (optional)" });
+    expect(categorySelect).toHaveValue("");
+    expect(within(categorySelect).getByRole("option", { name: "No category" })).toBeInTheDocument();
+    expect(within(categorySelect).getByRole("option", { name: "Edit categories…" })).toBeInTheDocument();
+    expect(screen.queryByText("Manage categories")).not.toBeInTheDocument();
+
+    fireEvent.change(categorySelect, { target: { value: "__edit_categories__" } });
+    expect(screen.getByRole("dialog", { name: "Edit categories" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Add a category"), { target: { value: "Errands" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText("Errands category added. Preview only.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close category editor" }));
+
+    fireEvent.change(categorySelect, { target: { value: "Errands" } });
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Pick up the parcel" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    expect(screen.getByText("Pick up the parcel")).toBeVisible();
+    expect(screen.getAllByText("Errands").some((element) => element.classList.contains("badge-category"))).toBe(true);
+  });
+
+  it("renames and explicitly confirms deletion of reusable categories", async () => {
+    render(<TaskBoard />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Category (optional)" }), { target: { value: "__edit_categories__" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rename Work" }));
+    fireEvent.change(screen.getByLabelText("New name for Work"), { target: { value: "Office" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Work renamed to Office. Preview only.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Office" }));
+    expect(screen.getByText("It will be cleared from 1 current task. Published posts will not change.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Remove category" }));
+
+    expect(await screen.findByText("Office deleted and cleared from 1 current task. Preview only.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Delete Office" })).not.toBeInTheDocument();
+  });
+
   it("keeps completion private and offers posting or undo afterward", () => {
     render(<TaskBoard />);
 
     fireEvent.click(screen.getByRole("button", { name: "Complete: Draft the project kickoff outline" }));
 
     expect(screen.getByText("Task complete")).toBeVisible();
+    const completedRegion = screen.getByRole("region", { name: "Completed tasks" });
+    expect(completedRegion).toBeVisible();
+    expect(within(completedRegion).getByRole("heading", { name: "Draft the project kickoff outline" })).toBeVisible();
     expect(screen.getByText("Nothing was posted. Add a note or photos only if you want to share this win.")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Post a win" })).toHaveAttribute("href", "/tasks/kickoff-outline/share");
+    expect(screen.getAllByRole("link", { name: "Post a win" }).some(
+      (link) => link.getAttribute("href") === "/tasks/kickoff-outline/share",
+    )).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(screen.getByText("Draft the project kickoff outline moved back to open tasks.")).toBeVisible();
@@ -59,8 +105,49 @@ describe("TaskBoard", () => {
     )).toBe(true);
   });
 
+  it("lets people set priorities 1 through 4 when creating and editing tasks", () => {
+    render(<TaskBoard />);
+
+    const prioritySelect = screen.getByRole("combobox", { name: "Priority" });
+    expect(within(prioritySelect).getAllByRole("option").map((option) => option.getAttribute("value"))).toEqual(["1", "2", "3", "4"]);
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Handle the urgent request" } });
+    fireEvent.change(prioritySelect, { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    const urgentTask = screen.getByRole("heading", { name: "Handle the urgent request" }).closest("article");
+    expect(urgentTask).not.toBeNull();
+    expect(within(urgentTask!).getByText("P1")).toHaveAttribute("title", "Priority 1 (highest)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Handle the urgent request" }));
+    const editDialog = screen.getByRole("heading", { name: "Edit task" }).closest("form");
+    expect(editDialog).not.toBeNull();
+    fireEvent.change(within(editDialog!).getByRole("combobox", { name: "Priority" }), { target: { value: "4" } });
+    fireEvent.click(within(editDialog!).getByRole("button", { name: "Save changes" }));
+
+    const taskArticle = screen.getByRole("heading", { name: "Handle the urgent request" }).closest("article");
+    expect(taskArticle).not.toBeNull();
+    expect(within(taskArticle!).getByText("P4")).toHaveAttribute("title", "Priority 4 (lowest)");
+  });
+
+  it("keeps leading and trailing task-field icons clear of their labels", () => {
+    render(<TaskBoard />);
+
+    expect(screen.getByLabelText("Due date")).not.toHaveClass("field-prefixed");
+    expect(screen.getByLabelText("Category (optional)")).toHaveClass("field-prefixed", "field-suffixed");
+    expect(screen.getByLabelText("Repeat schedule")).toHaveClass("field-prefixed", "field-suffixed");
+    expect(screen.getByLabelText("Priority")).toHaveClass("field-prefixed", "field-suffixed");
+    expect(screen.getByLabelText("Filter by category")).toHaveClass("field-prefixed", "field-suffixed");
+  });
+
   it("has no automated accessibility violations", async () => {
     const { container } = render(<TaskBoard />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("keeps the category manager free of automated accessibility violations", async () => {
+    const { container } = render(<TaskBoard />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Category (optional)" }), { target: { value: "__edit_categories__" } });
     expect(await axe(container)).toHaveNoViolations();
   });
 });

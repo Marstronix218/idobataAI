@@ -110,7 +110,7 @@ export function ActivityList() {
   return <div className="min-w-0 border-x border-line bg-canvas">
       <header className="sticky top-0 z-20 border-b border-line bg-canvas/88 backdrop-blur-xl">
         <div className="flex min-h-14 items-center justify-between gap-3 px-4">
-          <div><h1 className="display text-xl font-bold">Notifications</h1><p className="text-xs text-muted">Encouragement and progress updates.</p></div>
+          <h1 className="display text-xl font-bold">Notifications</h1>
           <div className="flex gap-1">
             <button className="icon-btn border-transparent bg-transparent" aria-label="Refresh notifications" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button>
             <button className="icon-btn border-transparent bg-transparent" aria-label="Mark all notifications as read" disabled={!unread.length || loading} onClick={() => void markRead()}><CheckCheck size={19} /></button>

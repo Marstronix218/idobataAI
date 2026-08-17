@@ -372,7 +372,7 @@ export function ChatPanel() {
   return <div className="relative flex h-[calc(100dvh-4.2rem)] min-h-[36rem] overflow-hidden border-x border-line bg-canvas lg:h-dvh">
     <section aria-label="Chat inbox" className={`${mobileConversationOpen ? "hidden md:flex" : "flex"} min-w-0 flex-1 flex-col border-r border-line md:max-w-[360px]`}>
       <header className="flex min-h-16 items-center justify-between gap-3 border-b border-line px-4">
-        <div><h1 className="display text-2xl font-bold">Chat</h1><p className="text-xs text-muted">Private conversations</p></div>
+        <h1 className="display text-2xl font-bold">Chat</h1>
         <button type="button" className="icon-btn" aria-label="Start a new conversation" onClick={() => setNewChatOpen(true)}><MailPlus size={19} /></button>
       </header>
       {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-xs leading-5"><strong>Preview mode.</strong> Messages are interactive demo data and do not persist.</div>}

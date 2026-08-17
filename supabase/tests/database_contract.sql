@@ -68,6 +68,13 @@ do $$
 begin
   if not exists(
     select 1 from information_schema.columns
+    where table_schema='public' and table_name='tasks' and column_name='priority'
+      and data_type='smallint' and is_nullable='NO' and column_default='4'
+  ) then raise exception 'tasks are missing the required priority field'; end if;
+  if not has_column_privilege('authenticated','public.tasks','priority','INSERT') then raise exception 'authenticated cannot set task priority on creation'; end if;
+  if not has_column_privilege('authenticated','public.tasks','priority','UPDATE') then raise exception 'authenticated cannot change task priority'; end if;
+  if not exists(
+    select 1 from information_schema.columns
     where table_schema='public' and table_name='social_posts' and column_name='image_paths'
   ) then raise exception 'social_posts is missing private media paths'; end if;
   if not exists(
@@ -83,6 +90,8 @@ do $$
 begin
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_posts_human_idempotency_key') then raise exception 'missing human post idempotency index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_posts_companion_source_key') then raise exception 'missing scheduled post idempotency index'; end if;
+  if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_reactions_actor_created_idx') then raise exception 'missing profile likes index'; end if;
+  if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_replies_author_created_idx') then raise exception 'missing profile replies index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='ai_jobs_claim_idx') then raise exception 'missing job claim index'; end if;
   if has_function_privilege('authenticated', 'public.apply_companion_post_catalog()', 'EXECUTE') then
     raise exception 'authenticated users must not execute the internal companion catalog helper';

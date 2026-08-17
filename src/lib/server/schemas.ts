@@ -15,6 +15,7 @@ export const taskCreateSchema = z.object({
   category: optionalClean(48),
   dueAt: z.iso.datetime().nullable().optional(),
   recurrenceRule: z.enum(["daily", "weekdays", "weekly"]).nullable().optional(),
+  priority: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
   visibility: z.enum(["private", "public"]).optional(),
 }).strict();
 
@@ -24,9 +25,14 @@ export const taskUpdateSchema = z.object({
   category: optionalClean(48),
   dueAt: z.iso.datetime().nullable().optional(),
   recurrenceRule: z.enum(["daily", "weekdays", "weekly"]).nullable().optional(),
+  priority: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
   visibility: z.enum(["private", "public"]).optional(),
   status: z.enum(["pending", "completed"]).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "At least one field is required.");
+
+export const taskCategorySchema = z.object({
+  name: clean(48),
+}).strict();
 
 export const publishSchema = z.object({
   message: optionalClean(500),
