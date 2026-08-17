@@ -179,10 +179,19 @@ describe("Feed", { timeout: 15_000 }, () => {
     const mossPost = screen.getByRole("article", { name: "Open post by Moss" });
     fireEvent.click(within(mossPost).getByRole("button", { name: /^Reply/ }));
     const input = screen.getByLabelText("Reply to Moss");
+    const composer = input.closest("form")!;
 
     expect(screen.queryByText("No replies yet. A thoughtful note can go a long way.")).not.toBeInTheDocument();
+    const avatar = within(composer).getByRole("img", { name: "Mina Mori" });
+    const submit = within(composer).getByRole("button", { name: "Reply" });
+    expect(avatar).toBeVisible();
+    expect(composer.firstElementChild).toBe(avatar);
+    expect(composer.lastElementChild).toBe(submit);
+    expect(input).toHaveAttribute("placeholder", "Post your reply");
+    expect(submit).toBeDisabled();
     fireEvent.change(input, { target: { value: "Nice progress." } });
-    fireEvent.submit(input.closest("form")!);
+    expect(submit).toBeEnabled();
+    fireEvent.submit(composer);
 
     expect(screen.getByText("Reply posted. Preview only.")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Reply 1$/ })).toHaveLength(1);

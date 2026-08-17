@@ -25,8 +25,9 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
 
 import { DELETE } from "@/app/api/account/route";
 
-function adminFixture(options: { anonymizationError?: Error; authError?: Error; finalizationError?: Error } = {}) {
+function adminFixture(options: { anonymizationError?: Error; authError?: Error; finalizationError?: Error; storedObjects?: Record<string, string[]>; removeError?: Error } = {}) {
   const events: string[] = [];
+  const removed: string[] = [];
   let updateCall = 0;
   const from = vi.fn(() => ({
     insert: () => ({ select: () => ({ single: async () => { events.push("request-recorded"); return { data: { id: "deletion-id" }, error: null }; } }) }),
@@ -37,8 +38,24 @@ function adminFixture(options: { anonymizationError?: Error; authError?: Error; 
       return { data: null, error: error ?? null };
     } }),
   }));
+  // Erasure has to reach storage too: deleting the auth user cascades away
+  // social_posts, and image_paths is the only record of which objects exist.
+  const storage = {
+    from: (bucket: string) => ({
+      list: async (folder: string) => ({
+        data: (options.storedObjects?.[`${bucket}/${folder}`] ?? []).map((name) => ({ id: name, name })),
+        error: null,
+      }),
+      remove: async (paths: string[]) => {
+        if (options.removeError) return { data: null, error: options.removeError };
+        removed.push(...paths);
+        events.push("storage-purged");
+        return { data: null, error: null };
+      },
+    }),
+  };
   deleteUser.mockImplementation(async () => { events.push("auth-deleted"); return { error: options.authError ?? null }; });
-  return { events, client: { from, auth: { admin: { deleteUser } } } };
+  return { events, removed, client: { from, storage, auth: { admin: { deleteUser } } } };
 }
 
 describe("account deletion route", () => {
@@ -55,6 +72,35 @@ describe("account deletion route", () => {
 
     expect((await DELETE(new Request("http://localhost/api/account", { method: "DELETE" }))).status).toBe(204);
     expect(fixture.events).toEqual(["request-recorded", "auth_delete_pending", "auth-deleted", "completed"]);
+  });
+
+  it("purges avatars and completion media before deleting Auth", async () => {
+    const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const fixture = adminFixture({
+      storedObjects: {
+        [`avatars/${userId}`]: ["portrait.jpg"],
+        [`completion-post-media/${userId}/pending`]: ["abandoned.webp"],
+      },
+    });
+    createAdminClient.mockReturnValue(fixture.client);
+
+    expect((await DELETE(new Request("http://localhost/api/account", { method: "DELETE" }))).status).toBe(204);
+    expect(fixture.removed).toEqual([`${userId}/portrait.jpg`, `${userId}/pending/abandoned.webp`]);
+    // A public avatar left behind stays fetchable at a stable URL forever, and
+    // orphaned post media becomes unreclaimable once its post row is gone.
+    expect(fixture.events.indexOf("storage-purged")).toBeLessThan(fixture.events.indexOf("auth-deleted"));
+  });
+
+  it("does not delete account data when stored media cannot be removed", async () => {
+    const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const fixture = adminFixture({
+      storedObjects: { [`avatars/${userId}`]: ["portrait.jpg"] },
+      removeError: new Error("storage unavailable"),
+    });
+    createAdminClient.mockReturnValue(fixture.client);
+
+    expect((await DELETE(new Request("http://localhost/api/account", { method: "DELETE" }))).status).toBe(502);
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 
   it("does not delete Auth if audit anonymization fails", async () => {

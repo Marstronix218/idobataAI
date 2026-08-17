@@ -34,6 +34,7 @@ export async function GET(request: Request, { params }: Context) {
     return ok({
       ...post,
       social_replies: replies,
+      reply_count: replies.length,
       image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
     });
   });

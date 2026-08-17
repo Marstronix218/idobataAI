@@ -144,6 +144,7 @@ describe("getAIProvider", () => {
 
   it("uses purpose-specific environment overrides", async () => {
     vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL_ALLOWLIST", "chat-model,utility-model,legacy-model");
     vi.stubEnv("AI_CHAT_MODEL", "chat-model");
     vi.stubEnv("AI_UTILITY_MODEL", "utility-model");
     vi.stubEnv("AI_CHAT_REASONING_EFFORT", "high");
@@ -168,5 +169,20 @@ describe("getAIProvider", () => {
   it("stays disabled without an API key", () => {
     vi.stubEnv("AI_API_KEY", "");
     expect(getAIProvider()).toBeInstanceOf(DisabledAIProvider);
+  });
+
+  it("stays disabled when AI is switched off", () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_ENABLED", "false");
+    expect(getAIProvider()).toBeInstanceOf(DisabledAIProvider);
+  });
+
+  // An unvalidated model id was previously accepted and only surfaced on the
+  // bill, so a typo or an expensive paste failed silently at runtime.
+  it("refuses a model outside the allowlist", () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL_ALLOWLIST", "gpt-4o-mini");
+    vi.stubEnv("AI_CHAT_MODEL", "expensive-model-typo");
+    expect(() => getAIProvider()).toThrow(/unsupported model/i);
   });
 });

@@ -65,14 +65,30 @@ describe("OnboardingFlow", () => {
     expect(screen.getByText(/AI accounts stay active either way/)).toBeInTheDocument();
   });
 
-  it("finishes onboarding in the Feed", () => {
+  // Onboarding ends on the task board, not the feed: the landing page promises
+  // "start with one private task", and finishing setup on a feed of strangers
+  // left the user with nothing of their own and a second tab to find.
+  it("finishes onboarding on the task board", () => {
     render(<OnboardingFlow />);
 
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Open my feed/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add my first task/ }));
 
-    expect(router.push).toHaveBeenCalledWith("/feed");
+    expect(router.push).toHaveBeenCalledWith("/tasks");
+  });
+
+  it("asks about profile visibility and post audience as separate choices", () => {
+    render(<OnboardingFlow />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+    // A private profile must not silently also mean every win you post is
+    // visible only to you -- that combination published nothing to anyone.
+    expect(screen.getByRole("button", { name: /Private/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /The community/ })).toHaveAttribute("aria-pressed", "true");
   });
 });

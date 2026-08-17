@@ -85,6 +85,7 @@ const previewPosts: FeedPost[] = [{
     companion_id: null,
   })),
   social_replies: [],
+  reply_count: 0,
 }];
 
 const previewLikedPosts: FeedPost[] = [{
@@ -117,6 +118,7 @@ const previewLikedPosts: FeedPost[] = [{
     companion_id: index >= 6 ? `preview-ai-${index}` : null,
   })),
   social_replies: [],
+  reply_count: 0,
 }];
 
 const previewReplies: ProfileReply[] = [{
@@ -153,6 +155,7 @@ const previewReplies: ProfileReply[] = [{
       companion_id: null,
     })),
     social_replies: [],
+    reply_count: 0,
   },
 }];
 
@@ -226,6 +229,10 @@ export default async function ProfilePage({
   let followerCount = previewCompanions.length;
   let isOwner = true;
   let currentUserId: string | null = "preview-user";
+  let replyAuthor: { name: string; avatarUrl: string | null } | null = {
+    name: previewProfile.display_name?.trim() || previewProfile.username,
+    avatarUrl: previewProfile.avatar_url,
+  };
 
   if (useDatabase) {
     if (!/^[A-Za-z0-9_]{3,24}$/.test(requestedUsername)) notFound();
@@ -238,6 +245,20 @@ export default async function ProfilePage({
     profile = foundProfile;
     currentUserId = viewer.user?.id ?? null;
     isOwner = currentUserId === profile.id;
+    if (!currentUserId) {
+      replyAuthor = null;
+    } else if (isOwner) {
+      replyAuthor = { name: profile.display_name?.trim() || profile.username, avatarUrl: profile.avatar_url };
+    } else {
+      const { data: viewerProfile } = await supabase
+        .from("user_profiles")
+        .select("username, display_name, avatar_url")
+        .eq("id", currentUserId)
+        .maybeSingle();
+      replyAuthor = viewerProfile
+        ? { name: viewerProfile.display_name?.trim() || viewerProfile.username, avatarUrl: viewerProfile.avatar_url }
+        : null;
+    }
     posts = [];
     replies = [];
     likedPosts = [];
@@ -406,7 +427,7 @@ export default async function ProfilePage({
         </nav>
 
         {selectedTab === "posts" && <section aria-label={`${displayName}'s posts`}>
-          {posts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} />)}
+          {posts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} />)}
           {!posts.length && <div className="border-b border-line p-10 text-center"><Sparkles className="mx-auto text-brand" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">Shared wins and progress updates will appear here.</p></div>}
         </section>}
 
@@ -435,7 +456,7 @@ export default async function ProfilePage({
         </section>}
 
         {selectedTab === "likes" && <section aria-label={`${displayName}'s liked posts`}>
-          {likedPosts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} />)}
+          {likedPosts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} />)}
           {!likedPosts.length && <div className="border-b border-line p-10 text-center"><Heart className="mx-auto text-brand" /><h3 className="display mt-4 text-xl font-bold">No visible likes yet</h3><p className="mt-2 text-sm text-muted">Posts {displayName} likes will appear here when you can view them.</p></div>}
         </section>}
 

@@ -4,6 +4,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import type { ChatMessage, ChatThread, SocialCompanion } from "@/types";
 
+// The provider is called synchronously here. Without an explicit budget the
+// route inherited the platform default of 10s -- shorter than the provider
+// timeout it relied on -- so a slow provider killed the function before the
+// companion's fallback reply could be substituted.
+export const maxDuration = 30;
+
 type Context = { params: Promise<{ id: string }> };
 const messageSchema = z.object({ content: z.string().trim().min(1).max(2000) });
 

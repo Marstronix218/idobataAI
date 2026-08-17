@@ -4,9 +4,34 @@ import { AVATAR_PATHS, type AvatarPath } from "@/lib/domain/avatar-options";
 
 const clean = (max: number) => z.string().trim().min(1).max(max);
 const optionalClean = (max: number) => z.string().trim().max(max).nullable().optional();
+// `z.url()` accepts any scheme and any host, so an arbitrary remote URL used to
+// be storable here and was then rendered as an <img> in the feed, chat, replies
+// and profile pages. That handed the URL's owner the IP address, User-Agent and
+// Referer of every viewer -- silent cross-user deanonymisation inside a product
+// that promises private profiles. Avatars are now restricted to the bundled
+// options and this project's own Supabase storage origin.
+const supabaseStorageOrigin = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin : null;
+  } catch {
+    return null;
+  }
+})();
+
+function isOwnStorageUrl(value: string) {
+  if (!supabaseStorageOrigin) return false;
+  try {
+    const url = new URL(value);
+    return url.origin === supabaseStorageOrigin
+      && url.pathname.startsWith("/storage/v1/object/public/avatars/");
+  } catch {
+    return false;
+  }
+}
+
 const avatarUrl = z.string().max(1000).refine(
-  (value) => AVATAR_PATHS.includes(value as AvatarPath) || z.url().safeParse(value).success,
-  "Choose an available avatar or provide a valid absolute URL.",
+  (value) => AVATAR_PATHS.includes(value as AvatarPath) || isOwnStorageUrl(value),
+  "Choose an available avatar or upload a photo.",
 );
 
 export const taskCreateSchema = z.object({

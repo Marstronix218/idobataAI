@@ -20,11 +20,13 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tasks as demoTasks } from "@/data/demo";
 import { TaskCategoryManager } from "@/components/tasks/task-category-manager";
 import { PrivacyBadge } from "@/components/ui/status";
+import { StatusMessage } from "@/components/ui/status-message";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
+import { useDialog } from "@/lib/client/use-dialog";
 import type { Task, TaskCategory, TaskPriority, UserProfile } from "@/types";
 
 type Filter = "Today" | "Upcoming" | "All" | "Completed";
@@ -150,9 +152,24 @@ export function TaskBoard() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const [announcementTone, setAnnouncementTone] = useState<"status" | "error">("status");
+  const [editError, setEditError] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [loading, setLoading] = useState(!isPreviewMode);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [categoryBusyId, setCategoryBusyId] = useState<string | null>(null);
+  const editDialogRef = useRef<HTMLDivElement | null>(null);
+
+  const notify = useCallback((message: string, tone: "status" | "error" = "status") => {
+    setAnnouncement(message);
+    setAnnouncementTone(tone);
+  }, []);
+  const closeEditor = useCallback(() => {
+    setEditing(null);
+    setEditError("");
+    setConfirmingDelete(false);
+  }, []);
+  useDialog(editDialogRef, { open: Boolean(editing), onClose: closeEditor });
 
   async function load(signal?: AbortSignal) {
     if (isPreviewMode) return;
@@ -167,7 +184,7 @@ export function TaskBoard() {
       setProfile(loadedProfile);
       setTaskCategories(loadedCategories);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) setAnnouncement(errorMessage(error));
+      if (!(error instanceof DOMException && error.name === "AbortError")) notify(errorMessage(error), "error");
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -187,13 +204,13 @@ export function TaskBoard() {
         setTaskCategories(loadedCategories);
       })
       .catch((error) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) setAnnouncement(errorMessage(error));
+        if (!(error instanceof DOMException && error.name === "AbortError")) notify(errorMessage(error), "error");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [notify]);
 
   const categories = useMemo(() => [
     "All",
@@ -230,21 +247,34 @@ export function TaskBoard() {
   }), [category, filter, items]);
   const groups = groupsFor(filter, visible);
 
+  // Ticking a task is the most repeated interaction in the product, so it
+  // applies immediately and rolls back on failure rather than freezing the
+  // checkbox for a round trip. The current filter and category are deliberately
+  // left alone: resetting them threw the user out of the list they were working
+  // down on every single completion. The celebration card below already
+  // confirms what happened and offers the optional share.
   async function complete(task: Task) {
     const next = task.status === "pending" ? "completed" : "pending";
+    const optimistic = {
+      ...task,
+      status: next,
+      completed_at: next === "completed" ? new Date().toISOString() : null,
+    } as Task;
     setBusyId(task.id);
-    setAnnouncement("");
+    notify("");
+    setItems((current) => current.map((item) => item.id === task.id ? optimistic : item));
+    setJustCompleted(next === "completed" ? optimistic : null);
     try {
       const updated = isPreviewMode
-        ? { ...task, status: next, completed_at: next === "completed" ? new Date().toISOString() : null } as Task
+        ? optimistic
         : await apiRequest<Task>(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
       setItems((current) => current.map((item) => item.id === task.id ? updated : item));
-      setJustCompleted(next === "completed" ? updated : null);
-      setCategory("All");
-      setFilter(next === "completed" ? "Completed" : "All");
-      setAnnouncement(next === "completed" ? `${task.title} completed. Nothing was posted.` : `${task.title} moved back to open tasks.`);
+      setJustCompleted((current) => current?.id === task.id && next === "completed" ? updated : current);
+      notify(next === "completed" ? `${task.title} completed. Nothing was posted.` : `${task.title} moved back to open tasks.`);
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      setItems((current) => current.map((item) => item.id === task.id ? task : item));
+      setJustCompleted((current) => current?.id === task.id ? null : current);
+      notify(errorMessage(error), "error");
     } finally {
       setBusyId(null);
     }
@@ -257,7 +287,7 @@ export function TaskBoard() {
     const dueAt = quickDue ? new Date(`${quickDue}T12:00:00`).toISOString() : null;
     const recurrenceRule = quickRecurrence ? quickRecurrence as "daily" | "weekdays" | "weekly" : null;
     setBusyId("new");
-    setAnnouncement("");
+    notify("");
     try {
       const created = isPreviewMode
         ? {
@@ -284,9 +314,9 @@ export function TaskBoard() {
       setQuickCategory("");
       setQuickRecurrence("");
       setQuickPriority(4);
-      setAnnouncement(`${title} added ${created.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
+      notify(`${title} added ${created.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      notify(errorMessage(error), "error");
     } finally {
       setBusyId(null);
     }
@@ -306,15 +336,18 @@ export function TaskBoard() {
       visibility: String(data.get("visibility")) as "private" | "public",
     };
     setBusyId(editing.id);
+    setEditError("");
     try {
       const updated = isPreviewMode
         ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, recurrence_rule: patch.recurrenceRule, priority: patch.priority, visibility: patch.visibility }
         : await apiRequest<Task>(`/api/tasks/${editing.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       setItems((current) => current.map((task) => task.id === updated.id ? updated : task));
-      setEditing(null);
-      setAnnouncement("Task changes saved.");
+      closeEditor();
+      notify("Task changes saved.");
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      // Reported inside the dialog: the page-level status line renders beneath
+      // the overlay, so a failure there was invisible and read as a dead button.
+      setEditError(errorMessage(error));
     } finally {
       setBusyId(null);
     }
@@ -322,13 +355,15 @@ export function TaskBoard() {
 
   async function remove(task: Task) {
     setBusyId(task.id);
+    setEditError("");
     try {
       if (!isPreviewMode) await apiRequest<void>(`/api/tasks/${task.id}`, { method: "DELETE" });
       setItems((current) => current.filter((item) => item.id !== task.id));
-      setEditing(null);
-      setAnnouncement(`${task.title} deleted.${isPreviewMode ? " Preview only." : ""}`);
+      setJustCompleted((current) => current?.id === task.id ? null : current);
+      closeEditor();
+      notify(`${task.title} deleted.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      setEditError(errorMessage(error));
     } finally {
       setBusyId(null);
     }
@@ -338,21 +373,21 @@ export function TaskBoard() {
     const cleanName = name.trim();
     if (!cleanName) return false;
     if (taskCategories.some((taskCategory) => taskCategory.name.toLowerCase() === cleanName.toLowerCase())) {
-      setAnnouncement(`You already have a category named ${cleanName}.`);
+      notify(`You already have a category named ${cleanName}.`, "error");
       return false;
     }
     setCategoryBusyId("new");
-    setAnnouncement("");
+    notify("");
     try {
       const now = new Date().toISOString();
       const created = isPreviewMode
         ? { id: `preview-category-${Date.now()}`, owner_id: "preview", name: cleanName, created_at: now, updated_at: now }
         : await apiRequest<TaskCategory>("/api/task-categories", { method: "POST", body: JSON.stringify({ name: cleanName }) });
       setTaskCategories((current) => sortCategories([...current, created]));
-      setAnnouncement(`${created.name} category added.${isPreviewMode ? " Preview only." : ""}`);
+      notify(`${created.name} category added.${isPreviewMode ? " Preview only." : ""}`);
       return true;
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      notify(errorMessage(error), "error");
       return false;
     } finally {
       setCategoryBusyId(null);
@@ -364,11 +399,11 @@ export function TaskBoard() {
     if (!cleanName) return false;
     if (taskCategory.name === cleanName) return true;
     if (taskCategories.some((candidate) => candidate.id !== taskCategory.id && candidate.name.toLowerCase() === cleanName.toLowerCase())) {
-      setAnnouncement(`You already have a category named ${cleanName}.`);
+      notify(`You already have a category named ${cleanName}.`, "error");
       return false;
     }
     setCategoryBusyId(taskCategory.id);
-    setAnnouncement("");
+    notify("");
     try {
       const updated = isPreviewMode
         ? { ...taskCategory, name: cleanName, updated_at: new Date().toISOString() }
@@ -378,10 +413,10 @@ export function TaskBoard() {
       setCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? updated.name : current);
       setQuickCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? updated.name : current);
       setEditing((current) => current?.category?.toLowerCase() === taskCategory.name.toLowerCase() ? { ...current, category: updated.name } : current);
-      setAnnouncement(`${taskCategory.name} renamed to ${updated.name}.${isPreviewMode ? " Preview only." : ""}`);
+      notify(`${taskCategory.name} renamed to ${updated.name}.${isPreviewMode ? " Preview only." : ""}`);
       return true;
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      notify(errorMessage(error), "error");
       return false;
     } finally {
       setCategoryBusyId(null);
@@ -391,7 +426,7 @@ export function TaskBoard() {
   async function deleteCategory(taskCategory: TaskCategory) {
     const affectedTasks = items.filter((task) => task.category?.toLowerCase() === taskCategory.name.toLowerCase()).length;
     setCategoryBusyId(taskCategory.id);
-    setAnnouncement("");
+    notify("");
     try {
       if (!isPreviewMode) await apiRequest<void>(`/api/task-categories/${taskCategory.id}`, { method: "DELETE" });
       setTaskCategories((current) => current.filter((candidate) => candidate.id !== taskCategory.id));
@@ -399,10 +434,10 @@ export function TaskBoard() {
       setCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? "All" : current);
       setQuickCategory((current) => current.toLowerCase() === taskCategory.name.toLowerCase() ? "" : current);
       setEditing((current) => current?.category?.toLowerCase() === taskCategory.name.toLowerCase() ? { ...current, category: null } : current);
-      setAnnouncement(`${taskCategory.name} deleted and cleared from ${affectedTasks} current ${affectedTasks === 1 ? "task" : "tasks"}.${isPreviewMode ? " Preview only." : ""}`);
+      notify(`${taskCategory.name} deleted and cleared from ${affectedTasks} current ${affectedTasks === 1 ? "task" : "tasks"}.${isPreviewMode ? " Preview only." : ""}`);
       return true;
     } catch (error) {
-      setAnnouncement(errorMessage(error));
+      notify(errorMessage(error), "error");
       return false;
     } finally {
       setCategoryBusyId(null);
@@ -443,6 +478,20 @@ export function TaskBoard() {
         </div>
       </form>
 
+      {/* First run lands here straight from onboarding. Neither the old feed
+          landing nor the bare "Today is clear." empty state explained the
+          ritual the product is actually built around, so the loop is taught
+          once, at the moment the user has nothing yet. */}
+      {!loading && !items.length && <section className="mt-6 rounded-[1.25rem] border border-brand/30 bg-brand-soft/50 p-5" aria-labelledby="first-run-title">
+        <p className="text-xs font-bold uppercase tracking-[.1em] text-brand">How this works</p>
+        <h2 id="first-run-title" className="display mt-1 text-xl font-bold">Start with one small thing.</h2>
+        <ol className="mt-4 space-y-3">
+          <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">1</span><span><strong>Add it privately.</strong> Every task starts private. Nobody else can see it.</span></li>
+          <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">2</span><span><strong>Finish it.</strong> Completing a task never posts anything, anywhere.</span></li>
+          <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Share only if you want to.</strong> Posting the win is a separate, deliberate choice.</span></li>
+        </ol>
+      </section>}
+
       <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center">
         <div className="segmented min-w-0 flex-1 overflow-x-auto" aria-label="Task view">
           {(["Today", "Upcoming", "All", "Completed"] as Filter[]).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}><span>{value}</span><span className="ml-1 text-xs opacity-65">{counts[value]}</span></button>)}
@@ -455,16 +504,19 @@ export function TaskBoard() {
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
         {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.hint} · {group.tasks.length}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2"><span className="badge badge-priority" title={priorityTitle(task.priority)}>P{task.priority}</span>{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post a win</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
       </section>
-      <p className="mt-4 min-h-5 text-sm font-bold text-muted" aria-live="polite">{categoryManagerOpen ? "" : announcement}</p>
+      <StatusMessage message={categoryManagerOpen ? "" : announcement} tone={categoryManagerOpen ? "status" : announcementTone} onRetry={announcementTone === "error" && !categoryManagerOpen ? () => void load() : undefined} />
     </div>
 
-    {editing && <div className="fixed inset-0 z-50 grid place-items-center bg-overlay/70 p-4">
-      <form onSubmit={saveEdit} className="card w-full max-w-lg p-6">
-        <div className="flex items-center justify-between">
-          <div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Task details</p><h2 className="display mt-1 text-2xl font-bold">Edit task</h2></div>
-          <button type="button" className="icon-btn" onClick={() => setEditing(null)} aria-label="Close"><X size={18} /></button>
+    {editing && <div ref={editDialogRef} className="fixed inset-0 z-50 grid place-items-end bg-overlay/70 p-0 sm:place-items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && busyId !== editing.id) closeEditor(); }}>
+      {/* Scroll container: without it the form is taller than a 360x640 viewport
+          with the keyboard open, and Save is unreachable. */}
+      <form onSubmit={saveEdit} role="dialog" aria-modal="true" aria-labelledby="edit-task-title" className="card flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.5rem] p-0 sm:rounded-[1.5rem]">
+        <div className="flex items-center justify-between gap-4 border-b border-line p-5 sm:p-6">
+          <div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Task details</p><h2 id="edit-task-title" className="display mt-1 text-2xl font-bold">Edit task</h2></div>
+          <button type="button" className="icon-btn shrink-0" onClick={closeEditor} aria-label="Close"><X size={18} /></button>
         </div>
-        <label className="field-label mt-5" htmlFor="edit-title">Title</label>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+        <label className="field-label" htmlFor="edit-title">Title</label>
         <input className="field" id="edit-title" name="title" defaultValue={editing.title} required maxLength={160} />
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
@@ -485,7 +537,24 @@ export function TaskBoard() {
           <div><label className="field-label" htmlFor="edit-visibility">Visibility</label><select className="field" id="edit-visibility" name="visibility" defaultValue={editing.visibility}><option value="private">Private</option><option value="public">Public progress</option></select></div>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">P1 is the highest priority and P4 is the lowest. Posting remains a separate choice after completion.</p>
-        <div className="mt-6 flex justify-between gap-3"><button type="button" className="btn btn-danger" onClick={() => void remove(editing)}><Trash2 size={16} /> Delete</button><button className="btn btn-primary" disabled={busyId === editing.id}>Save changes</button></div>
+        {editError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm font-bold text-danger"><span className="min-w-0 flex-1 break-words">{editError}</span></div>}
+        </div>
+        {/* Deleting a task is irreversible, so it confirms in place rather than
+            firing on a single click, matching the category editor. */}
+        <div className="border-t border-line p-5 sm:p-6">
+          {confirmingDelete ? (
+            <div role="alert" className="rounded-xl bg-danger-soft p-3">
+              <p className="font-bold break-words">Delete “{editing.title}”?</p>
+              <p className="mt-1 text-sm leading-6 text-muted">This cannot be undone. Anything you already posted about it stays as it is.</p>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <button type="button" className="btn btn-secondary min-h-11" onClick={() => setConfirmingDelete(false)} disabled={busyId === editing.id}>Keep task</button>
+                <button type="button" className="btn btn-danger min-h-11" onClick={() => void remove(editing)} disabled={busyId === editing.id}><Trash2 size={16} /> Delete task</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-between gap-3"><button type="button" className="btn btn-danger" onClick={() => setConfirmingDelete(true)} disabled={busyId === editing.id}><Trash2 size={16} /> Delete</button><button className="btn btn-primary" disabled={busyId === editing.id}>Save changes</button></div>
+          )}
+        </div>
       </form>
     </div>}
 

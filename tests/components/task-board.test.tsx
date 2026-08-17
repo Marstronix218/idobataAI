@@ -81,9 +81,12 @@ describe("TaskBoard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Complete: Draft the project kickoff outline" }));
 
     expect(screen.getByText("Task complete")).toBeVisible();
-    const completedRegion = screen.getByRole("region", { name: "Completed tasks" });
-    expect(completedRegion).toBeVisible();
-    expect(within(completedRegion).getByRole("heading", { name: "Draft the project kickoff outline" })).toBeVisible();
+    // Completing a task must not move the user: resetting the filter and
+    // category threw them out of the list they were working down, on the most
+    // repeated interaction in the product. The celebration card is the
+    // confirmation; the list stays where it was.
+    expect(screen.getByRole("region", { name: "Today tasks" })).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Completed tasks" })).not.toBeInTheDocument();
     expect(screen.getByText("Nothing was posted. Add a note or photos only if you want to share this win.")).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Post a win" }).some(
       (link) => link.getAttribute("href") === "/tasks/kickoff-outline/share",

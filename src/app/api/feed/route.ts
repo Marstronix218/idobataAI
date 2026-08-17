@@ -3,12 +3,16 @@ import { signPostMediaByPath } from "@/lib/server/post-media";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { FeedPost } from "@/types";
 
+// The list feed renders reaction counts and a "did I react" state, and does not
+// render replies at all -- those appear only in the post detail view. Expanding
+// `social_replies(*, ...)` here joined two extra tables per post for output that
+// was thrown away, and neither nested relation was bounded, so a single popular
+// post degraded the feed for everyone who saw it.
 const feedSelect = `
   *,
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
-  social_reactions(id, reaction, actor_id, companion_id),
-  social_replies(*, user_profiles(username, display_name, avatar_url), social_companions(name, slug, avatar_url))
+  social_reactions(id, reaction, actor_id, companion_id)
 `;
 
 export async function GET(request: Request) {
@@ -41,6 +45,9 @@ export async function GET(request: Request) {
     const imageUrlByPath = await signPostMediaByPath(admin, imagePaths);
     const signedItems = items.map((post) => ({
       ...post,
+      // Always an array so consumers never read `.length` of undefined; the
+      // list feed shows `reply_count` and the detail route supplies the bodies.
+      social_replies: [],
       image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
     }));
     return ok({ items: signedItems, nextCursor: hasMore && items.length ? makeCursor(items[items.length - 1]) : null });

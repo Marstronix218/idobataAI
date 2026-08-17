@@ -131,7 +131,7 @@ CI runs the application gates and a separate Docker-backed Supabase job. The lat
 3. Configure the production Site URL and exact allowed redirect URLs in Supabase Auth, including `/auth/callback`; configure custom SMTP and ensure custom email templates preserve `{{ .RedirectTo }}`.
 4. Import the repository into Vercel and add every value from `.env.example` for the appropriate environments.
    Do not add `NEXT_PUBLIC_ENABLE_DEMO_MODE` to Vercel.
-5. Generate distinct long random values for `CRON_SECRET` and `WORKER_SECRET`. Vercel uses `CRON_SECRET` for scheduled requests; `WORKER_SECRET` also authorizes manual worker calls. The checked-in schedule is once daily per route so it is valid on Vercel Hobby; increase the worker frequency when using a plan that supports it.
+5. Generate distinct long random values for `CRON_SECRET` and `WORKER_SECRET`. Vercel uses `CRON_SECRET` for scheduled requests; `WORKER_SECRET` also authorizes manual worker calls. The checked-in schedule is once daily per route so it is valid on Vercel Hobby; increase the worker frequency when using a plan that supports it, and move `/api/cron/rollover` to `0 * * * *` so recurring tasks reopen closer to each user's own morning rather than at UTC midnight.
 6. Leave provider variables empty to launch with curated companion fallbacks, or configure an OpenAI-compatible provider and the purpose-specific chat and utility models for optional reply enhancement.
 7. Run a production deployment and confirm signup, confirmation resend, password recovery, onboarding, task privacy, explicit sharing, owner audience/deletion controls, AI labels, the people-only feed, and account-deletion policy in the deployed environment.
 
@@ -144,6 +144,10 @@ Before enabling paid subscriptions, implement the billing cancellation adapter a
 - When companion engagement has been scheduled, provider failure leaves its persisted fallback content available.
 - Human and companion chat threads are visible only to their human participants.
 - At-least-once cron/worker delivery is safe because visible writes use stable database keys.
+- Completed recurring tasks return to pending once their occurrence passes, via `/api/cron/rollover`. The rollover is a no-op inside the same occurrence, so repeated delivery cannot reopen a task twice.
+- `profile_visibility` is enforced by RLS, not only by the profile page, and the SQL suite asserts a private profile is unreadable by another authenticated user.
+- Account deletion purges avatars and completion media before deleting the auth user, and refuses to proceed if that media cannot be removed.
+- `GET /api/health` reports database reachability and the deployed commit for an external uptime monitor.
 - A public-to-private task change removes the public projection synchronously.
 - Feed pagination uses the `(created_at, id)` cursor pair to avoid gaps on timestamp ties.
 - A successful mutation remains successful even if a later feed refresh fails.

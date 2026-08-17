@@ -6,7 +6,8 @@ select plan(1);
 insert into auth.users(id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','authenticated','authenticated','user-a@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"user_a"}',now(),now()),
-  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','authenticated','authenticated','user-b@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"user_b"}',now(),now());
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','authenticated','authenticated','user-b@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"user_b"}',now(),now()),
+  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','authenticated','authenticated','user-c@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"user_c"}',now(),now());
 
 insert into public.social_companions(id,slug,name,personality,writing_style,interests,safety_instructions,fallback_replies,daily_templates,posting_frequency)
 values
@@ -128,6 +129,47 @@ do $$ begin
   if not exists(select 1 from public.social_reactions where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and reaction='like') then raise exception 'like upsert failed'; end if;
 end $$;
 
+-- The preceding block ran under `reset role`, i.e. as the table owner, which
+-- bypasses RLS entirely. Re-enter the authenticated role before asserting
+-- anything about policy behaviour.
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+-- profile_visibility must be enforced by RLS, not only by the profile page.
+-- The anon key is published to the browser by design, so a UI-only check left
+-- every row of user_profiles -- bio, interests, streak, last_completion_date --
+-- readable straight from PostgREST by any signed-in user.
+do $$ begin
+  -- User C is private and has published nothing.
+  if exists(select 1 from public.user_profiles where id='cccccccc-cccc-4ccc-8ccc-cccccccccccc') then
+    raise exception 'private profile leaked to another authenticated user';
+  end if;
+  -- User A is private too, but authored a live public post, so their identity
+  -- must stay readable or that post cannot render its own author.
+  if not exists(select 1 from public.user_profiles where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') then
+    raise exception 'author of a public post was not readable';
+  end if;
+  -- Directory search must not enumerate private accounts either.
+  if exists(select 1 from public.search_chat_contacts('user_c')) then
+    raise exception 'private profile was enumerable through contact search';
+  end if;
+end $$;
+reset role;
+
+update public.user_profiles set profile_visibility='public' where id='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+do $$ begin
+  if not exists(select 1 from public.user_profiles where id='cccccccc-cccc-4ccc-8ccc-cccccccccccc') then
+    raise exception 'public profile was not readable';
+  end if;
+  if not exists(select 1 from public.search_chat_contacts('user_c')) then
+    raise exception 'public profile was not findable through contact search';
+  end if;
+end $$;
+reset role;
+
 insert into public.account_deletion_requests(user_id,status)
 values('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','processing');
 update public.account_deletion_requests set user_id=null,user_fingerprint=encode(digest('user-b:test-salt','sha256'),'hex'),status='auth_delete_pending' where user_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -154,6 +196,75 @@ begin
   update public.ai_jobs set lease_expires_at=now()-interval '1 second' where id=claimed.id;
   if not exists(select 1 from public.claim_ai_jobs(1,30) where id=claimed.id and lease_token<>claimed.lease_token) then
     raise exception 'expired lease was not recovered';
+  end if;
+end $$;
+
+-- The list feed shows a reply count but never reply bodies. That count is
+-- denormalized, so it has to track inserts, moderation status changes, and
+-- deletes -- otherwise the number drifts from what the detail view lists.
+do $$
+declare reply_id uuid;
+begin
+  if (select reply_count from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000002') <> 0 then
+    raise exception 'reply_count did not start at zero';
+  end if;
+
+  insert into public.social_replies(post_id, author_id, content)
+  values('aaaaaaaa-1000-4000-8000-000000000002','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','A first reply.')
+  returning id into reply_id;
+  if (select reply_count from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000002') <> 1 then
+    raise exception 'reply_count did not follow an insert';
+  end if;
+
+  -- A hidden reply is not listed by the detail view, so it must not be counted.
+  update public.social_replies set content_status='hidden' where id=reply_id;
+  if (select reply_count from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000002') <> 0 then
+    raise exception 'reply_count counted a hidden reply';
+  end if;
+
+  update public.social_replies set content_status='active' where id=reply_id;
+  delete from public.social_replies where id=reply_id;
+  if (select reply_count from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000002') <> 0 then
+    raise exception 'reply_count did not follow a delete';
+  end if;
+end $$;
+
+-- A completed recurring task previously stayed completed forever, so a "daily
+-- routine" fired exactly once and the habit loop could not repeat. Rollover
+-- must be a no-op inside the same occurrence and must reopen the task once the
+-- occurrence has passed.
+do $$
+declare rolled integer; task public.tasks;
+begin
+  select * into task from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000004';
+  if task.status <> 'completed' or task.recurrence_instance_id is null then
+    raise exception 'recurring fixture was not left completed for the rollover contract';
+  end if;
+
+  rolled := public.rollover_recurring_tasks(current_date);
+  if rolled <> 0 then raise exception 'rollover reopened a task inside its own occurrence'; end if;
+  if exists(select 1 from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000004' and status='pending') then
+    raise exception 'rollover reopened a task completed today';
+  end if;
+
+  rolled := public.rollover_recurring_tasks(current_date + 1);
+  if rolled <> 1 then raise exception 'rollover did not reopen a task whose occurrence has passed'; end if;
+  select * into task from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000004';
+  if task.status <> 'pending' or task.completed_at is not null or task.recurrence_instance_id is not null then
+    raise exception 'rollover left the task in an inconsistent state';
+  end if;
+  if task.due_at is null or task.due_at::date <> current_date + 1 then
+    raise exception 'rollover did not advance the due date to the next occurrence';
+  end if;
+
+  -- Idempotent: running again within the new occurrence must change nothing.
+  if public.rollover_recurring_tasks(current_date + 1) <> 0 then
+    raise exception 'rollover was not idempotent within an occurrence';
+  end if;
+
+  -- A non-recurring completed task must never be reopened.
+  if exists(select 1 from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000003' and status='pending') then
+    raise exception 'rollover reopened a task that does not repeat';
   end if;
 end $$;
 

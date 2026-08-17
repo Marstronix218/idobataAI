@@ -8,9 +8,17 @@ describe("profileSchema avatarUrl", () => {
     expect(profileSchema.safeParse({ avatarUrl }).success).toBe(true);
   });
 
-  it("accepts a blank avatar and an existing absolute URL", () => {
+  it("accepts a blank avatar", () => {
     expect(profileSchema.safeParse({ avatarUrl: null }).success).toBe(true);
-    expect(profileSchema.safeParse({ avatarUrl: "https://example.com/avatar.png" }).success).toBe(true);
+  });
+
+  // An arbitrary remote URL is rendered as an <img> for every viewer, handing
+  // its host each viewer's IP, User-Agent and Referer.
+  it("rejects avatars hosted anywhere but this project's own storage", () => {
+    expect(profileSchema.safeParse({ avatarUrl: "https://example.com/avatar.png" }).success).toBe(false);
+    expect(profileSchema.safeParse({ avatarUrl: "javascript:alert(1)" }).success).toBe(false);
+    expect(profileSchema.safeParse({ avatarUrl: "data:text/html,<script></script>" }).success).toBe(false);
+    expect(profileSchema.safeParse({ avatarUrl: "http://169.254.169.254/latest/meta-data" }).success).toBe(false);
   });
 
   it("rejects unknown local paths and relative URLs", () => {

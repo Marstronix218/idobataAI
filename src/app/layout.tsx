@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import "./globals.css";
 
@@ -29,6 +29,15 @@ export const metadata: Metadata = {
     title: "idobataAI — small wins, shared well",
     description: "A private task list and encouraging community for sharing the wins you choose.",
   },
+};
+
+// `viewportFit: "cover"` is what makes env(safe-area-inset-*) resolve to a real
+// value. Without it the bottom navigation's safe-area padding was always zero,
+// so the last row of tap targets sat under the iPhone home indicator.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

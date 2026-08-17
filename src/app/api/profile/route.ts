@@ -1,5 +1,6 @@
 import { profileSchema } from "@/lib/server/schemas";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 
 export async function GET(request: Request) {
   return withApi(async () => {
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   return withApi(async () => {
     const { user, supabase } = await authed(request);
+    await enforceRateLimit(supabase, "profile:update", 20, 3600);
     const input = await parseJson(request, profileSchema);
     const result = await supabase.from("user_profiles").update({
       ...(input.username !== undefined && { username: input.username }),

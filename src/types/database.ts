@@ -93,6 +93,9 @@ export interface SocialPost {
   source_key: string | null;
   image_paths: string[];
   is_ai_generated: boolean;
+  // Maintained by trigger so the list feed can show a reply count without
+  // joining reply bodies. Only the trigger may write it.
+  reply_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -225,6 +228,11 @@ export interface Database {
       finalize_ai_reply_job: { Args: { p_job_id: string; p_lease_token: string; p_content: string }; Returns: boolean };
       fail_ai_job: { Args: { p_job_id: string; p_lease_token: string; p_error: string; p_cooldown_seconds?: number }; Returns: boolean };
       schedule_companion_posts: { Args: { p_date?: string }; Returns: number };
+      rollover_recurring_tasks: { Args: { p_date?: string }; Returns: number };
+      search_chat_contacts: {
+        Args: { p_query?: string; p_limit?: number };
+        Returns: Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string | null }>;
+      };
       check_rate_limit: { Args: { p_bucket: string; p_limit: number; p_window_seconds: number; p_actor_key?: string | null }; Returns: boolean };
       set_human_reaction: { Args: { p_post_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
       create_human_reply: { Args: { p_post_id: string; p_content: string; p_parent_reply_id?: string | null }; Returns: SocialReply };

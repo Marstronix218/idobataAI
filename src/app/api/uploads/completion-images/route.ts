@@ -11,6 +11,7 @@ import {
   removePostMedia,
 } from "@/lib/server/post-media";
 import { ApiError, assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const uploadRequestSchema = z.object({
@@ -26,7 +27,10 @@ const cleanupRequestSchema = z.object({
 
 export async function POST(request: Request) {
   return withApi(async () => {
-    const { user } = await authed(request);
+    const { user, supabase } = await authed(request);
+    // Each ticket is a signed URL for a 5MB object. Unlimited tickets meant
+    // unbounded storage cost from uploads that never reach a published post.
+    await enforceRateLimit(supabase, "upload:ticket", 40, 3600);
     const input = await parseJson(request, uploadRequestSchema);
     const admin = createAdminClient();
     const tickets = [];

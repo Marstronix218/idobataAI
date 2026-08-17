@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { describe, expect, it, vi } from "vitest";
 
@@ -28,7 +28,12 @@ describe("PostThread", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Reply/ }));
 
-    expect(screen.getByLabelText("Reply to Moss")).toBeVisible();
+    const input = screen.getByLabelText("Reply to Moss");
+    const composer = input.closest("form")!;
+    expect(input).toBeVisible();
+    expect(input).toHaveAttribute("placeholder", "Post your reply");
+    expect(within(composer).getByRole("img", { name: "Mina Mori" })).toBeVisible();
+    expect(within(composer).getByRole("button", { name: "Reply" })).toBeVisible();
   });
 
   it("handles an unavailable post", () => {

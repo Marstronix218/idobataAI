@@ -104,7 +104,9 @@ export class OpenAICompatibleProvider implements AIProvider {
         [this.options.tokenParameter]: maxTokens,
         messages,
       }),
-      signal: AbortSignal.timeout(12_000),
+      // Must stay below the calling route's maxDuration so the in-code
+      // fallback always wins rather than the platform killing the function.
+      signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) throw new Error(`AI provider returned ${response.status}.`);
 
@@ -172,13 +174,41 @@ export class OpenAICompatibleProvider implements AIProvider {
   }
 }
 
+// Model ids were read straight from unvalidated environment variables, so a
+// typo or a paste of an expensive model was accepted silently at runtime and
+// only showed up on the bill. `AI_MODEL_ALLOWLIST` overrides this for a
+// deployment that uses a different provider's names.
+const DEFAULT_MODEL_ALLOWLIST = [
+  "gpt-5.6-luna",
+  "gpt-5.6",
+  "gpt-5",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gpt-4.1-mini",
+];
+
+function modelAllowlist() {
+  const configured = nonEmpty(process.env.AI_MODEL_ALLOWLIST);
+  const names = configured ? configured.split(",").map((name) => name.trim()).filter(Boolean) : DEFAULT_MODEL_ALLOWLIST;
+  return new Set(names);
+}
+
+function assertAllowedModel(model: string, allowed: Set<string>, variable: string) {
+  if (!allowed.has(model)) {
+    throw new Error(`${variable} is set to an unsupported model: ${model}. Allowed models: ${[...allowed].join(", ")}.`);
+  }
+  return model;
+}
+
 export function getAIProvider(): AIProvider {
   const key = nonEmpty(process.env.AI_API_KEY);
-  if (!key) return new DisabledAIProvider();
+  // A single switch that turns off every provider call without rotating a key.
+  if (!key || process.env.AI_ENABLED === "false") return new DisabledAIProvider();
 
+  const allowed = modelAllowlist();
   const globalModel = nonEmpty(process.env.AI_MODEL);
-  const chatModel = nonEmpty(process.env.AI_CHAT_MODEL) ?? globalModel ?? "gpt-5.6-luna";
-  const utilityModel = nonEmpty(process.env.AI_UTILITY_MODEL) ?? globalModel ?? "gpt-4o-mini";
+  const chatModel = assertAllowedModel(nonEmpty(process.env.AI_CHAT_MODEL) ?? globalModel ?? "gpt-5.6-luna", allowed, "AI_CHAT_MODEL");
+  const utilityModel = assertAllowedModel(nonEmpty(process.env.AI_UTILITY_MODEL) ?? globalModel ?? "gpt-4o-mini", allowed, "AI_UTILITY_MODEL");
   const tokenParameter = process.env.AI_MAX_TOKENS_PARAM === "max_tokens" ? "max_tokens" : "max_completion_tokens";
   return new OpenAICompatibleProvider({
     apiKey: key,

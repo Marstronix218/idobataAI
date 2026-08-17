@@ -2,15 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PostCard } from "@/components/social/feed";
+import { PostCard, type ReplyAuthor } from "@/components/social/feed";
 import type { FeedPost } from "@/types";
 
 export function ProfileFeedPost({
   post: initialPost,
   currentUserId,
+  replyAuthor,
 }: {
   post: FeedPost;
   currentUserId: string | null;
+  replyAuthor?: ReplyAuthor | null;
 }) {
   const router = useRouter();
   const [post, setPost] = useState(initialPost);
@@ -24,6 +26,7 @@ export function ProfileFeedPost({
     <PostCard
       post={post}
       currentUserId={currentUserId}
+      replyAuthor={replyAuthor}
       onChange={setPost}
       onDelete={() => setDeleted(true)}
       onNotice={setNotice}

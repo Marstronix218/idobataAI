@@ -249,10 +249,26 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .app-page { padding: 2rem 2rem 4rem; }
 }
 
+/* iOS Safari zooms the page on focus for any control under 16px and never
+   zooms back out. The quick-add row and the chat composer both used 13-15px
+   text, so opening a dropdown or tapping the composer left the app zoomed.
+   Below the tablet breakpoint the computed size is forced to 16px; padding and
+   min-height keep the controls visually compact. */
+@media (max-width: 767px) {
+  .field,
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea { font-size: 16px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .btn:hover { transform: none; }
+  /* The blanket animation kill above also silences every loading spinner, which
+     left reduced-motion users with a disabled button and no feedback at all.
+     Restore a non-moving busy signal in its place. */
+  [aria-busy="true"], .icon-btn:disabled, .btn:disabled { opacity: .6; }
 }
 
 @media (forced-colors: active) {

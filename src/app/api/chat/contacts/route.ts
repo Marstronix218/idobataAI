@@ -3,23 +3,21 @@ import type { ChatContact, SocialCompanion, UserProfile } from "@/types";
 
 export async function GET(request: Request) {
   return withApi(async () => {
-    const { user, supabase } = await authed(request);
+    const { supabase } = await authed(request);
     const query = new URL(request.url).searchParams.get("query")?.trim() ?? "";
     if (query.length > 50) throw new ApiError(400, "Search must be 50 characters or fewer.");
     const pattern = `%${query.replace(/[%,]/g, "")}%`;
 
-    let profilesQuery = supabase.from("user_profiles")
-      .select("id, username, display_name, avatar_url, bio")
-      .neq("id", user.id)
-      .order("username")
-      .limit(12);
+    // Directory search runs through a definer function so the projection is
+    // fixed server-side, private profiles are never enumerated, and the LIKE
+    // wildcards in the query string are escaped rather than pattern-matched.
+    const profilesQuery = supabase.rpc("search_chat_contacts", { p_query: query, p_limit: 12 });
     let companionsQuery = supabase.from("social_companions")
       .select("id, slug, name, avatar_url, personality")
       .eq("active", true)
       .order("name")
       .limit(12);
     if (query) {
-      profilesQuery = profilesQuery.or(`username.ilike.${pattern},display_name.ilike.${pattern}`);
       companionsQuery = companionsQuery.or(`name.ilike.${pattern},slug.ilike.${pattern}`);
     }
 

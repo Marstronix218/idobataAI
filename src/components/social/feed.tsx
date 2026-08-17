@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Heart, MessageCircle, MoreHorizontal, RefreshCw, Send, Trash2 } from "lucide-react";
+import { ChevronDown, Heart, MessageCircle, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
 import { posts as demoPosts } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
@@ -16,7 +16,9 @@ import type { FeedPost, ReactionKind, SocialReaction, SocialReply, UserProfile }
 type Reply = FeedPost["social_replies"][number];
 type FeedPage = { items: FeedPost[]; nextCursor: string | null };
 type FeedTab = "for-you" | "following" | "people";
+export type ReplyAuthor = { name: string; avatarUrl: string | null };
 const previewInterests = ["Fitness", "Design", "Space", "Books"];
+const previewReplyAuthor: ReplyAuthor = { name: "Mina Mori", avatarUrl: null };
 
 function makeFeedParams(tab: FeedTab, category: string, cursor?: string | null) {
   return new URLSearchParams({ scope: tab, limit: "10", ...(category ? { category } : {}), ...(cursor ? { cursor } : {}) });
@@ -30,7 +32,7 @@ export const previewFeed: FeedPost[] = demoPosts.map((post) => ({
   kind: post.ai ? "ai_completion" : "human_completion",
   visibility: "public", content_status: "active", content: post.message, task_title: post.task, category: post.category,
   xp_earned: post.xp, streak: null, completed_at: new Date(Date.now() - post.minutesAgo * 60_000).toISOString(), idempotency_key: null, source_key: post.ai ? `preview-completion:${post.authorSlug}` : null, image_paths: [], image_urls: [],
-  is_ai_generated: post.ai, created_at: new Date(Date.now() - post.minutesAgo * 60_000).toISOString(), updated_at: new Date().toISOString(),
+  is_ai_generated: post.ai, reply_count: 0, created_at: new Date(Date.now() - post.minutesAgo * 60_000).toISOString(), updated_at: new Date().toISOString(),
   user_profiles: post.ai ? null : { username: post.authorSlug, display_name: post.author, avatar_url: null },
   social_companions: post.ai ? { name: post.author, slug: post.authorSlug, avatar_url: null } : null,
   social_reactions: Array.from({ length: post.likes }, (_, i) => ({
@@ -47,12 +49,16 @@ function postType(kind: FeedPost["kind"]) { return kind.includes("completion") ?
 
 const postControlSelector = "a, button, input, textarea, select, form, label, [role='menu'], [role='menuitem']";
 
-export function PostCard({ post, currentUserId, onChange, onDelete, onNotice, detail = false, onOpen }: { post: FeedPost; currentUserId: string | null; onChange: (post: FeedPost) => void; onDelete?: (postId: string) => void; onNotice: (message: string) => void; detail?: boolean; onOpen?: (postId: string) => void }) {
+export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete, onNotice, detail = false, onOpen }: { post: FeedPost; currentUserId: string | null; replyAuthor?: ReplyAuthor | null; onChange: (post: FeedPost) => void; onDelete?: (postId: string) => void; onNotice: (message: string) => void; detail?: boolean; onOpen?: (postId: string) => void }) {
   const [replying, setReplying] = useState(false); const [menuOpen, setMenuOpen] = useState(false); const [reply, setReply] = useState(""); const [busy, setBusy] = useState(false);
   const ai = Boolean(post.companion_id); const name = post.social_companions?.name ?? post.user_profiles?.display_name ?? post.user_profiles?.username ?? "Community member";
   const owned = Boolean(currentUserId && post.author_id === currentUserId);
   const avatarUrl = post.social_companions?.avatar_url ?? post.user_profiles?.avatar_url ?? null;
   const profileHref = post.social_companions?.slug ? `/companions/${post.social_companions.slug}` : post.user_profiles?.username ? `/u/${post.user_profiles.username}` : null;
+  // The list feed carries `reply_count` and omits reply bodies; only the post
+  // detail route populates `social_replies`.
+  const replies = post.social_replies ?? [];
+  const replyCount = post.reply_count ?? replies.length;
   const selected = currentUserId ? post.social_reactions.find((item) => item.actor_id === currentUserId)?.reaction ?? null : null;
   const likeCount = post.social_reactions.length;
   const aiLikeCount = post.social_reactions.filter((item) => item.companion_id).length;
@@ -80,13 +86,13 @@ export function PostCard({ post, currentUserId, onChange, onDelete, onNotice, de
     try {
       const base = isPreviewMode ? { id: `preview-reply-${Date.now()}`, post_id: post.id, parent_reply_id: null, author_id: currentUserId ?? "preview-user", companion_id: null, content, content_status: "active", is_ai_generated: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SocialReply : await apiRequest<SocialReply>(`/api/posts/${post.id}/replies`, { method: "POST", body: JSON.stringify({ content }) });
       const saved: Reply = { ...base, user_profiles: { username: "you", avatar_url: null }, social_companions: null };
-      onChange({ ...post, social_replies: [...post.social_replies, saved] }); setReply(""); setReplying(false); onNotice(`Reply posted.${isPreviewMode ? " Preview only." : ""}`);
+      onChange({ ...post, social_replies: [...replies, saved], reply_count: replyCount + 1 }); setReply(""); setReplying(false); onNotice(`Reply posted.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) { onNotice(errorMessage(error)); }
     finally { setBusy(false); }
   }
 
   async function deleteReply(item: Reply) {
-    try { if (!isPreviewMode) await apiRequest<void>(`/api/replies/${item.id}`, { method: "DELETE" }); onChange({ ...post, social_replies: post.social_replies.filter((replyItem) => replyItem.id !== item.id) }); onNotice("Reply deleted."); }
+    try { if (!isPreviewMode) await apiRequest<void>(`/api/replies/${item.id}`, { method: "DELETE" }); onChange({ ...post, social_replies: replies.filter((replyItem) => replyItem.id !== item.id), reply_count: Math.max(0, replyCount - 1) }); onNotice("Reply deleted."); }
     catch (error) { onNotice(errorMessage(error)); }
   }
 
@@ -148,15 +154,15 @@ export function PostCard({ post, currentUserId, onChange, onDelete, onNotice, de
   >
     <div className={`p-4 ${detail || replying ? "" : "pb-0"}`}><header className="flex items-start gap-2.5"><Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{owned && <PrivacyBadge isPublic={post.visibility === "public"} />}<span className="text-xs text-muted">· <RelativeTime value={post.created_at} /></span></div><p className="text-xs text-muted">{postType(post.kind)}</p></div><div className="relative shrink-0" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") { setMenuOpen(false); event.currentTarget.querySelector("button")?.focus(); } }}><button type="button" className="post-menu-trigger" aria-label={`More actions for ${name}`} aria-expanded={menuOpen} aria-controls={`post-menu-${post.id}`} onClick={() => setMenuOpen((open) => !open)} disabled={busy}><MoreHorizontal aria-hidden="true" size={19} /></button>{menuOpen && <div id={`post-menu-${post.id}`} role="menu" aria-label={`Actions for ${name}`} className="absolute right-0 top-10 z-30 min-w-48 overflow-hidden rounded-xl border border-line bg-surface-raised p-1 shadow-lg">{owned ? <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void toggleAudience()}>{post.visibility === "public" ? "Make post private" : "Share post publicly"}</button><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void deletePost()}>Delete post</button></> : <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void reportPost()}>{ai ? "Report AI post" : "Report post"}</button>{post.author_id && <button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void blockAuthor()}>Block {name}</button>}</>}</div>}</div></header>
       <p className="mt-3 text-[.98rem] leading-7">{post.content}</p><PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />{post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
-      <div className="mt-2 grid grid-cols-2 gap-1" aria-label="Post actions"><button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="text-xs text-community">{aiLikeCount} AI</span>}</button><button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{post.social_replies.length}</span></button></div>
-      {detail && <div className="mt-3 space-y-2 border-l-2 border-line pl-4" aria-label="Conversation">{post.social_replies.length ? post.social_replies.map((item) => { const replyName = item.social_companions?.name ?? item.user_profiles?.display_name ?? item.user_profiles?.username ?? "Community member"; return <div key={item.id} className="rounded-xl bg-canvas p-3"><div className="flex items-center gap-2"><strong className="text-sm">{replyName}</strong>{item.companion_id && <><AIBadge /><span className="text-xs font-bold text-community">AI-generated</span></>}{item.author_id === currentUserId && <button className="ml-auto text-muted hover:text-danger" aria-label="Delete your reply" onClick={() => void deleteReply(item)}><Trash2 size={14} /></button>}</div><p className="mt-1 text-sm leading-6">{item.content}</p></div>; }) : <p className="text-sm text-muted">No replies yet. A thoughtful note can go a long way.</p>}</div>}
-      {replying && <form className="mt-3 flex gap-2" onSubmit={submitReply}><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="field flex-1" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} /><button className="icon-btn border-community bg-community-strong text-white" aria-label="Post reply" disabled={busy}><Send size={17} /></button></form>}
+      <div className="mt-2 grid grid-cols-2 gap-1" aria-label="Post actions"><button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="text-xs text-community">{aiLikeCount} AI</span>}</button><button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button></div>
+      {detail && <div className="mt-3 space-y-2 border-l-2 border-line pl-4" aria-label="Conversation">{replies.length ? replies.map((item) => { const replyName = item.social_companions?.name ?? item.user_profiles?.display_name ?? item.user_profiles?.username ?? "Community member"; return <div key={item.id} className="rounded-xl bg-canvas p-3"><div className="flex items-center gap-2"><strong className="text-sm">{replyName}</strong>{item.companion_id && <><AIBadge /><span className="text-xs font-bold text-community">AI-generated</span></>}{item.author_id === currentUserId && <button className="ml-auto text-muted hover:text-danger" aria-label="Delete your reply" onClick={() => void deleteReply(item)}><Trash2 size={14} /></button>}</div><p className="mt-1 text-sm leading-6">{item.content}</p></div>; }) : <p className="text-sm text-muted">No replies yet. A thoughtful note can go a long way.</p>}</div>}
+      {replying && <form className="mt-3 flex items-center gap-3 border-t border-line pt-3" onSubmit={submitReply}><Avatar initials={initials(replyAuthor?.name ?? "You")} avatarUrl={replyAuthor?.avatarUrl} name={replyAuthor?.name ?? "You"} /><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-base text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} placeholder="Post your reply" autoFocus /><button type="submit" className="btn btn-community shrink-0 rounded-full px-4 text-sm" disabled={busy || !reply.trim()}>{busy ? "Replying…" : "Reply"}</button></form>}
     </div></article>;
 }
 
 export function Feed() {
   const router = useRouter();
-  const [tab, setTab] = useState<FeedTab>("for-you"); const [category, setCategory] = useState(""); const [categories, setCategories] = useState<string[]>(isPreviewMode ? previewInterests : []); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : ""); const [loadError, setLoadError] = useState("");
+  const [tab, setTab] = useState<FeedTab>("for-you"); const [category, setCategory] = useState(""); const [categories, setCategories] = useState<string[]>(isPreviewMode ? previewInterests : []); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [replyAuthor, setReplyAuthor] = useState<ReplyAuthor | null>(isPreviewMode ? previewReplyAuthor : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : ""); const [loadError, setLoadError] = useState("");
   async function load({ append = false, signal }: { append?: boolean; signal?: AbortSignal } = {}) {
     if (isPreviewMode) { setStatus("Preview feed refreshed."); setCursor(null); return; }
     setLoading(true); setLoadError("");
@@ -170,7 +176,10 @@ export function Feed() {
     if (isPreviewMode) return;
     createClient().auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
     apiRequest<UserProfile>("/api/profile")
-      .then((profile) => setCategories(Array.from(new Set(profile.interests))))
+      .then((profile) => {
+        setCategories(Array.from(new Set(profile.interests)));
+        setReplyAuthor({ name: profile.display_name?.trim() || profile.username, avatarUrl: profile.avatar_url });
+      })
       .catch((error) => setLoadError(errorMessage(error)));
   }, []);
   useEffect(() => {
@@ -235,7 +244,7 @@ export function Feed() {
       <p className="sr-only" aria-live="polite">{loading ? "Refreshing feed." : status}</p>
       {loadError && <p role="alert" className="border-b border-line bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{loadError}</p>}
 
-      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} onChange={changePost} onDelete={(postId) => setItems((current) => current.filter((item) => item.id !== postId))} onNotice={setStatus} onOpen={(postId) => router.push(`/posts/${encodeURIComponent(postId)}`)} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
+      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} onChange={changePost} onDelete={(postId) => setItems((current) => current.filter((item) => item.id !== postId))} onNotice={setStatus} onOpen={(postId) => router.push(`/posts/${encodeURIComponent(postId)}`)} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
       {(cursor || isPreviewMode) && <div className="border-b border-line p-4"><button className="btn btn-ghost w-full text-community" onClick={() => isPreviewMode ? setStatus("All preview posts are loaded.") : void load({ append: true })} disabled={loading}>Show more posts</button></div>}
       </div>
   </div>;

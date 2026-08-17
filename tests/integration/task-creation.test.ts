@@ -50,6 +50,9 @@ describe("task creation route", () => {
     authed.mockResolvedValue({
       user: { id: userId },
       supabase: {
+        // Task creation is rate limited; unbounded inserts each fire the
+        // category-library and public-progress triggers.
+        rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
         from: vi.fn((table: string) => {
           if (table === "user_profiles") {
             return {
