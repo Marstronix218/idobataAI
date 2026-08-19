@@ -8,7 +8,7 @@ import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import { createClient } from "@/lib/supabase/client";
 import type { FeedPost, UserProfile } from "@/types";
 
-const previewReplyAuthor: ReplyAuthor = { name: "Mina Mori", avatarUrl: null };
+const previewReplyAuthor: ReplyAuthor = { name: "Mina Mori", username: "mina", avatarUrl: null };
 
 export function PostThread({ postId }: { postId: string }) {
   const [post, setPost] = useState<FeedPost | null>(() => isPreviewMode ? previewFeed.find((item) => item.id === postId) ?? null : null);
@@ -28,7 +28,7 @@ export function PostThread({ postId }: { postId: string }) {
       .then(([loadedPost, auth, profile]) => {
         setPost(loadedPost);
         setCurrentUserId(auth.data.user?.id ?? null);
-        if (profile) setReplyAuthor({ name: profile.display_name?.trim() || profile.username, avatarUrl: profile.avatar_url });
+        if (profile) setReplyAuthor({ name: profile.display_name?.trim() || profile.username, username: profile.username, avatarUrl: profile.avatar_url });
       })
       .catch((error) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error));

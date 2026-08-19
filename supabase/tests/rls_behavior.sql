@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(1);
+select extensions.plan(1);
 
 insert into auth.users(id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -268,7 +268,7 @@ begin
   end if;
 end $$;
 
-select pass('authenticated privacy, publishing, recurrence, deletion, reaction, and lease contracts hold');
-select * from finish();
+select extensions.pass('authenticated privacy, publishing, recurrence, deletion, reaction, and lease contracts hold');
+select * from extensions.finish();
 
 rollback;

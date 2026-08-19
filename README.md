@@ -55,36 +55,33 @@ supabase/seed.sql        initial companion catalog and fallback templates
 tests/                   Vitest domain and component coverage
 ```
 
-## Local development
+## Development
 
 Requirements:
 
 - Node.js 20.9 or newer (CI uses Node.js 22)
 - npm
-- Supabase CLI and Docker Desktop (or another Docker-compatible runtime) for persistent local development
+- Supabase CLI
+- A linked remote Supabase project; this repository does not use a local database
 
-Install dependencies and create the local environment file:
+Install dependencies, create the environment file, and fill it with the remote project's URL and keys:
 
 ```bash
 npm install
 cp .env.example .env.local
+supabase login
+supabase link --project-ref <remote-project-ref>
 ```
 
-For a UI-only preview with demo data, leave `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` and start the app:
+Start the app:
 
 ```bash
 npm run dev
 ```
 
-For the full persistent stack, start and reset Supabase, copy the local API URL and keys printed by the CLI into `.env.local`, then remove `NEXT_PUBLIC_ENABLE_DEMO_MODE` or set it to `false`:
+`npm run dev` first runs `npm run db:sync`. The guard rejects localhost database URLs, verifies that the CLI link matches `NEXT_PUBLIC_SUPABASE_URL`, and applies every pending migration to that remote project before Next.js starts. This prevents application code from running ahead of its schema. Open `http://localhost:3000` after the sync completes.
 
-```bash
-supabase start
-supabase db reset --local
-npm run dev
-```
-
-Open `http://localhost:3000`. Demo mode is available only outside production and does not persist mutations. Vercel production fails closed when Supabase is missing; never set the demo flag there.
+Demo mode remains available only for non-persistent UI inspection outside production. Keep `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` for normal development. Vercel production fails closed when Supabase is missing; never enable the demo flag there.
 
 ## Environment
 
@@ -112,22 +109,23 @@ npm test
 npm run build
 ```
 
-With the local Supabase stack running, also validate migrations and database contracts:
+Validate the linked remote schema and its transactional database contracts:
 
 ```bash
-supabase db reset --local
-supabase db lint --local
-supabase test db
+npm run db:verify
+npm run db:status
+# Only against a dedicated non-production remote project:
+SUPABASE_TEST_PROJECT_REF=<non-production-project-ref> npm run db:test
 ```
 
-The database suite is intended to prove privacy projection, RLS visibility, completion-post and recurrence idempotency, chat isolation, like uniqueness, lease recovery, provider-failure fallback, and account-deletion behavior. RLS tests must execute as authenticated users rather than only through the service role.
+`db:verify` is read-only: it requires exact local/remote migration parity and lints the linked schema. The SQL contracts run inside transactions and roll back their fixtures, but they still create temporary auth and application rows. `db:test` refuses to run unless the linked project exactly matches the explicit `SUPABASE_TEST_PROJECT_REF`. They prove privacy projection, RLS visibility, completion-post and recurrence idempotency, chat isolation, like uniqueness, lease recovery, provider-failure fallback, and account-deletion behavior. RLS tests execute as authenticated users rather than only through the service role.
 
-CI runs the application gates and a separate Docker-backed Supabase job. The latter applies the migration from a clean database, lints SQL, and executes both ACL/schema checks and authenticated behavioral RLS/idempotency/lease tests.
+On pushes to `main`, CI links the configured project, applies pending migrations, lints the remote schema, and emits `CI / release-ready` only after both the database and application jobs pass. Configure repository secrets named `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_PROJECT_REF`; a missing secret fails the gate instead of silently accepting code ahead of schema. Pull requests run the application checks without database credentials; validate migrations on a dedicated preview remote before merging schema-heavy changes.
 
 ## Vercel deployment
 
-1. Create a production Supabase project.
-2. Apply `supabase/migrations` and `supabase/seed.sql` to that project.
+1. Create the remote Supabase project and configure the three CI secrets listed above.
+2. In Vercel, require the GitHub check `CI / release-ready` before production promotion. Pushes to `main` then apply `supabase/migrations` and pass application verification before that check succeeds. Apply `supabase/seed.sql` once when provisioning a brand-new project.
 3. Configure the production Site URL and exact allowed redirect URLs in Supabase Auth, including `/auth/callback`; configure custom SMTP and ensure custom email templates preserve `{{ .RedirectTo }}`.
 4. Import the repository into Vercel and add every value from `.env.example` for the appropriate environments.
    Do not add `NEXT_PUBLIC_ENABLE_DEMO_MODE` to Vercel.

@@ -60,7 +60,8 @@ export default async function CompanionProfilePage({
       const basePosts = posts ?? [];
       const postIds = basePosts.map((post) => post.id);
       const [reactionResult, replyResult] = postIds.length ? await Promise.all([
-        supabase.from("social_reactions").select("post_id").in("post_id", postIds),
+        // Reply likes share this table; only the post's own count belongs here.
+        supabase.from("social_reactions").select("post_id").in("post_id", postIds).is("reply_id", null),
         supabase.from("social_replies").select("post_id").in("post_id", postIds).eq("content_status", "active"),
       ]) : [{ data: [] }, { data: [] }];
       const reactionCounts = new Map<string, number>();

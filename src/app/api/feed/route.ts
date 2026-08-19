@@ -12,7 +12,7 @@ const feedSelect = `
   *,
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
-  social_reactions(id, reaction, actor_id, companion_id)
+  social_reactions(id, reaction, actor_id, companion_id, reply_id)
 `;
 
 export async function GET(request: Request) {
@@ -26,6 +26,9 @@ export async function GET(request: Request) {
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? 20) || 20));
     const cursor = parseCursor(url.searchParams.get("cursor"));
     let query = supabase.from("social_posts").select(feedSelect).eq("content_status", "active")
+      // Reply likes share this table, so the embedded reactions must be narrowed
+      // to the post's own -- otherwise a busy thread inflates the post like count.
+      .is("social_reactions.reply_id", null)
       .lte("created_at", new Date().toISOString())
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
     if (scope === "mine") query = query.eq("author_id", user.id);

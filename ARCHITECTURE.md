@@ -55,4 +55,4 @@ Deletion is a resumable saga: mark the account pending and block new activity; r
 
 ## Verification contract
 
-The release gate is lint, strict typecheck, Vitest domain/component coverage, production Next.js build, clean local Supabase migration reset/lint/SQL contract tests, and a mobile production smoke check. The database suite must exercise RLS with authenticated identities, never only through `service_role`.
+The release gate is lint, strict typecheck, Vitest domain/component coverage, production Next.js build, remote Supabase migration sync/lint, and a mobile production smoke check. Development rejects local database URLs and syncs the linked remote schema before Next.js starts; self-hosted startup requires exact migration parity. Transactional SQL contract tests run only on a dedicated non-production remote and must exercise RLS with authenticated identities, never only through `service_role`.

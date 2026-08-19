@@ -216,7 +216,7 @@ Ordered by business impact. Each is deferred for a stated reason, not forgotten.
 
 9. **Remaining UX polish**, mechanical and low-risk: apply the shared `StatusMessage` to the other seven panels; a shared `<Modal>` with focus trap for the remaining three dialogs; optimistic chat send; `break-words` on feed/task/notification text; contrast fixes for `text-white/70` on brand and `--ink-subtle` placeholders; touch-target padding on the sub-44px controls; axe assertions in the *open* state for all four modals (the current suite only tests closed states, which is why the dialog defects in §1.2 were missed); keyset pagination for tasks, replies, chat threads, and profile tabs.
 
-10. **Deploy pipeline.** Migrations are applied by hand; CI never runs `supabase db push`. A deploy shipping code ahead of its migration would fail every affected request with no alert. Needs a `deploy.yml` gated on the existing `database` job, plus a documented and tested restore drill.
+10. **Deployment hardening.** Remote migration sync is enforced before development and by the `main` CI release gate. The remaining operational gaps are a documented restore drill and disposable remote database branches for pre-merge SQL contract tests.
 
 11. **Orphaned upload reaper.** Upload tickets are now rate limited, but nothing sweeps `pending/` objects that were uploaded and never published. Needs a scheduled job — the `assertPrivilegedRequest` cron pattern already exists — deleting `pending/` objects older than 24h that no `social_posts.image_paths` references. Same shape for pruning `api_rate_limits` rows, which currently grow forever and outlive deleted accounts.
 
@@ -228,4 +228,4 @@ Ordered by business impact. Each is deferred for a stated reason, not forgotten.
 
 ## Verification
 
-Every change in this pass is covered by the existing gates plus new tests: lint, strict typecheck, the Vitest suite, a production build, and a clean `supabase db reset` with the SQL contract tests.
+Every change in this pass is covered by the existing gates plus new tests: lint, strict typecheck, the Vitest suite, a production build, remote migration sync/lint, and transactional SQL contract tests on a dedicated non-production remote.

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, CheckCircle2, Globe2, Heart, LockKeyhole, MessageCircle, Pencil, Sparkles } from "lucide-react";
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
 import { ProfileFeedPost } from "@/components/profile/profile-feed-post";
+import type { ReplyAuthor } from "@/components/social/reply-thread";
 import { Avatar } from "@/components/ui/avatar";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
 import { companions as previewCompanions } from "@/data/demo";
@@ -27,14 +28,17 @@ type ProfileReply = Pick<SocialReply, "id" | "content" | "created_at"> & {
   post: FeedPost;
 };
 
-type UnsignedFeedPost = Omit<FeedPost, "image_urls">;
+type UnsignedFeedPost = Omit<FeedPost, "image_urls" | "social_replies">;
 
+// Profile cards render a reply *count* and never a reply body, so the reply
+// rows are left to `reply_count` rather than expanded here -- the same reason
+// the list feed stopped joining them. Reactions are narrowed to the post's own
+// with `reply_id is null`, since reply likes now live in the same table.
 const profilePostSelect = `
   *,
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
-  social_reactions(id, reaction, actor_id, companion_id),
-  social_replies(*, user_profiles(username, display_name, avatar_url), social_companions(name, slug, avatar_url))
+  social_reactions(id, reaction, actor_id, companion_id, reply_id)
 `;
 
 const previewProfile: UserProfile = {
@@ -81,6 +85,7 @@ const previewPosts: FeedPost[] = [{
   social_reactions: Array.from({ length: 3 }, (_, index) => ({
     id: `preview-win-like-${index}`,
     reaction: "like" as const,
+    reply_id: null,
     actor_id: `preview-human-${index}`,
     companion_id: null,
   })),
@@ -114,6 +119,7 @@ const previewLikedPosts: FeedPost[] = [{
   social_reactions: Array.from({ length: 8 }, (_, index) => ({
     id: `moss-study-like-${index}`,
     reaction: "like" as const,
+    reply_id: null,
     actor_id: index === 0 ? "preview-user" : index < 6 ? `preview-human-${index}` : null,
     companion_id: index >= 6 ? `preview-ai-${index}` : null,
   })),
@@ -151,6 +157,7 @@ const previewReplies: ProfileReply[] = [{
     social_reactions: Array.from({ length: 5 }, (_, index) => ({
       id: `jonah-run-like-${index}`,
       reaction: "like" as const,
+      reply_id: null,
       actor_id: `preview-human-${index}`,
       companion_id: null,
     })),
@@ -191,6 +198,9 @@ async function signPosts(basePosts: UnsignedFeedPost[]) {
     : new Map<string, string>();
   return basePosts.map((post): FeedPost => ({
     ...post,
+    // Always an array so consumers never read `.length` of undefined; bodies
+    // come from the post detail route.
+    social_replies: [],
     image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
   }));
 }
@@ -229,8 +239,9 @@ export default async function ProfilePage({
   let followerCount = previewCompanions.length;
   let isOwner = true;
   let currentUserId: string | null = "preview-user";
-  let replyAuthor: { name: string; avatarUrl: string | null } | null = {
+  let replyAuthor: ReplyAuthor | null = {
     name: previewProfile.display_name?.trim() || previewProfile.username,
+    username: previewProfile.username,
     avatarUrl: previewProfile.avatar_url,
   };
 
@@ -248,7 +259,7 @@ export default async function ProfilePage({
     if (!currentUserId) {
       replyAuthor = null;
     } else if (isOwner) {
-      replyAuthor = { name: profile.display_name?.trim() || profile.username, avatarUrl: profile.avatar_url };
+      replyAuthor = { name: profile.display_name?.trim() || profile.username, username: profile.username, avatarUrl: profile.avatar_url };
     } else {
       const { data: viewerProfile } = await supabase
         .from("user_profiles")
@@ -256,7 +267,7 @@ export default async function ProfilePage({
         .eq("id", currentUserId)
         .maybeSingle();
       replyAuthor = viewerProfile
-        ? { name: viewerProfile.display_name?.trim() || viewerProfile.username, avatarUrl: viewerProfile.avatar_url }
+        ? { name: viewerProfile.display_name?.trim() || viewerProfile.username, username: viewerProfile.username, avatarUrl: viewerProfile.avatar_url }
         : null;
     }
     posts = [];
@@ -296,6 +307,7 @@ export default async function ProfilePage({
         let postQuery = supabase
           .from("social_posts")
           .select(profilePostSelect)
+          .is("social_reactions.reply_id", null)
           .eq("author_id", profile.id)
           .eq("content_status", "active")
           .order("created_at", { ascending: false })
@@ -316,7 +328,7 @@ export default async function ProfilePage({
         const replyRows = replyResult.data ?? [];
         const postIds = Array.from(new Set(replyRows.map((reply) => reply.post_id)));
         const postResult = postIds.length
-          ? await supabase.from("social_posts").select(profilePostSelect).in("id", postIds).eq("content_status", "active")
+          ? await supabase.from("social_posts").select(profilePostSelect).is("social_reactions.reply_id", null).in("id", postIds).eq("content_status", "active")
           : { data: [] };
         const hydratedPosts = await signPosts((postResult.data ?? []) as unknown as UnsignedFeedPost[]);
         const postById = new Map(hydratedPosts.map((post) => [post.id, post]));
@@ -332,12 +344,13 @@ export default async function ProfilePage({
           .select("post_id, created_at")
           .eq("actor_id", profile.id)
           .eq("reaction", "like")
+          .is("reply_id", null)
           .order("created_at", { ascending: false })
           .limit(20);
         const reactionRows = reactionResult.data ?? [];
         const postIds = reactionRows.map((reaction) => reaction.post_id);
         const postResult = postIds.length
-          ? await supabase.from("social_posts").select(profilePostSelect).in("id", postIds).eq("content_status", "active")
+          ? await supabase.from("social_posts").select(profilePostSelect).is("social_reactions.reply_id", null).in("id", postIds).eq("content_status", "active")
           : { data: [] };
         const hydratedPosts = await signPosts((postResult.data ?? []) as unknown as UnsignedFeedPost[]);
         const postById = new Map(hydratedPosts.map((post) => [post.id, post]));

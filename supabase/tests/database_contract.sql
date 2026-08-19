@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(1);
+select extensions.plan(1);
 
 do $$
 declare missing text;
@@ -209,7 +209,7 @@ begin
   ) then raise exception 'a new community must not manufacture an all-AI starter feed'; end if;
 end $$;
 
-select pass('schema, RLS, ACL, and index contracts hold');
-select * from finish();
+select extensions.pass('schema, RLS, ACL, and index contracts hold');
+select * from extensions.finish();
 
 rollback;

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -29,6 +30,27 @@ describe("ShareComposer", () => {
     expect(screen.getByText(/posted privately/)).toBeInTheDocument();
   });
 
+  it("composes the win as a comment above a quoted completed task", () => {
+    render(<ShareComposer taskId="preview-task" />);
+
+    const composer = screen.getByRole("region", { name: "Post your completed task" });
+    const quotedTask = within(composer).getByRole("article", {
+      name: "Quoted completed task: Draft the project kickoff outline",
+    });
+    const submit = within(composer).getByRole("button", { name: "Post privately" });
+
+    expect(within(composer).getByRole("heading", { name: "Post a win" })).toBeVisible();
+    expect(within(composer).getByLabelText("Comment on your completed task")).toHaveAttribute(
+      "placeholder",
+      "Add a comment about this win",
+    );
+    expect(within(quotedTask).getByText("Draft the project kickoff outline")).toBeVisible();
+    expect(within(quotedTask).getByText("Your completed task")).toBeVisible();
+    expect(submit.closest("header")).not.toBeNull();
+    expect(screen.queryByText("Tell the story")).not.toBeInTheDocument();
+    expect(screen.queryByText("Post preview")).not.toBeInTheDocument();
+  });
+
   it("lets the user explicitly choose the community audience for this post", () => {
     render(<ShareComposer taskId="preview-task" />);
 
@@ -39,14 +61,10 @@ describe("ShareComposer", () => {
     expect(screen.getByText(/posted to the community/)).toBeInTheDocument();
   });
 
-  it("previews a human fallback thought in a compact post when the note is blank", () => {
+  it("explains the fallback thought while keeping the comment optional", () => {
     render(<ShareComposer taskId="preview-task" />);
 
-    const thought = screen.getByText("Glad to have this one wrapped up.");
-    const taskCard = screen.getByText("Draft the project kickoff outline").parentElement;
-
-    expect(thought).toHaveClass("mt-3", "leading-7");
-    expect(taskCard).toHaveClass("mt-3", "p-3");
+    expect(screen.getByText(/Leave it blank and we’ll use “Glad to have this one wrapped up.”/)).toBeVisible();
   });
 
   it("previews and removes optional completion photos before posting", () => {
@@ -56,11 +74,17 @@ describe("ShareComposer", () => {
     fireEvent.change(screen.getByLabelText("Add photos"), { target: { files: [image] } });
 
     expect(screen.getByAltText("Selected completion photo 1")).toHaveAttribute("src", "blob:completion-photo");
-    expect(screen.getByAltText("Photo attached to Draft the project kickoff outline")).toBeVisible();
+    expect(screen.getByRole("article", { name: "Quoted completed task: Draft the project kickoff outline" })).toBeVisible();
     expect(screen.getByText("1 image added. Nothing is posted yet.")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove photo 1" }));
     expect(screen.queryByAltText("Selected completion photo 1")).not.toBeInTheDocument();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:completion-photo");
+  });
+
+  it("has no automated accessibility violations", async () => {
+    const { container } = render(<ShareComposer taskId="preview-task" />);
+
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

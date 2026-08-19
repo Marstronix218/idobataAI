@@ -1,17 +1,15 @@
 import { z } from "zod";
 import { replySchema } from "@/lib/server/schemas";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
+import { loadThreadReplies } from "@/lib/server/reply-thread";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
-    const { supabase } = await authed(request);
+    const { user, supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
-    const result = await supabase.from("social_replies")
-      .select("*, user_profiles(username, display_name, avatar_url), social_companions(name, slug, avatar_url)")
-      .eq("post_id", postId).eq("content_status", "active").order("created_at").limit(200);
-    return ok(assertDatabase(result));
+    return ok(await loadThreadReplies(supabase, postId, user.id));
   });
 }
 

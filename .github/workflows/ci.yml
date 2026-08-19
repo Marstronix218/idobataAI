@@ -25,14 +25,32 @@ jobs:
       - run: npm run build
 
   database:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: application
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
-      - run: supabase start
-      - run: supabase db reset --local
-      - run: supabase db lint --local
-      - run: supabase test db
+          version: 2.115.0
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - run: npm run db:deploy
+
+  release-ready:
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [application, database]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful application and database jobs
+        if: needs.application.result != 'success' || needs.database.result != 'success'
+        run: exit 1
+      - run: echo "Application checks passed and the remote schema is deployed."

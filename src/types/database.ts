@@ -109,6 +109,11 @@ export interface SocialReply {
   content: string;
   content_status: ContentStatus;
   is_ai_generated: boolean;
+  // Both counters are maintained by triggers so a thread can render its like and
+  // sub-reply totals without joining reactions or child rows per reply. Only the
+  // triggers may write them.
+  like_count: number;
+  reply_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -116,6 +121,8 @@ export interface SocialReply {
 export interface SocialReaction {
   id: string;
   post_id: string;
+  // Null targets the post itself; set targets one reply on that post.
+  reply_id: string | null;
   actor_id: string | null;
   companion_id: string | null;
   reaction: ReactionKind;
@@ -235,6 +242,7 @@ export interface Database {
       };
       check_rate_limit: { Args: { p_bucket: string; p_limit: number; p_window_seconds: number; p_actor_key?: string | null }; Returns: boolean };
       set_human_reaction: { Args: { p_post_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
+      set_human_reply_reaction: { Args: { p_reply_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
       create_human_reply: { Args: { p_post_id: string; p_content: string; p_parent_reply_id?: string | null }; Returns: SocialReply };
       publish_progress_post: {
         Args: { p_content: string; p_visibility: PostVisibility; p_idempotency_key: string; p_task_id?: string | null; p_task_title?: string | null; p_category?: string | null };
@@ -268,9 +276,14 @@ export type FeedPost = SocialPost & {
   image_urls: string[];
   user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
   social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
-  social_reactions: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id">>;
-  social_replies: Array<SocialReply & {
-    user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
-    social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
-  }>;
+  social_reactions: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id" | "reply_id">>;
+  social_replies: ThreadReply[];
+};
+
+export type ThreadReply = SocialReply & {
+  user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
+  social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
+  // Whether the requesting viewer has liked this reply. Resolved server-side in
+  // one query per thread rather than by expanding reactions on every reply.
+  viewer_liked: boolean;
 };

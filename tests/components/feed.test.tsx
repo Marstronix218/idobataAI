@@ -174,7 +174,7 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.getByText("Like saved.")).toBeInTheDocument();
   });
 
-  it("posts a reply from the primary Reply action", () => {
+  it("posts a reply from the primary Reply action", async () => {
     render(<Feed />);
     const mossPost = screen.getByRole("article", { name: "Open post by Moss" });
     fireEvent.click(within(mossPost).getByRole("button", { name: /^Reply/ }));
@@ -193,7 +193,7 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(submit).toBeEnabled();
     fireEvent.submit(composer);
 
-    expect(screen.getByText("Reply posted. Preview only.")).toBeInTheDocument();
+    expect(await screen.findByText("Reply posted. Preview only.")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Reply 1$/ })).toHaveLength(1);
     expect(screen.queryByText("Nice progress.")).not.toBeInTheDocument();
   });
