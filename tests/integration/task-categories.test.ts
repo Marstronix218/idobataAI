@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authed, parseJson } = vi.hoisted(() => ({
+const { authed, createAdminClient, parseJson, rateLimitRpc } = vi.hoisted(() => ({
   authed: vi.fn(),
+  createAdminClient: vi.fn(),
   parseJson: vi.fn(),
+  rateLimitRpc: vi.fn(),
 }));
 
 vi.mock("@/lib/server/http", () => ({
@@ -19,6 +21,7 @@ vi.mock("@/lib/server/http", () => ({
   parseJson,
   withApi: async (handler: () => Promise<Response>) => handler(),
 }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
 
 import { POST } from "@/app/api/task-categories/route";
 import { DELETE, PATCH } from "@/app/api/task-categories/[id]/route";
@@ -31,6 +34,8 @@ describe("task category routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    rateLimitRpc.mockResolvedValue({ data: true, error: null });
+    createAdminClient.mockReturnValue({ rpc: rateLimitRpc });
     parseJson.mockResolvedValue({ name: "Work" });
     insert.mockReturnValue({
       select: vi.fn(() => ({

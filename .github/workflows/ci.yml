@@ -23,6 +23,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run mobile:doctor
+      - run: npm run mobile:export:ios
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://example.invalid
+          EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
 
   database:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

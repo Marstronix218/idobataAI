@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authed, parseJson } = vi.hoisted(() => ({
+const { authed, createAdminClient, parseJson, rateLimitRpc } = vi.hoisted(() => ({
   authed: vi.fn(),
+  createAdminClient: vi.fn(),
   parseJson: vi.fn(),
+  rateLimitRpc: vi.fn(),
 }));
 
 vi.mock("@/lib/server/http", () => ({
@@ -18,6 +20,7 @@ vi.mock("@/lib/server/http", () => ({
   parseJson,
   withApi: async (handler: () => Promise<Response>) => handler(),
 }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
 
 import { POST } from "@/app/api/tasks/route";
 
@@ -27,6 +30,8 @@ describe("task creation route", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    rateLimitRpc.mockResolvedValue({ data: true, error: null });
+    createAdminClient.mockReturnValue({ rpc: rateLimitRpc });
     parseJson.mockResolvedValue({
       title: "Prepare the launch notes",
       category: "Work",
@@ -50,9 +55,6 @@ describe("task creation route", () => {
     authed.mockResolvedValue({
       user: { id: userId },
       supabase: {
-        // Task creation is rate limited; unbounded inserts each fire the
-        // category-library and public-progress triggers.
-        rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
         from: vi.fn((table: string) => {
           if (table === "user_profiles") {
             return {
@@ -86,5 +88,22 @@ describe("task creation route", () => {
       priority: 1,
       visibility: "private",
     });
+  });
+
+  it("stores an omitted priority as no priority", async () => {
+    parseJson.mockResolvedValueOnce({
+      title: "Prepare the launch notes",
+      category: "Work",
+      dueAt: null,
+      recurrenceRule: null,
+    });
+
+    const response = await POST(new Request("http://localhost/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Prepare the launch notes", category: "Work" }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ priority: null }));
   });
 });

@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+/apps/*/node_modules/
+/packages/*/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -16,6 +18,12 @@
 # next.js
 /.next/
 /out/
+
+# expo
+/apps/mobile/.expo/
+/apps/mobile/dist/
+/apps/mobile/ios/
+/apps/mobile/android/
 
 # production
 /build

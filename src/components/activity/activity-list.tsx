@@ -33,6 +33,7 @@ const previewItems: ActivityItem[] = demoActivity.map((item, index) => ({
 function notificationCopy(item: ActivityItem) {
   if (item.kind === "reply") return "replied to your post";
   if (item.kind === "reaction") return "liked your post";
+  if (item.kind === "follow") return "requested to follow you";
   return "shared an update about your progress";
 }
 
@@ -82,6 +83,10 @@ export function ActivityList() {
 
   async function openNotification(item: ActivityItem) {
     if (!item.read_at) await markRead([item.id]);
+    if (item.kind === "follow" && item.social_companions?.slug) {
+      router.push(`/companions/${encodeURIComponent(item.social_companions.slug)}`);
+      return;
+    }
     if (item.post_id && item.social_posts?.content_status === "active") {
       router.push(`/posts/${encodeURIComponent(item.post_id)}`);
       return;
@@ -127,7 +132,7 @@ export function ActivityList() {
         {(loading || status) && <p className="border-b border-line px-4 py-2 text-center text-xs font-semibold text-muted" aria-live="polite">{loading ? "Checking for notifications…" : status}</p>}
         {displayedItems.length ? <section aria-label={filter === "unread" ? "Unread notifications" : "Recent notifications"}>{displayedItems.map((item) => {
           const ai = Boolean(item.companion_id); const actor = item.social_companions?.name ?? item.user_profiles?.username ?? "idobataAI";
-          const detail = item.social_posts?.task_title ?? item.social_posts?.content ?? (item.kind === "system" ? "A small streak is growing." : "A shared accomplishment");
+          const detail = item.social_posts?.task_title ?? item.social_posts?.content ?? (item.kind === "follow" ? "Open this AI persona’s profile to accept or decline." : item.kind === "system" ? "A small streak is growing." : "A shared accomplishment");
           const avatarUrl = item.social_companions?.avatar_url ?? item.user_profiles?.avatar_url ?? null;
           const destination = item.post_id || item.social_companions?.slug || item.user_profiles?.username;
           return <button key={item.id} type="button" onClick={() => void openNotification(item)} aria-label={`${destination ? "Open" : "Mark"} notification from ${actor}${item.read_at ? ". Read" : ""}`} className={`relative flex w-full items-start gap-3 border-b border-line p-4 text-left transition-colors hover:bg-surface/55 sm:p-5 ${item.read_at ? "bg-canvas opacity-80" : "bg-brand-soft/20"}`}><Avatar initials={actor.slice(0, 2).toUpperCase()} ai={ai} avatarUrl={avatarUrl} name={actor} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"><strong>{actor}</strong>{ai && <AIBadge />}<span className="text-muted">{notificationCopy(item)}</span><span className="text-xs text-muted">· <RelativeTime value={item.created_at} /></span></div><p className="mt-2 border-l-2 border-line pl-3 text-sm leading-6 text-muted">{detail}</p></div>{!item.read_at && <span className="absolute right-4 top-5 h-2.5 w-2.5 rounded-full bg-brand"><span className="sr-only">Unread</span></span>}</button>;

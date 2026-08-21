@@ -8,6 +8,11 @@ describe("task priority schemas", () => {
     expect(taskUpdateSchema.parse({ priority }).priority).toBe(priority);
   });
 
+  it("accepts an explicitly unset priority", () => {
+    expect(taskCreateSchema.parse({ title: "Plan the next step", priority: null }).priority).toBeNull();
+    expect(taskUpdateSchema.parse({ priority: null }).priority).toBeNull();
+  });
+
   it.each([0, 5, 1.5, "1"])("rejects invalid priority %s", (priority) => {
     expect(taskCreateSchema.safeParse({ title: "Plan the next step", priority }).success).toBe(false);
     expect(taskUpdateSchema.safeParse({ priority }).success).toBe(false);

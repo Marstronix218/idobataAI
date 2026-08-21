@@ -34,8 +34,11 @@ describe("OnboardingFlow", () => {
     expect(screen.queryByLabelText(/Avatar URL/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Add avatar URL/i)).not.toBeInTheDocument();
 
-    const initials = screen.getByRole("radio", { name: "Use initials" });
-    const acorn = screen.getByRole("radio", { name: "Acorn avatar" });
+    const initials = screen.getByRole("radio", { name: "Initials" });
+    const acorn = screen.getByRole("radio", { name: "Acorn" });
+    expect(screen.getByRole("radio", { name: "Moon" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Sprout" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Cloud" })).not.toBeChecked();
     expect(initials).toBeChecked();
     expect(acorn).not.toBeChecked();
 

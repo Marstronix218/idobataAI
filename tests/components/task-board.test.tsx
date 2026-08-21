@@ -75,22 +75,24 @@ describe("TaskBoard", () => {
     expect(screen.queryByRole("button", { name: "Delete Office" })).not.toBeInTheDocument();
   });
 
-  it("keeps completion private and offers posting or undo afterward", () => {
-    render(<TaskBoard />);
+  it("keeps completion private and offers sharing or undo afterward", async () => {
+    const { container } = render(<TaskBoard />);
 
     fireEvent.click(screen.getByRole("button", { name: "Complete: Draft the project kickoff outline" }));
 
-    expect(screen.getByText("Task complete")).toBeVisible();
+    expect(screen.getByText("Done")).toBeVisible();
     // Completing a task must not move the user: resetting the filter and
     // category threw them out of the list they were working down, on the most
     // repeated interaction in the product. The celebration card is the
     // confirmation; the list stays where it was.
     expect(screen.getByRole("region", { name: "Today tasks" })).toBeVisible();
     expect(screen.queryByRole("region", { name: "Completed tasks" })).not.toBeInTheDocument();
-    expect(screen.getByText("Nothing was posted. Add a note or photos only if you want to share this win.")).toBeVisible();
-    expect(screen.getAllByRole("link", { name: "Post a win" }).some(
+    expect(screen.getByText("It stays off the feed unless you share it.")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Draft the project kickoff outline completed and remains off the feed.");
+    expect(screen.getAllByRole("link", { name: "Share" }).some(
       (link) => link.getAttribute("href") === "/tasks/kickoff-outline/share",
     )).toBe(true);
+    expect(await axe(container)).toHaveNoViolations();
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(screen.getByText("Draft the project kickoff outline moved back to open tasks.")).toBeVisible();
@@ -100,19 +102,23 @@ describe("TaskBoard", () => {
     render(<TaskBoard />);
 
     fireEvent.click(screen.getByRole("button", { name: "Complete: Draft the project kickoff outline" }));
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss completion message" }));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
     fireEvent.click(screen.getByRole("button", { name: /Completed/ }));
 
-    expect(screen.getAllByRole("link", { name: "Post a win" }).some(
+    expect(screen.getAllByRole("link", { name: "Share" }).some(
       (link) => link.getAttribute("href") === "/tasks/kickoff-outline/share",
     )).toBe(true);
   });
 
-  it("lets people set priorities 1 through 4 when creating and editing tasks", () => {
+  it("keeps priority optional and spells out selected priority values", () => {
     render(<TaskBoard />);
 
-    const prioritySelect = screen.getByRole("combobox", { name: "Priority" });
-    expect(within(prioritySelect).getAllByRole("option").map((option) => option.getAttribute("value"))).toEqual(["1", "2", "3", "4"]);
+    const prioritySelect = screen.getByRole("combobox", { name: "Priority (optional)" });
+    expect(prioritySelect).toHaveValue("");
+    expect(within(prioritySelect).getAllByRole("option").map((option) => option.getAttribute("value"))).toEqual(["", "1", "2", "3", "4"]);
+    expect(within(prioritySelect).getByRole("option", { name: "No priority" })).toBeInTheDocument();
+    expect(within(prioritySelect).getByRole("option", { name: "Priority 1 — Highest" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Handle the urgent request" } });
     fireEvent.change(prioritySelect, { target: { value: "1" } });
@@ -120,17 +126,17 @@ describe("TaskBoard", () => {
 
     const urgentTask = screen.getByRole("heading", { name: "Handle the urgent request" }).closest("article");
     expect(urgentTask).not.toBeNull();
-    expect(within(urgentTask!).getByText("P1")).toHaveAttribute("title", "Priority 1 (highest)");
+    expect(within(urgentTask!).getByText("Priority 1")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Handle the urgent request" }));
     const editDialog = screen.getByRole("heading", { name: "Edit task" }).closest("form");
     expect(editDialog).not.toBeNull();
-    fireEvent.change(within(editDialog!).getByRole("combobox", { name: "Priority" }), { target: { value: "4" } });
+    fireEvent.change(within(editDialog!).getByRole("combobox", { name: "Priority (optional)" }), { target: { value: "" } });
     fireEvent.click(within(editDialog!).getByRole("button", { name: "Save changes" }));
 
     const taskArticle = screen.getByRole("heading", { name: "Handle the urgent request" }).closest("article");
     expect(taskArticle).not.toBeNull();
-    expect(within(taskArticle!).getByText("P4")).toHaveAttribute("title", "Priority 4 (lowest)");
+    expect(within(taskArticle!).queryByText(/Priority [1-4]/)).not.toBeInTheDocument();
   });
 
   it("keeps leading and trailing task-field icons clear of their labels", () => {
@@ -139,8 +145,18 @@ describe("TaskBoard", () => {
     expect(screen.getByLabelText("Due date")).not.toHaveClass("field-prefixed");
     expect(screen.getByLabelText("Category (optional)")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Repeat schedule")).toHaveClass("field-prefixed", "field-suffixed");
-    expect(screen.getByLabelText("Priority")).toHaveClass("field-prefixed", "field-suffixed");
+    expect(screen.getByLabelText("Priority (optional)")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Filter by category")).toHaveClass("field-prefixed", "field-suffixed");
+  });
+
+  it("keeps the quick controls stacked through tablet widths before using the roomy desktop grid", () => {
+    render(<TaskBoard />);
+
+    const recurrence = screen.getByRole("combobox", { name: "Repeat schedule" });
+    const controlGrid = recurrence.closest("div.grid");
+    expect(controlGrid).not.toBeNull();
+    expect(controlGrid).toHaveClass("sm:grid-cols-2", "lg:grid-cols-[175px_minmax(150px,1fr)_195px_210px]");
+    expect(controlGrid).not.toHaveClass("md:grid-cols-[175px_minmax(150px,1fr)_180px_125px]");
   });
 
   it("has no automated accessibility violations", async () => {

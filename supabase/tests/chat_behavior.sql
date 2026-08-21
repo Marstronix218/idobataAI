@@ -9,10 +9,11 @@ values
   ('dddddddd-dddd-4ddd-8ddd-dddddddddddd','authenticated','authenticated','chat-b@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"chat_b"}',now(),now()),
   ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','authenticated','authenticated','chat-c@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"chat_c"}',now(),now());
 
-insert into public.social_companions(id,slug,name,personality,writing_style,interests,safety_instructions,fallback_replies,daily_templates,posting_frequency)
+insert into public.social_companions(id,slug,name,personality,writing_style,interests,safety_instructions,fallback_replies,daily_templates,posting_frequency,daily_posts)
 values(
   '20000000-0000-4000-8000-000000000001','chat-guide','Chat Guide','Calm and practical.','Brief.','{}','Stay safe.',
-  array['A safe fallback.'],array['A daily note.'],0
+  array['A safe fallback.'],array['A daily note.'],3,
+  '[{"task_title":"Chat A","category":"Test","content":"Chat A"},{"task_title":"Chat B","category":"Test","content":"Chat B"},{"task_title":"Chat C","category":"Test","content":"Chat C"}]'::jsonb
 )
 on conflict (id) do nothing;
 

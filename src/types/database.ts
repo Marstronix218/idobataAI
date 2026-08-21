@@ -8,6 +8,11 @@ export type PostKind = "human_completion" | "human_progress" | "ai_daily_task" |
 export type ContentStatus = "active" | "hidden" | "removed";
 export type ReactionKind = "like";
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+export type CompanionFollowState = "none" | "pending" | "following";
+export type EngagementKind = "reply" | "reaction" | "repost";
+export type EngagementSource = "human_post_guarantee" | "human_reply_response" | "daily_quota" | "ambient";
+export type EngagementState = "planned" | "processing" | "completed" | "failed" | "cancelled";
+export type FeedbackType = "idea" | "issue" | "other";
 
 export interface UserProfile {
   id: string;
@@ -36,7 +41,7 @@ export interface Task {
   due_at: string | null;
   recurrence_rule: string | null;
   recurrence_instance_id: string | null;
-  priority: TaskPriority;
+  priority: TaskPriority | null;
   visibility: TaskVisibility;
   status: TaskStatus;
   xp_earned: number;
@@ -129,9 +134,74 @@ export interface SocialReaction {
   created_at: string;
 }
 
+export interface UserCompanionRelationship {
+  user_id: string;
+  companion_id: string;
+  user_followed_at: string | null;
+  companion_follow_state: CompanionFollowState;
+  companion_follow_requested_at: string | null;
+  companion_followed_at: string | null;
+  dm_opt_in: boolean;
+  companion_dm_started_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserFollow {
+  follower_id: string;
+  followed_id: string;
+  created_at: string;
+}
+
+export interface SocialRepost {
+  id: string;
+  post_id: string;
+  actor_id: string | null;
+  companion_id: string | null;
+  created_at: string;
+}
+
+export type FeedRepost = Pick<SocialRepost, "id" | "companion_id" | "created_at"> & {
+  user_id: string | null;
+  social_companions?: Pick<SocialCompanion, "name" | "slug"> | null;
+};
+
+export interface CompanionUserMemory {
+  user_id: string;
+  companion_id: string;
+  summary: string;
+  facts: Json;
+  source_watermark: string | null;
+  expires_at: string | null;
+  reset_at: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SocialAIEngagement {
+  id: string;
+  post_id: string;
+  companion_id: string;
+  slot: number | null;
+  kind: EngagementKind;
+  reply_id: string | null;
+  reaction_id: string | null;
+  repost_id: string | null;
+  fallback_content: string | null;
+  enhanced: boolean;
+  dedupe_key: string;
+  source: EngagementSource;
+  state: EngagementState;
+  scheduled_for: string;
+  target_reply_id: string | null;
+  failure_reason: string | null;
+  created_at: string;
+}
+
 export interface AIJob {
   id: string;
-  job_type: "enhance_reply" | "schedule_companion_posts";
+  job_type: "enhance_reply" | "schedule_companion_posts" | "perform_social_action";
   dedupe_key: string;
   payload: Json;
   status: JobStatus;
@@ -153,7 +223,7 @@ export interface Notification {
   companion_id: string | null;
   post_id: string | null;
   reply_id: string | null;
-  kind: "reply" | "reaction" | "system";
+  kind: "reply" | "reaction" | "follow" | "system";
   read_at: string | null;
   created_at: string;
 }
@@ -193,6 +263,14 @@ export interface ChatMessage {
   updated_at: string;
 }
 
+export interface FeedbackSubmission {
+  id: string;
+  user_id: string;
+  category: FeedbackType;
+  message: string;
+  created_at: string;
+}
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>;
   Insert: Insert & Record<string, unknown>;
@@ -211,7 +289,11 @@ export interface Database {
       social_posts: Table<SocialPost, Partial<SocialPost> & Pick<SocialPost, "content" | "kind">>;
       social_replies: Table<SocialReply, Partial<SocialReply> & Pick<SocialReply, "post_id" | "content">>;
       social_reactions: Table<SocialReaction, Partial<SocialReaction> & Pick<SocialReaction, "post_id" | "reaction">>;
-      social_ai_engagements: Table<Record<string, unknown>>;
+      user_follows: Table<UserFollow, Pick<UserFollow, "follower_id" | "followed_id">>;
+      user_companion_relationships: Table<UserCompanionRelationship, Partial<UserCompanionRelationship> & Pick<UserCompanionRelationship, "user_id" | "companion_id">>;
+      social_reposts: Table<SocialRepost, Partial<SocialRepost> & Pick<SocialRepost, "post_id">>;
+      companion_user_memory: Table<CompanionUserMemory, Partial<CompanionUserMemory> & Pick<CompanionUserMemory, "user_id" | "companion_id">>;
+      social_ai_engagements: Table<SocialAIEngagement>;
       ai_jobs: Table<AIJob>;
       notification_preferences: Table<NotificationPreferences>;
       notifications: Table<Notification>;
@@ -223,6 +305,7 @@ export interface Database {
       api_rate_limits: Table<Record<string, unknown>>;
       chat_threads: Table<ChatThread, Partial<ChatThread> & Pick<ChatThread, "user_one_id" | "created_by">>;
       chat_messages: Table<ChatMessage, Partial<ChatMessage> & Pick<ChatMessage, "thread_id" | "content">>;
+      feedback_submissions: Table<FeedbackSubmission, Partial<FeedbackSubmission> & Pick<FeedbackSubmission, "user_id" | "category" | "message">>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -243,6 +326,40 @@ export interface Database {
       check_rate_limit: { Args: { p_bucket: string; p_limit: number; p_window_seconds: number; p_actor_key?: string | null }; Returns: boolean };
       set_human_reaction: { Args: { p_post_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
       set_human_reply_reaction: { Args: { p_reply_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
+      set_human_repost: { Args: { p_post_id: string; p_reposted: boolean }; Returns: SocialRepost };
+      set_user_follow: { Args: { p_followed_id: string; p_following: boolean }; Returns: boolean };
+      get_profile_follow_summary: {
+        Args: { p_user_id: string };
+        Returns: Array<{ follower_count: number; viewer_follows: boolean }>;
+      };
+      get_following_post_ids: {
+        Args: { p_category?: string | null; p_before?: string | null; p_before_id?: string | null; p_limit?: number };
+        Returns: Array<{ post_id: string; created_at: string }>;
+      };
+      set_user_companion_follow: { Args: { p_companion_id: string; p_following: boolean }; Returns: UserCompanionRelationship };
+      respond_companion_follow: { Args: { p_companion_id: string; p_accept: boolean }; Returns: UserCompanionRelationship };
+      set_companion_dm_opt_in: { Args: { p_companion_id: string; p_opt_in: boolean }; Returns: UserCompanionRelationship };
+      start_companion_dm: { Args: { p_user_id: string; p_companion_id: string; p_content: string }; Returns: ChatMessage | null };
+      reset_companion_memory: { Args: { p_companion_id: string }; Returns: boolean };
+      refresh_companion_memory: {
+        Args: {
+          p_user_id: string;
+          p_companion_id: string;
+          p_summary: string;
+          p_facts: Json;
+          p_source_watermark: string | null;
+          p_expires_at: string;
+          p_expected_version: number;
+          p_memory_boundary: string | null;
+        };
+        Returns: boolean;
+      };
+      enqueue_social_action: {
+        Args: { p_dedupe_key: string; p_source: EngagementSource; p_kind: EngagementKind; p_post_id: string; p_companion_id: string; p_target_reply_id?: string | null; p_scheduled_for?: string };
+        Returns: string;
+      };
+      reconcile_persona_engagements: { Args: { p_date?: string }; Returns: number };
+      finalize_social_action: { Args: { p_job_id: string; p_lease_token: string; p_content?: string | null }; Returns: boolean };
       create_human_reply: { Args: { p_post_id: string; p_content: string; p_parent_reply_id?: string | null }; Returns: SocialReply };
       publish_progress_post: {
         Args: { p_content: string; p_visibility: PostVisibility; p_idempotency_key: string; p_task_id?: string | null; p_task_title?: string | null; p_category?: string | null };
@@ -257,6 +374,7 @@ export interface Database {
       get_or_create_chat_thread: { Args: { p_user_id?: string | null; p_companion_id?: string | null }; Returns: ChatThread };
       create_chat_message: { Args: { p_thread_id: string; p_content: string }; Returns: ChatMessage };
       create_companion_chat_message: { Args: { p_thread_id: string; p_companion_id: string; p_content: string }; Returns: ChatMessage };
+      submit_feedback: { Args: { p_category: FeedbackType; p_message: string }; Returns: string };
     };
     Enums: {
       task_visibility: TaskVisibility;
@@ -267,6 +385,7 @@ export interface Database {
       reaction_kind: ReactionKind;
       engagement_kind: "reply" | "reaction";
       job_status: JobStatus;
+      feedback_type: FeedbackType;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -277,6 +396,7 @@ export type FeedPost = SocialPost & {
   user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
   social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
   social_reactions: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id" | "reply_id">>;
+  social_reposts?: FeedRepost[];
   social_replies: ThreadReply[];
 };
 

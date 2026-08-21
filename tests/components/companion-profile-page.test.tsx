@@ -9,6 +9,7 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock("@/lib/supabase/env", () => ({
@@ -40,7 +41,7 @@ describe("CompanionProfilePage", () => {
       params: Promise.resolve({ companionId: "moss" }),
     }));
 
-    expect(screen.getByRole("link", { name: "Back to AI followers" })).toHaveAttribute("href", "/companions");
+    expect(screen.getByRole("link", { name: "Back to AI personas" })).toHaveAttribute("href", "/companions");
     expect(screen.getAllByText("@moss")[0]).toBeVisible();
     expect(screen.getByRole("link", { name: "Manage mute" })).toHaveAttribute("href", "/companions");
     expect(screen.getByRole("tab", { name: "Posts" })).toHaveAttribute("aria-selected", "true");
@@ -55,7 +56,7 @@ describe("CompanionProfilePage", () => {
     }));
 
     expect(screen.getByRole("tab", { name: "About" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "How Moss may participate" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "How Moss participates socially" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Example daily note" })).toBeVisible();
   });
 

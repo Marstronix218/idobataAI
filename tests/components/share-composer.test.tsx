@@ -61,10 +61,12 @@ describe("ShareComposer", () => {
     expect(screen.getByText(/posted to the community/)).toBeInTheDocument();
   });
 
-  it("explains the fallback thought while keeping the comment optional", () => {
+  it("keeps the comment optional without promising fallback text", () => {
     render(<ShareComposer taskId="preview-task" />);
 
-    expect(screen.getByText(/Leave it blank and we’ll use “Glad to have this one wrapped up.”/)).toBeVisible();
+    expect(screen.getByLabelText("Comment on your completed task")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Post privately" })).toBeEnabled();
+    expect(screen.queryByText(/Leave it blank and we’ll use/)).not.toBeInTheDocument();
   });
 
   it("previews and removes optional completion photos before posting", () => {

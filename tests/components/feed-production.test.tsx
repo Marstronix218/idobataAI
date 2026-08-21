@@ -16,7 +16,7 @@ vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) } }),
 }));
 
-import { Feed } from "@/components/social/feed";
+import { Feed, PostCard, previewFeed } from "@/components/social/feed";
 
 describe("Feed production data loading", () => {
   beforeEach(() => {
@@ -91,5 +91,19 @@ describe("Feed production data loading", () => {
     const reply = await screen.findByRole("button", { name: /Reply/ });
     expect(reply).toHaveTextContent("7");
     expect(screen.getByText("Finished the kitchen shelf.")).toBeVisible();
+  });
+
+  it("renders a completed-task card without an empty comment body", () => {
+    render(<PostCard
+      post={{ ...previewFeed[0], content: "", task_title: "Build the shelf", social_reposts: [] }}
+      currentUserId={null}
+      onChange={vi.fn()}
+      onNotice={vi.fn()}
+    />);
+
+    const post = screen.getByRole("article");
+    expect(screen.getByText("Build the shelf")).toBeVisible();
+    expect(post.querySelector("p.leading-7")).toBeNull();
+    expect(screen.queryByText("Glad to have this one wrapped up.")).not.toBeInTheDocument();
   });
 });

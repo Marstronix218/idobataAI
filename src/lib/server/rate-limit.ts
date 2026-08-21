@@ -1,5 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "./http";
 
 /**
@@ -9,17 +8,20 @@ import { ApiError } from "./http";
  * in every other user's chat list without sending a message, and upload tickets
  * mint unbounded signed URLs for 5MB objects.
  *
- * `check_rate_limit` is an existing atomic definer function; this is just a
- * typed call site that turns a refusal into a 429.
+ * `check_rate_limit` is an existing atomic definer function. Authenticated
+ * clients deliberately cannot execute it because they could choose their own
+ * limits. Invoke it through the isolated server client and key the request with
+ * the user id that the route already verified.
  */
 export async function enforceRateLimit(
-  supabase: SupabaseClient<Database>,
+  actorId: string,
   bucket: string,
   limit: number,
   windowSeconds: number,
   message = "You are doing that a little too quickly. Try again shortly.",
 ) {
-  const { data, error } = await supabase.rpc("check_rate_limit", {
+  const { data, error } = await createAdminClient().rpc("check_rate_limit", {
+    p_actor_key: actorId,
     p_bucket: bucket,
     p_limit: limit,
     p_window_seconds: windowSeconds,

@@ -16,6 +16,13 @@ vi.mock("@/lib/supabase/env", () => ({
   hasPublicSupabaseEnv: () => false,
 }));
 
+vi.mock("@/lib/server/http", () => ({
+  assertDatabase: <T,>(result: { data: T; error: { message: string } | null }) => {
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  },
+}));
+
 vi.mock("@/lib/server/post-media", () => ({
   signPostMediaByPath: vi.fn(),
 }));
@@ -44,12 +51,13 @@ describe("ProfilePage", () => {
     expect(screen.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/u/mina/edit");
   });
 
-  it("exposes the AI follower directory from the profile header", async () => {
+  it("shows human followers beside the AI follower directory", async () => {
     render(await ProfilePage({
       params: Promise.resolve({ username: "mina" }),
       searchParams: Promise.resolve({}),
     }));
 
+    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/3\s*Followers/);
     expect(screen.getByRole("link", { name: "View 20 AI followers" })).toHaveAttribute("href", "/companions");
   });
 

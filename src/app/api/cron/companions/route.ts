@@ -16,8 +16,7 @@ function run(request: Request) {
   return withApi(async () => {
     assertPrivilegedRequest(request);
     const date = new Date().toISOString().slice(0, 10);
-    const inserted = assertDatabase(await createAdminClient().rpc("schedule_companion_posts", { p_date: date }));
-    return ok({ date, inserted });
+    const planned = assertDatabase(await createAdminClient().rpc("reconcile_persona_engagements", { p_date: date }));
+    return ok({ date, planned });
   });
 }
-

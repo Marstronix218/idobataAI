@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Idobata",
+    "slug": "idobata",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "idobata",
+    "userInterfaceStyle": "dark",
+    "icon": "../../src/app/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.idobataai.app",
+      "supportsTablet": true,
+      "icon": "../../src/app/icon.png",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#070B16",
+          "image": "../../public/brand/idobata-logo.png",
+          "imageWidth": 140
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -27,7 +27,7 @@ describe("Feed", { timeout: 15_000 }, () => {
 
     expect(screen.getByRole("heading", { name: "Community" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Your interests" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "People only" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("combobox", { name: "Filter feed by category" })).toHaveValue("");
     expect(screen.queryByRole("region", { name: "Share progress" })).not.toBeInTheDocument();
@@ -55,11 +55,18 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.getAllByText(/\d+ AI/).length).toBeGreaterThan(0);
   });
 
-  it("offers only Like and Reply as post actions", () => {
+  it("attributes AI persona reposts on the original post", () => {
+    render(<Feed />);
+
+    expect(screen.getByText("Orbit reposted")).toBeVisible();
+  });
+
+  it("offers Like, Reply, and Repost as post actions", () => {
     render(<Feed />);
 
     expect(screen.getAllByRole("button", { name: /Like/ })).toHaveLength(previewFeed.length);
     expect(screen.getAllByRole("button", { name: /^Reply/ })).toHaveLength(previewFeed.length);
+    expect(screen.getAllByRole("button", { name: /^Repost/ })).toHaveLength(previewFeed.length);
     expect(screen.queryByRole("button", { name: "View conversation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Cheer|Respect|Relatable|Inspired/ })).not.toBeInTheDocument();
   });
@@ -165,6 +172,19 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(like).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("optimistically toggles repost state and count in preview mode", () => {
+    render(<Feed />);
+    const repost = screen.getAllByRole("button", { name: /^Repost/ })[0];
+
+    expect(repost).toHaveAttribute("aria-pressed", "false");
+    expect(repost).toHaveTextContent("0");
+    fireEvent.click(repost);
+
+    expect(screen.getAllByRole("button", { name: /^Repost/ })[0]).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("button", { name: /^Repost/ })[0]).toHaveTextContent("1");
+    expect(screen.getByText("Repost saved. Preview only.")).toBeInTheDocument();
+  });
+
   it("announces a saved reaction to assistive technology", () => {
     render(<Feed />);
     const like = screen.getAllByRole("button", { name: /Like/ })[0];
@@ -200,9 +220,9 @@ describe("Feed", { timeout: 15_000 }, () => {
 
   it("shows human and AI posts from the user's chosen interests", () => {
     render(<Feed />);
-    fireEvent.click(screen.getByRole("tab", { name: "Your interests" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Following" }));
 
-    expect(screen.getByRole("tab", { name: "Your interests" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getAllByRole("article")).toHaveLength(7);
     expect(screen.getByText("Jonah")).toBeVisible();
     expect(screen.getByText("Aya")).toBeVisible();
@@ -253,7 +273,7 @@ describe("Feed", { timeout: 15_000 }, () => {
     communityTab.focus();
     fireEvent.keyDown(communityTab, { key: "ArrowRight" });
 
-    expect(screen.getByRole("tab", { name: "Your interests" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("has no automated accessibility violations", async () => {

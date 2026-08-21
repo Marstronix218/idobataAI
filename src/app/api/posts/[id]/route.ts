@@ -10,7 +10,8 @@ const postSelect = `
   *,
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
-  social_reactions(id, reaction, actor_id, companion_id, reply_id)
+  social_reactions(id, reaction, actor_id, companion_id, reply_id),
+  social_reposts(id, user_id:actor_id, companion_id, created_at, social_companions(name, slug))
 `;
 
 type Context = { params: Promise<{ id: string }> };

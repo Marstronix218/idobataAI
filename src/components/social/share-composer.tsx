@@ -12,8 +12,6 @@ import type { SocialPost, Task, UserProfile } from "@/types";
 type Attachment = { id: string; file: File; previewUrl: string };
 type UploadTicket = { path: string; token: string };
 
-const DEFAULT_COMPLETION_NOTE = "Glad to have this one wrapped up.";
-
 const previewTask = (taskId: string): Task => ({
   id: taskId,
   owner_id: "preview",
@@ -23,7 +21,7 @@ const previewTask = (taskId: string): Task => ({
   due_at: null,
   recurrence_rule: null,
   recurrence_instance_id: null,
-  priority: 4,
+  priority: null,
   visibility: "public",
   status: "completed",
   xp_earned: 25,
@@ -195,7 +193,6 @@ export function ShareComposer({ taskId }: { taskId: string }) {
 
             <label className="sr-only" htmlFor="post-message">Comment on your completed task</label>
             <textarea id="post-message" className="min-h-28 w-full resize-none bg-transparent py-2 text-[1.08rem] leading-7 text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus" maxLength={500} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Add a comment about this win" disabled={busy} />
-            {!message.trim() && <p className="mt-1 text-xs leading-5 text-muted">Leave it blank and we’ll use “{DEFAULT_COMPLETION_NOTE}”</p>}
 
             {attachments.length > 0 && <div className="mt-4 grid grid-cols-2 gap-2" aria-label="Selected photos">{attachments.map((item, index) => <div key={item.id} className="relative min-h-36 overflow-hidden rounded-2xl border border-line bg-canvas">
               {/* Local object URLs are intentionally rendered without the remote image optimizer. */}

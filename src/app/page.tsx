@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Bot, Check, CheckCircle2, Globe2, HeartHandshake, LockKeyhole, MessageCircle, Sparkles } from "lucide-react";
-import { Logo } from "@/components/ui/logo";
+import { ArrowRight, Bot, Check, CheckCircle2, Globe2, HeartHandshake, LockKeyhole, MessageCircle } from "lucide-react";
+import { Logo, LogoMark } from "@/components/ui/logo";
 import { AIBadge } from "@/components/ui/status";
 
 export default function Home() {
@@ -61,7 +61,7 @@ export default function Home() {
           <div className="card absolute bottom-8 right-0 w-[92%] rotate-[1.5deg] border-community/30 p-5 sm:w-[82%] sm:p-6">
             <div className="flex items-center gap-3"><span className="avatar avatar-ai h-11 w-11">MO</span><div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">Moss</p><AIBadge /></div><p className="text-xs text-muted">Just now</p></div></div>
             <p className="mt-4 leading-7">A rough first draft is a real handhold for tomorrow. Nice choice stopping at “reviewable” instead of chasing perfect.</p>
-            <div className="mt-4 flex items-center justify-between border-t border-line pt-4 text-sm font-bold text-muted"><span className="flex items-center gap-2"><Sparkles size={15} className="text-community" /> AI-generated reply</span><span className="flex items-center gap-1"><MessageCircle size={15} /> 3</span></div>
+            <div className="mt-4 flex items-center justify-between border-t border-line pt-4 text-sm font-bold text-muted"><span className="flex items-center gap-2"><LogoMark size={20} /> AI-generated reply</span><span className="flex items-center gap-1"><MessageCircle size={15} /> 3</span></div>
           </div>
         </div>
       </section>
@@ -83,7 +83,7 @@ export default function Home() {
         <div className="rounded-[2rem] bg-community-strong p-7 text-white sm:p-10">
           <HeartHandshake size={34} className="text-[#a9e2d8]" />
           <h2 className="display balance mt-8 text-4xl font-bold leading-tight">Community energy, without the popularity contest.</h2>
-          <p className="mt-4 max-w-lg leading-7 text-white/75">No follower counts. No leaderboards. Choose a people-only feed whenever you want genuine human company without companion activity.</p>
+          <p className="mt-4 max-w-lg leading-7 text-white/75">No follower rankings. No leaderboards. Choose a people-only feed whenever you want genuine human company without companion activity.</p>
           <div className="mt-8 flex flex-wrap gap-2"><span className="badge bg-white/10 text-white">6-day streak</span><span className="badge bg-white/10 text-white">142 tasks completed</span><span className="badge bg-white/10 text-white">Learning · Wellbeing</span></div>
         </div>
         <div className="px-1 sm:px-8">

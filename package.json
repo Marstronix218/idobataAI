@@ -2,6 +2,13 @@
   "name": "idobata-ai",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "predev": "npm run db:sync",
     "dev": "next dev",
@@ -15,12 +22,21 @@
     "db:test": "node scripts/test-remote-database.mjs",
     "db:deploy": "npm run db:sync && npm run db:lint",
     "db:verify": "npm run db:check && npm run db:lint",
-    "lint": "eslint",
+    "lint": "npm run lint:web && npm run lint:mobile",
+    "lint:web": "eslint",
+    "lint:mobile": "npm run lint --workspace @idobata/mobile",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit --incremental false"
+    "typecheck": "npm run typecheck:web && npm run typecheck:mobile",
+    "typecheck:web": "tsc --noEmit --incremental false",
+    "typecheck:mobile": "npm run typecheck --workspace @idobata/mobile",
+    "mobile:start": "npm run start --workspace @idobata/mobile",
+    "mobile:ios": "npm run ios --workspace @idobata/mobile",
+    "mobile:doctor": "npm run doctor --workspace @idobata/mobile",
+    "mobile:export:ios": "npm run export:ios --workspace @idobata/mobile"
   },
   "dependencies": {
+    "@idobata/contracts": "*",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "clsx": "^2.1.1",

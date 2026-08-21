@@ -1,7 +1,7 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
 import { useState } from "react";
+import { LogoMark } from "@/components/ui/logo";
 
 type AvatarProps = {
   initials: string;
@@ -25,7 +25,7 @@ export function Avatar({ initials, avatarUrl, name, ai = false, size = "md", col
       aria-label={name}
       aria-hidden={name ? undefined : true}
     >
-      {ai && size === "sm" ? <Sparkles size={14} /> : initials}
+      {ai && size === "sm" ? <LogoMark size={22} /> : initials}
       {showImage && (
         // Stored legacy avatars can come from arbitrary remote hosts, so this cannot use next/image.
         // eslint-disable-next-line @next/next/no-img-element

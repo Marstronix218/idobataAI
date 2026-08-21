@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   return withApi(async () => {
     const { user, supabase } = await authed(request);
-    await enforceRateLimit(supabase, "profile:update", 20, 3600);
+    await enforceRateLimit(user.id, "profile:update", 20, 3600);
     const input = await parseJson(request, profileSchema);
     const result = await supabase.from("user_profiles").update({
       ...(input.username !== undefined && { username: input.username }),

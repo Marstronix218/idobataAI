@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { taskCreateSchema, taskUpdateSchema } from "@idobata/contracts";
+
+export { taskCreateSchema, taskUpdateSchema };
 
 import { AVATAR_PATHS, type AvatarPath } from "@/lib/domain/avatar-options";
 
@@ -33,27 +36,6 @@ const avatarUrl = z.string().max(1000).refine(
   (value) => AVATAR_PATHS.includes(value as AvatarPath) || isOwnStorageUrl(value),
   "Choose an available avatar or upload a photo.",
 );
-
-export const taskCreateSchema = z.object({
-  title: clean(160),
-  description: optionalClean(1000),
-  category: optionalClean(48),
-  dueAt: z.iso.datetime().nullable().optional(),
-  recurrenceRule: z.enum(["daily", "weekdays", "weekly"]).nullable().optional(),
-  priority: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
-  visibility: z.enum(["private", "public"]).optional(),
-}).strict();
-
-export const taskUpdateSchema = z.object({
-  title: clean(160).optional(),
-  description: optionalClean(1000),
-  category: optionalClean(48),
-  dueAt: z.iso.datetime().nullable().optional(),
-  recurrenceRule: z.enum(["daily", "weekdays", "weekly"]).nullable().optional(),
-  priority: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
-  visibility: z.enum(["private", "public"]).optional(),
-  status: z.enum(["pending", "completed"]).optional(),
-}).strict().refine((value) => Object.keys(value).length > 0, "At least one field is required.");
 
 export const taskCategorySchema = z.object({
   name: clean(48),
@@ -115,3 +97,8 @@ export const reportSchema = z.object({
   replyId: z.uuid().optional(),
   reason: clean(300).refine((value) => value.length >= 3),
 }).strict().refine((value) => Number(Boolean(value.postId)) + Number(Boolean(value.replyId)) === 1, "Report exactly one post or reply.");
+
+export const feedbackSchema = z.object({
+  category: z.enum(["idea", "issue", "other"]),
+  message: z.string().trim().min(5).max(2000),
+}).strict();

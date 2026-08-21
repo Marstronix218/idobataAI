@@ -59,4 +59,16 @@ describe("task update route", () => {
       data: { id: taskId, owner_id: userId, priority: 2, status: "completed" },
     });
   });
+
+  it("clears priority without dropping the field from the patch", async () => {
+    parseJson.mockResolvedValueOnce({ priority: null });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ priority: null });
+  });
 });

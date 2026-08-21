@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Repeat2,
   SlidersHorizontal,
-  Sparkles,
   Tag,
   Trash2,
   Undo2,
@@ -33,11 +32,11 @@ type Filter = "Today" | "Upcoming" | "All" | "Completed";
 type TaskGroup = { key: string; title: string; hint: string; tasks: Task[] };
 
 const EDIT_CATEGORIES_VALUE = "__edit_categories__";
-const priorityOptions: Array<{ value: TaskPriority; label: string; shortLabel: string }> = [
-  { value: 1, label: "P1 — Highest", shortLabel: "P1" },
-  { value: 2, label: "P2 — High", shortLabel: "P2" },
-  { value: 3, label: "P3 — Medium", shortLabel: "P3" },
-  { value: 4, label: "P4 — Low", shortLabel: "P4" },
+const priorityOptions: Array<{ value: TaskPriority; label: string }> = [
+  { value: 1, label: "Priority 1 — Highest" },
+  { value: 2, label: "Priority 2 — High" },
+  { value: 3, label: "Priority 3 — Medium" },
+  { value: 4, label: "Priority 4 — Low" },
 ];
 
 const todayInputValue = () => {
@@ -59,7 +58,7 @@ const previewTasks: Task[] = demoTasks.map((task, index) => ({
       : null,
   recurrence_rule: task.recurring ? "weekdays" : null,
   recurrence_instance_id: null,
-  priority: 4,
+  priority: null,
   visibility: task.isPublic ? "public" : "private",
   status: task.completed ? "completed" : "pending",
   xp_earned: task.xp,
@@ -110,9 +109,7 @@ function recurrenceLabel(value: string) {
 }
 
 function priorityTitle(priority: TaskPriority) {
-  if (priority === 1) return "Priority 1 (highest)";
-  if (priority === 4) return "Priority 4 (lowest)";
-  return `Priority ${priority}`;
+  return priorityOptions.find((option) => option.value === priority)?.label ?? `Priority ${priority}`;
 }
 
 function groupsFor(filter: Filter, tasks: Task[]): TaskGroup[] {
@@ -147,7 +144,7 @@ export function TaskBoard() {
   const [quickDue, setQuickDue] = useState(todayInputValue);
   const [quickCategory, setQuickCategory] = useState("");
   const [quickRecurrence, setQuickRecurrence] = useState("");
-  const [quickPriority, setQuickPriority] = useState<TaskPriority>(4);
+  const [quickPriority, setQuickPriority] = useState<TaskPriority | "">("");
   const [justCompleted, setJustCompleted] = useState<Task | null>(null);
   const [editing, setEditing] = useState<Task | null>(null);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
@@ -240,7 +237,9 @@ export function TaskBoard() {
           : task.status === "pending" && dueTime !== null && dueTime > dayBoundary(0, true);
     return statusMatch && (category === "All" || task.category === category);
   }).sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
+    const leftPriority = a.priority ?? Number.MAX_SAFE_INTEGER;
+    const rightPriority = b.priority ?? Number.MAX_SAFE_INTEGER;
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
     const left = a.due_at ? new Date(a.due_at).getTime() : Number.MAX_SAFE_INTEGER;
     const right = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER;
     return left - right;
@@ -270,7 +269,7 @@ export function TaskBoard() {
         : await apiRequest<Task>(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
       setItems((current) => current.map((item) => item.id === task.id ? updated : item));
       setJustCompleted((current) => current?.id === task.id && next === "completed" ? updated : current);
-      notify(next === "completed" ? `${task.title} completed. Nothing was posted.` : `${task.title} moved back to open tasks.`);
+      notify(next === "completed" ? `${task.title} completed and remains off the feed.` : `${task.title} moved back to open tasks.`);
     } catch (error) {
       setItems((current) => current.map((item) => item.id === task.id ? task : item));
       setJustCompleted((current) => current?.id === task.id ? null : current);
@@ -297,7 +296,7 @@ export function TaskBoard() {
             category: quickCategory.trim() || null,
             due_at: dueAt,
             recurrence_rule: recurrenceRule,
-            priority: quickPriority,
+            priority: quickPriority || null,
             visibility: profile?.default_task_visibility ?? "private",
             status: "pending",
             completed_at: null,
@@ -307,13 +306,13 @@ export function TaskBoard() {
           } as Task
         : await apiRequest<Task>("/api/tasks", {
             method: "POST",
-            body: JSON.stringify({ title, category: quickCategory.trim() || null, dueAt, recurrenceRule, priority: quickPriority }),
+            body: JSON.stringify({ title, category: quickCategory.trim() || null, dueAt, recurrenceRule, priority: quickPriority || null }),
           });
       setItems((current) => [created, ...current]);
       setDraft("");
       setQuickCategory("");
       setQuickRecurrence("");
-      setQuickPriority(4);
+      setQuickPriority("");
       notify(`${title} added ${created.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
       notify(errorMessage(error), "error");
@@ -327,12 +326,13 @@ export function TaskBoard() {
     if (!editing) return;
     const data = new FormData(event.currentTarget);
     const recurrence = String(data.get("recurrenceRule"));
+    const priority = String(data.get("priority"));
     const patch = {
       title: String(data.get("title")),
       category: String(data.get("category")) || null,
       dueAt: data.get("dueAt") ? new Date(`${data.get("dueAt")}T12:00:00`).toISOString() : null,
       recurrenceRule: recurrence ? recurrence as "daily" | "weekdays" | "weekly" : null,
-      priority: Number(data.get("priority")) as TaskPriority,
+      priority: priority ? Number(priority) as TaskPriority : null,
       visibility: String(data.get("visibility")) as "private" | "public",
     };
     setBusyId(editing.id);
@@ -469,12 +469,12 @@ export function TaskBoard() {
           <input id="quick-task" value={draft} onChange={(event) => setDraft(event.target.value)} className="field min-w-0 flex-1 border-0 bg-transparent text-base shadow-none" placeholder="Add a task…" maxLength={160} />
           <button className="btn btn-primary shrink-0 px-4" disabled={busyId === "new" || !draft.trim()}><Plus size={18} /><span className="hidden sm:inline">Add task</span></button>
         </div>
-        <div className="grid gap-2 border-t border-line bg-canvas/55 p-3 sm:grid-cols-2 sm:items-center sm:px-4 md:grid-cols-[175px_minmax(150px,1fr)_180px_125px]">
+        <div className="grid gap-2 border-t border-line bg-canvas/55 p-3 sm:grid-cols-2 sm:items-center sm:px-4 lg:grid-cols-[175px_minmax(150px,1fr)_195px_210px]">
           <label><span className="sr-only">Due date</span><input type="date" className="field min-h-10 py-2 text-xs font-bold" value={quickDue} onChange={(event) => setQuickDue(event.target.value)} /></label>
           <label className="relative min-w-0"><span className="sr-only">Category (optional)</span><Tag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickCategory} onChange={(event) => { const value = event.target.value; if (value === EDIT_CATEGORIES_VALUE) { setAnnouncement(""); setCategoryManagerOpen(true); return; } setQuickCategory(value); }}><option value="">No category</option>{taskCategories.map((taskCategory) => <option key={taskCategory.id} value={taskCategory.name}>{taskCategory.name}</option>)}<option value={EDIT_CATEGORIES_VALUE}>Edit categories…</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
-          <label className="relative"><span className="sr-only">Repeat schedule</span><Repeat2 aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickRecurrence} onChange={(event) => setQuickRecurrence(event.target.value)}><option value="">Doesn’t repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
-          <label className="relative"><span className="sr-only">Priority</span><Flag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickPriority} onChange={(event) => setQuickPriority(Number(event.target.value) as TaskPriority)}>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.shortLabel}</option>)}</select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
-          <span className="flex items-center gap-1.5 px-1 text-xs font-bold text-muted sm:col-span-2 md:col-span-4"><LockKeyhole size={13} /> Starts {profile?.default_task_visibility ?? "private"}</span>
+          <label className="relative min-w-0"><span className="sr-only">Repeat schedule</span><Repeat2 aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickRecurrence} onChange={(event) => setQuickRecurrence(event.target.value)}><option value="">Doesn’t repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
+          <label className="relative min-w-0"><span className="sr-only">Priority (optional)</span><Flag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickPriority} onChange={(event) => { const value = event.target.value; setQuickPriority(value ? Number(value) as TaskPriority : ""); }}><option value="">No priority</option>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
+          <span className="flex items-center gap-1.5 px-1 text-xs font-bold text-muted sm:col-span-2 lg:col-span-4"><LockKeyhole size={13} /> Starts {profile?.default_task_visibility ?? "private"}</span>
         </div>
       </form>
 
@@ -499,12 +499,12 @@ export function TaskBoard() {
         <label className="relative min-w-44"><span className="sr-only">Filter by category</span><SlidersHorizontal aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-12 appearance-none py-2 text-sm font-bold" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value} value={value}>{value === "All" ? "All categories" : value}</option>)}</select><ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
       </div>
 
-      {justCompleted && <section className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-5"><div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-success text-canvas"><Sparkles size={21} /></span><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[.1em] text-success">Task complete</p><h2 className="display mt-1 text-xl font-bold">{justCompleted.title}</h2><p className="mt-1 text-sm text-muted">Nothing was posted. Add a note or photos only if you want to share this win.</p><div className="mt-4 flex flex-wrap gap-2"><Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-primary">Post a win</Link><button className="btn btn-secondary" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 size={16} /> Undo</button><button className="btn btn-ghost" onClick={() => setJustCompleted(null)}>Not now</button></div></div></div></section>}
+      {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2><p className="mt-1 text-sm text-muted">It stays off the feed unless you share it.</p><div className="mt-3 flex flex-wrap gap-2"><Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-secondary">Share</Link><button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
 
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
-        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.hint} · {group.tasks.length}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2"><span className="badge badge-priority" title={priorityTitle(task.priority)}>P{task.priority}</span>{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post a win</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
+        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.hint} · {group.tasks.length}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">{task.priority && <span className="badge badge-priority" title={priorityTitle(task.priority)}>Priority {task.priority}</span>}{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Share</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
       </section>
-      <StatusMessage message={categoryManagerOpen ? "" : announcement} tone={categoryManagerOpen ? "status" : announcementTone} onRetry={announcementTone === "error" && !categoryManagerOpen ? () => void load() : undefined} />
+      <StatusMessage message={categoryManagerOpen ? "" : announcement} tone={categoryManagerOpen ? "status" : announcementTone} className={justCompleted ? "sr-only" : ""} onRetry={announcementTone === "error" && !categoryManagerOpen ? () => void load() : undefined} />
     </div>
 
     {editing && <div ref={editDialogRef} className="fixed inset-0 z-50 grid place-items-end bg-overlay/70 p-0 sm:place-items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && busyId !== editing.id) closeEditor(); }}>
@@ -532,11 +532,11 @@ export function TaskBoard() {
             </div>
           </div>
           <div><label className="field-label" htmlFor="edit-due">Due date</label><input className="field" id="edit-due" name="dueAt" type="date" defaultValue={editing.due_at?.slice(0, 10) ?? ""} /></div>
-          <div><label className="field-label" htmlFor="edit-priority">Priority</label><select className="field" id="edit-priority" name="priority" defaultValue={editing.priority ?? 4}>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div><label className="field-label" htmlFor="edit-priority">Priority <span className="font-medium normal-case tracking-normal text-muted">(optional)</span></label><select className="field" id="edit-priority" name="priority" defaultValue={editing.priority ?? ""}><option value="">No priority</option>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
           <div><label className="field-label" htmlFor="edit-recurring">Repeat</label><select className="field" id="edit-recurring" name="recurrenceRule" defaultValue={editing.recurrence_rule ?? ""}><option value="">Does not repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select></div>
           <div><label className="field-label" htmlFor="edit-visibility">Visibility</label><select className="field" id="edit-visibility" name="visibility" defaultValue={editing.visibility}><option value="private">Private</option><option value="public">Public progress</option></select></div>
         </div>
-        <p className="mt-4 text-xs leading-5 text-muted">P1 is the highest priority and P4 is the lowest. Posting remains a separate choice after completion.</p>
+        <p className="mt-4 text-xs leading-5 text-muted">Priority is optional. Posting remains a separate choice after completion.</p>
         {editError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm font-bold text-danger"><span className="min-w-0 flex-1 break-words">{editError}</span></div>}
         </div>
         {/* Deleting a task is irreversible, so it confirms in place rather than

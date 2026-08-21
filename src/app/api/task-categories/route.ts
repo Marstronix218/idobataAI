@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApi(async () => {
     const { user, supabase } = await authed(request);
-    await enforceRateLimit(supabase, "category:create", 60, 3600);
+    await enforceRateLimit(user.id, "category:create", 60, 3600);
     const input = await parseJson(request, taskCategorySchema);
     const result = await supabase
       .from("task_categories")

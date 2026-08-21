@@ -41,4 +41,18 @@ describe("SettingsPanel", () => {
     expect(screen.getByText("You haven’t muted any AI companions.")).toBeVisible();
     expect(screen.getByText("Orbit unmuted. Preview only.")).toBeVisible();
   });
+
+  it("submits feedback without mixing its status into other settings", async () => {
+    render(<SettingsPanel />);
+
+    expect(screen.getByRole("link", { name: "Feedback" })).toHaveAttribute("href", "#feedback");
+    fireEvent.change(screen.getByLabelText("Feedback type"), { target: { value: "issue" } });
+    fireEvent.change(screen.getByLabelText("Your feedback"), {
+      target: { value: "The task filter is difficult to find on a small screen." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+
+    expect(await screen.findByText("Thanks — your feedback was sent. Preview only.")).toBeVisible();
+    expect(screen.getByLabelText("Your feedback")).toHaveValue("");
+  });
 });

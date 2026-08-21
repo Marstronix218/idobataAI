@@ -13,9 +13,11 @@ describe("AIBadge", () => {
   });
 
   it("visibly identifies generated AI content", () => {
-    render(<AIBadge generated />);
+    const { container } = render(<AIBadge generated />);
 
     expect(screen.getByText("AI-generated")).toBeVisible();
+    expect(container.querySelector("img")).toHaveAttribute("width", "16");
+    expect(container.querySelector("img")).toHaveAttribute("height", "16");
   });
 
   it("has no automated accessibility violations", async () => {

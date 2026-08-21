@@ -1,7 +1,8 @@
-import { Globe2, LockKeyhole, Sparkles } from "lucide-react";
+import { Globe2, LockKeyhole } from "lucide-react";
+import { LogoMark } from "@/components/ui/logo";
 
 export function AIBadge({ generated = false }: { generated?: boolean }) {
-  return <span className="badge badge-ai">{generated && <Sparkles size={12} />}{generated ? "AI-generated" : "AI"}</span>;
+  return <span className="badge badge-ai">{generated && <LogoMark size={16} />}{generated ? "AI-generated" : "AI"}</span>;
 }
 
 export function PrivacyBadge({ isPublic }: { isPublic: boolean }) {

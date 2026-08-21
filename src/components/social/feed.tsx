@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Heart, MessageCircle, MoreHorizontal, RefreshCw } from "lucide-react";
+import { ChevronDown, Heart, MessageCircle, MoreHorizontal, RefreshCw, Repeat2 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
 import { posts as demoPosts } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,7 +12,7 @@ import { PostMediaGrid } from "@/components/social/post-media-grid";
 import { ReplyThread, initials, postReply, type ReplyAuthor } from "@/components/social/reply-thread";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import { createClient } from "@/lib/supabase/client";
-import type { FeedPost, ReactionKind, SocialReaction, ThreadReply, UserProfile } from "@/types";
+import type { FeedPost, FeedRepost, ReactionKind, SocialReaction, ThreadReply, UserProfile } from "@/types";
 
 type FeedPage = { items: FeedPost[]; nextCursor: string | null };
 type FeedTab = "for-you" | "following" | "people";
@@ -43,6 +43,11 @@ export const previewFeed: FeedPost[] = demoPosts.map((post) => ({
     reply_id: null,
   })),
   social_replies: [],
+  social_reposts: post.authorSlug === "moss" ? [{
+    id: `${post.id}-repost-orbit`, user_id: null, companion_id: "preview-ai-orbit",
+    created_at: new Date(Date.now() - Math.max(1, post.minutesAgo - 1) * 60_000).toISOString(),
+    social_companions: { name: "Orbit", slug: "orbit" },
+  }] : [],
 }));
 
 function postType(kind: FeedPost["kind"]) { return kind.includes("completion") ? "Completed a task" : kind.includes("daily_task") ? "Daily task" : "Progress update"; }
@@ -64,6 +69,11 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
   const selected = currentUserId ? post.social_reactions.find((item) => item.actor_id === currentUserId)?.reaction ?? null : null;
   const likeCount = post.social_reactions.length;
   const aiLikeCount = post.social_reactions.filter((item) => item.companion_id).length;
+  const reposts = post.social_reposts ?? [];
+  const viewerRepost = currentUserId ? reposts.find((item) => item.user_id === currentUserId) : null;
+  const aiReposters = Array.from(new Map(reposts
+    .filter((item) => item.companion_id && item.social_companions)
+    .map((item) => [item.companion_id, item.social_companions!] as const)).values());
 
   async function toggleLike() {
     if (busy) return; setBusy(true);
@@ -81,6 +91,32 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
       onNotice(`Like ${selected === "like" ? "removed" : "saved"}.`);
     } catch (error) { onChange({ ...post, social_reactions: prior }); onNotice(errorMessage(error)); }
     finally { setBusy(false); }
+  }
+
+  async function toggleRepost() {
+    if (busy || !currentUserId) return;
+    setBusy(true);
+    const prior = reposts;
+    const optimistic = viewerRepost
+      ? prior.filter((item) => item.id !== viewerRepost.id)
+      : [...prior, { id: "optimistic-repost", user_id: currentUserId, companion_id: null, created_at: new Date().toISOString() }];
+    onChange({ ...post, social_reposts: optimistic });
+    try {
+      if (!isPreviewMode) {
+        if (viewerRepost) {
+          await apiRequest<void>(`/api/posts/${post.id}/repost`, { method: "DELETE" });
+        } else {
+          const saved = await apiRequest<FeedRepost>(`/api/posts/${post.id}/repost`, { method: "PUT" });
+          onChange({ ...post, social_reposts: [...prior, saved] });
+        }
+      }
+      onNotice(`Repost ${viewerRepost ? "removed" : "saved"}.${isPreviewMode ? " Preview only." : ""}`);
+    } catch (error) {
+      onChange({ ...post, social_reposts: prior });
+      onNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitReply(event: FormEvent) {
@@ -152,9 +188,9 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
       if (onOpen && event.target === event.currentTarget && event.key === "Enter") onOpen(post.id);
     }}
   >
-    <div className={`p-4 ${detail || replying ? "" : "pb-0"}`}><header className="flex items-start gap-2.5"><Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{owned && <PrivacyBadge isPublic={post.visibility === "public"} />}<span className="text-xs text-muted">· <RelativeTime value={post.created_at} /></span></div><p className="text-xs text-muted">{postType(post.kind)}</p></div><div className="relative shrink-0" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") { setMenuOpen(false); event.currentTarget.querySelector("button")?.focus(); } }}><button type="button" className="post-menu-trigger" aria-label={`More actions for ${name}`} aria-expanded={menuOpen} aria-controls={`post-menu-${post.id}`} onClick={() => setMenuOpen((open) => !open)} disabled={busy}><MoreHorizontal aria-hidden="true" size={19} /></button>{menuOpen && <div id={`post-menu-${post.id}`} role="menu" aria-label={`Actions for ${name}`} className="absolute right-0 top-10 z-30 min-w-48 overflow-hidden rounded-xl border border-line bg-surface-raised p-1 shadow-lg">{owned ? <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void toggleAudience()}>{post.visibility === "public" ? "Make post private" : "Share post publicly"}</button><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void deletePost()}>Delete post</button></> : <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void reportPost()}>{ai ? "Report AI post" : "Report post"}</button>{post.author_id && <button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void blockAuthor()}>Block {name}</button>}</>}</div>}</div></header>
-      <p className="mt-3 text-[.98rem] leading-7">{post.content}</p><PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />{post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
-      <div className="mt-2 grid grid-cols-2 gap-1" aria-label="Post actions"><button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="text-xs text-community">{aiLikeCount} AI</span>}</button><button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button></div>
+    <div className={`p-4 ${detail || replying ? "" : "pb-0"}`}>{aiReposters.length > 0 && <div className="mb-3 flex items-center gap-2 pl-1 text-xs font-bold text-muted"><Repeat2 size={15} className="text-community" /><span>{aiReposters[0].name}{aiReposters.length > 1 ? ` and ${aiReposters.length - 1} more` : ""} reposted</span><AIBadge /></div>}<header className="flex items-start gap-2.5"><Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{owned && <PrivacyBadge isPublic={post.visibility === "public"} />}<span className="text-xs text-muted">· <RelativeTime value={post.created_at} /></span></div><p className="text-xs text-muted">{postType(post.kind)}</p></div><div className="relative shrink-0" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") { setMenuOpen(false); event.currentTarget.querySelector("button")?.focus(); } }}><button type="button" className="post-menu-trigger" aria-label={`More actions for ${name}`} aria-expanded={menuOpen} aria-controls={`post-menu-${post.id}`} onClick={() => setMenuOpen((open) => !open)} disabled={busy}><MoreHorizontal aria-hidden="true" size={19} /></button>{menuOpen && <div id={`post-menu-${post.id}`} role="menu" aria-label={`Actions for ${name}`} className="absolute right-0 top-10 z-30 min-w-48 overflow-hidden rounded-xl border border-line bg-surface-raised p-1 shadow-lg">{owned ? <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void toggleAudience()}>{post.visibility === "public" ? "Make post private" : "Share post publicly"}</button><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void deletePost()}>Delete post</button></> : <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void reportPost()}>{ai ? "Report AI post" : "Report post"}</button>{post.author_id && <button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void blockAuthor()}>Block {name}</button>}</>}</div>}</div></header>
+      {post.content && <p className="mt-3 text-[.98rem] leading-7">{post.content}</p>}<PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />{post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
+      <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Post actions"><button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="hidden text-xs text-community sm:inline">{aiLikeCount} AI</span>}</button><button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button><button type="button" aria-pressed={Boolean(viewerRepost)} onClick={() => void toggleRepost()} disabled={busy || !currentUserId} className={`btn btn-ghost post-action ${viewerRepost ? "bg-community-soft text-community" : "text-muted"}`}><Repeat2 size={17} /> Repost <span>{reposts.length}</span></button></div>
       {detail && <ReplyThread postId={post.id} replies={replies} currentUserId={currentUserId} replyAuthor={replyAuthor ?? null} onChange={changeReplies} onNotice={onNotice} />}
       {replying && <form className="mt-3 flex items-center gap-3 border-t border-line pt-3" onSubmit={submitReply}><Avatar initials={initials(replyAuthor?.name ?? "You")} avatarUrl={replyAuthor?.avatarUrl} name={replyAuthor?.name ?? "You"} /><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-base text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} placeholder="Post your reply" autoFocus /><button type="submit" className="btn btn-community shrink-0 rounded-full px-4 text-sm" disabled={busy || !reply.trim()}>{busy ? "Replying…" : "Reply"}</button></form>}
     </div></article>;
@@ -223,7 +259,7 @@ export function Feed() {
         <div className="flex flex-col border-t border-line sm:flex-row">
           <div className="grid min-w-0 flex-1 grid-cols-3" role="tablist" aria-label="Feed view">
             <button id="feed-for-you-tab" type="button" role="tab" aria-selected={tab === "for-you"} aria-controls="feed-panel" tabIndex={tab === "for-you" ? 0 : -1} onClick={() => changeTab("for-you")} onKeyDown={(event) => handleTabKeyDown(event, "for-you")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "for-you" ? "text-ink" : "text-muted"}`}>For you{tab === "for-you" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
-            <button id="feed-following-tab" type="button" role="tab" aria-selected={tab === "following"} aria-controls="feed-panel" tabIndex={tab === "following" ? 0 : -1} onClick={() => changeTab("following")} onKeyDown={(event) => handleTabKeyDown(event, "following")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "following" ? "text-ink" : "text-muted"}`}>Your interests{tab === "following" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
+            <button id="feed-following-tab" type="button" role="tab" aria-selected={tab === "following"} aria-controls="feed-panel" tabIndex={tab === "following" ? 0 : -1} onClick={() => changeTab("following")} onKeyDown={(event) => handleTabKeyDown(event, "following")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "following" ? "text-ink" : "text-muted"}`}>Following{tab === "following" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
             <button id="feed-people-tab" type="button" role="tab" aria-selected={tab === "people"} aria-controls="feed-panel" tabIndex={tab === "people" ? 0 : -1} onClick={() => changeTab("people")} onKeyDown={(event) => handleTabKeyDown(event, "people")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "people" ? "text-ink" : "text-muted"}`}>People only{tab === "people" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
           </div>
           <label className="relative flex w-full items-center border-t border-line hover:bg-surface/55 sm:min-w-36 sm:w-auto sm:border-l sm:border-t-0">

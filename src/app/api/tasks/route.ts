@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApi(async () => {
     const { user, supabase } = await authed(request);
-    await enforceRateLimit(supabase, "task:create", 120, 3600);
+    await enforceRateLimit(user.id, "task:create", 120, 3600);
     const input = await parseJson(request, taskCreateSchema);
     let visibility = input.visibility;
     if (!visibility) {
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const result = await supabase.from("tasks").insert({
       owner_id: user.id, title: input.title, description: input.description ?? null, category: input.category ?? null,
       due_at: input.dueAt ?? null, recurrence_rule: input.recurrenceRule ?? null,
-      priority: input.priority ?? 4, visibility,
+      priority: input.priority ?? null, visibility,
     }).select("*").single();
     return ok(assertDatabase(result), { status: 201 });
   });

@@ -28,4 +28,13 @@ describe("Avatar", () => {
     expect(container.firstChild).toHaveTextContent("NS");
     expect(container.querySelector("img")).not.toBeInTheDocument();
   });
+
+  it("uses the larger app logo for compact AI avatars", () => {
+    render(<Avatar initials="AI" ai size="sm" name="AI profile" />);
+
+    const logo = screen.getByRole("img", { name: "AI profile" }).querySelector("img");
+    expect(logo).toHaveAttribute("src", expect.stringContaining("brand%2Fidobata-logo.png"));
+    expect(logo).toHaveAttribute("width", "22");
+    expect(logo).toHaveAttribute("height", "22");
+  });
 });

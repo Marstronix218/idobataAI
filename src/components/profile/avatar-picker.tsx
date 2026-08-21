@@ -21,7 +21,7 @@ export function AvatarPicker({ value, onChange, initials, disabled = false, onUp
   const customAvatar = value && !AVATAR_PATHS.includes(value as (typeof AVATAR_PATHS)[number])
     ? [{ value, label: "Your photo" }]
     : [];
-  const choices = [...customAvatar, { value: null, label: "Use initials" }, ...AVATAR_OPTIONS];
+  const choices = [...customAvatar, { value: null, label: "Initials" }, ...AVATAR_OPTIONS];
 
   return (
     <fieldset disabled={disabled} aria-describedby="avatar-picker-help">

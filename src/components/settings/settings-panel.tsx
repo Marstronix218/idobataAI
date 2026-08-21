@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bell, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, Trash2, VolumeX, X } from "lucide-react";
+import { Bell, LockKeyhole, LogOut, MessageSquare, ShieldCheck, SlidersHorizontal, Trash2, VolumeX, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { PrivacyBadge } from "@/components/ui/status";
@@ -62,6 +62,8 @@ export function SettingsPanel() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [status, setStatus] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [busy, setBusy] = useState(!isPreviewMode);
   const router = useRouter();
 
@@ -165,6 +167,30 @@ export function SettingsPanel() {
     }
   }
 
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const category = String(data.get("feedbackType")) as "idea" | "issue" | "other";
+    const message = String(data.get("feedbackMessage"));
+    setFeedbackBusy(true);
+    setFeedbackStatus("");
+    try {
+      if (!isPreviewMode) {
+        await apiRequest<{ id: string }>("/api/feedback", {
+          method: "POST",
+          body: JSON.stringify({ category, message }),
+        });
+      }
+      form.reset();
+      setFeedbackStatus(`Thanks — your feedback was sent.${isPreviewMode ? " Preview only." : ""}`);
+    } catch (error) {
+      setFeedbackStatus(errorMessage(error));
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }
+
   async function unblock(person: BlockedPerson) {
     setSafetyBusyId(`person-${person.id}`);
     setStatus("");
@@ -202,7 +228,7 @@ export function SettingsPanel() {
 
     <div className="mt-7 grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Settings sections">
-        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [ShieldCheck, "Safety"]].map(([Icon, label]) => {
+        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [ShieldCheck, "Safety"]].map(([Icon, label]) => {
           const Comp = Icon as typeof SlidersHorizontal;
           return <a key={label as string} href={`#${String(label).toLowerCase()}`} className="btn btn-ghost shrink-0 justify-start"><Comp size={17} />{label as string}</a>;
         })}
@@ -236,6 +262,20 @@ export function SettingsPanel() {
           <div className="flex items-center gap-2"><VolumeX size={19} className="text-muted" /><h2 className="display text-xl font-bold">Muted AI companions</h2></div>
           <p className="mt-2 text-sm text-muted">Muted AI companions stay out of your feed. You can also manage mute controls from their profiles.</p>
           {mutedCompanions.length ? <ul className="mt-4 divide-y divide-line" aria-label="Muted AI companions">{mutedCompanions.map((companion) => <li key={companion.id} className="flex items-center gap-3 py-4"><Avatar initials={initials(companion.name)} avatarUrl={companion.avatarUrl} name={companion.name} ai /><div className="min-w-0 flex-1"><p className="truncate font-bold">{companion.name}</p><p className="truncate text-sm text-muted">@{companion.slug} · AI companion</p></div><button type="button" className="btn btn-secondary shrink-0" aria-label={`Unmute ${companion.name}`} disabled={safetyBusyId !== null} onClick={() => void unmute(companion)}>{safetyBusyId === `companion-${companion.id}` ? "Unmuting…" : "Unmute"}</button></li>)}</ul> : <p className="soft-card mt-4 p-5 text-center text-sm text-muted">You haven’t muted any AI companions.</p>}
+        </section>
+
+        <section id="feedback" className="card p-5 sm:p-6">
+          <div className="flex items-center gap-2"><MessageSquare size={19} className="text-brand" /><h2 className="display text-xl font-bold">Feedback</h2></div>
+          <p className="mt-2 text-sm leading-6 text-muted">Share an idea, tell us what isn’t working, or leave a note for the product team.</p>
+          <form className="mt-5 space-y-4" onSubmit={submitFeedback}>
+            <label className="block"><span className="field-label">Feedback type</span><select className="field" name="feedbackType" defaultValue="idea"><option value="idea">Idea</option><option value="issue">Something isn’t working</option><option value="other">Other</option></select></label>
+            <label className="block"><span className="field-label">Your feedback</span><textarea className="field min-h-32 resize-y" name="feedbackMessage" minLength={5} maxLength={2000} required placeholder="What would make Idobata more useful for you?" /></label>
+            <p className="text-sm leading-6 text-muted">5–2,000 characters. Your feedback is linked to your account and visible only to the product team.</p>
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <button className="btn btn-primary" disabled={feedbackBusy}>{feedbackBusy ? "Sending…" : "Send feedback"}</button>
+              <p className="min-h-5 text-sm font-bold text-muted" aria-live="polite">{feedbackStatus}</p>
+            </div>
+          </form>
         </section>
 
         <section id="safety" className="card border-danger/25 p-5 sm:p-6">

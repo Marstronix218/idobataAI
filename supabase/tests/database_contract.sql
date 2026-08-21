@@ -11,7 +11,8 @@ begin
     'user_profiles','tasks','public_task_progress','social_posts','social_replies','social_reactions',
     'social_companions','social_ai_engagements','ai_jobs','notifications','notification_preferences',
     'content_reports','blocked_users','muted_companions','account_deletion_requests','task_completion_awards',
-    'chat_threads','chat_messages'
+    'chat_threads','chat_messages','user_follows','user_companion_relationships','social_reposts','companion_user_memory',
+    'feedback_submissions'
   ]) expected
   where to_regclass('public.' || expected) is null;
   if missing is not null then raise exception 'missing required tables: %', missing; end if;
@@ -26,13 +27,19 @@ begin
     'user_profiles','tasks','public_task_progress','social_posts','social_replies','social_reactions',
     'social_companions','social_ai_engagements','ai_jobs','notifications','notification_preferences',
     'content_reports','blocked_users','muted_companions','account_deletion_requests','task_completion_awards',
-    'chat_threads','chat_messages'
+    'chat_threads','chat_messages','user_follows','user_companion_relationships','social_reposts','companion_user_memory',
+    'feedback_submissions'
   ) and not c.relrowsecurity;
   if unprotected is not null then raise exception 'RLS disabled on: %', unprotected; end if;
 end $$;
 
 do $$
 begin
+  if (select array_agg(e.enumlabel::text order by e.enumsortorder)
+      from pg_enum e join pg_type t on t.oid=e.enumtypid join pg_namespace n on n.oid=t.typnamespace
+      where n.nspname='public' and t.typname='feedback_type')
+      is distinct from array['idea','issue','other']::text[]
+  then raise exception 'feedback type enum does not match the API contract'; end if;
   if has_table_privilege('authenticated','public.social_posts','INSERT') then raise exception 'authenticated can bypass post publishing RPC'; end if;
   if not has_table_privilege('authenticated','public.tasks','SELECT') then raise exception 'authenticated cannot read own tasks through RLS'; end if;
   if not has_table_privilege('authenticated','public.social_posts','SELECT') then raise exception 'authenticated cannot read visible posts through RLS'; end if;
@@ -40,8 +47,21 @@ begin
   if has_column_privilege('authenticated','public.social_posts','content','UPDATE') then raise exception 'authenticated can rewrite published post content directly'; end if;
   if has_table_privilege('authenticated','public.ai_jobs','SELECT') then raise exception 'authenticated can read privileged jobs'; end if;
   if has_table_privilege('authenticated','public.social_ai_engagements','SELECT') then raise exception 'authenticated can read internal AI fallback rows'; end if;
+  if has_table_privilege('authenticated','public.user_companion_relationships','INSERT') then raise exception 'authenticated can bypass relationship RPCs'; end if;
+  if has_table_privilege('authenticated','public.user_follows','INSERT') then raise exception 'authenticated can forge human follow identity'; end if;
+  if not has_table_privilege('authenticated','public.user_follows','SELECT') then raise exception 'authenticated cannot read their own human follow edges through RLS'; end if;
+  if not has_function_privilege('authenticated','public.set_user_follow(uuid,boolean)','EXECUTE') then raise exception 'authenticated cannot follow public profiles'; end if;
+  if not has_function_privilege('authenticated','public.get_profile_follow_summary(uuid)','EXECUTE') then raise exception 'authenticated cannot read profile follow summaries'; end if;
+  if not has_function_privilege('authenticated','public.get_following_post_ids(text,timestamp with time zone,uuid,integer)','EXECUTE') then raise exception 'authenticated cannot resolve their Following feed'; end if;
+  if has_function_privilege('anon','public.set_user_follow(uuid,boolean)','EXECUTE') then raise exception 'anonymous users can mutate human follows'; end if;
+  if has_function_privilege('anon','public.get_following_post_ids(text,timestamp with time zone,uuid,integer)','EXECUTE') then raise exception 'anonymous users can query relationship feeds'; end if;
+  if has_table_privilege('authenticated','public.social_reposts','INSERT') then raise exception 'authenticated can forge repost identity'; end if;
+  if has_table_privilege('authenticated','public.companion_user_memory','INSERT') then raise exception 'authenticated can write companion memory'; end if;
+  if has_table_privilege('authenticated','public.companion_user_memory','DELETE') then raise exception 'authenticated can bypass the durable memory reset barrier'; end if;
+  if not has_table_privilege('authenticated','public.companion_user_memory','SELECT') then raise exception 'authenticated cannot read own companion memory through RLS'; end if;
   if not has_function_privilege('authenticated','public.can_read_social_companion(uuid)','EXECUTE') then raise exception 'authenticated cannot resolve readable companion identities'; end if;
   if has_function_privilege('authenticated','public.check_rate_limit(text,integer,integer,text)','EXECUTE') then raise exception 'authenticated can bypass rate limits'; end if;
+  if not has_function_privilege('service_role','public.check_rate_limit(text,integer,integer,text)','EXECUTE') then raise exception 'service role cannot enforce API rate limits'; end if;
   if exists(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace,
       lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
@@ -60,17 +80,99 @@ begin
   ) then raise exception 'PUBLIC can finalize AI jobs'; end if;
   if has_function_privilege('authenticated','public.finalize_ai_reply_job(uuid,uuid,text)','EXECUTE') then raise exception 'authenticated can finalize AI jobs'; end if;
   if not has_function_privilege('service_role','public.finalize_ai_reply_job(uuid,uuid,text)','EXECUTE') then raise exception 'service role cannot finalize AI jobs'; end if;
+  if has_function_privilege('authenticated','public.finalize_social_action(uuid,uuid,text)','EXECUTE') then raise exception 'authenticated can finalize persona jobs'; end if;
+  if not has_function_privilege('service_role','public.finalize_social_action(uuid,uuid,text)','EXECUTE') then raise exception 'service role cannot finalize persona jobs'; end if;
+  if not has_function_privilege('authenticated','public.set_human_repost(uuid,boolean)','EXECUTE') then raise exception 'authenticated cannot use repost RPC'; end if;
+  if not has_function_privilege('authenticated','public.reset_companion_memory(uuid)','EXECUTE') then raise exception 'authenticated cannot reset companion memory'; end if;
+  if has_function_privilege('authenticated','public.refresh_companion_memory(uuid,uuid,text,jsonb,uuid,timestamp with time zone,integer,timestamp with time zone)','EXECUTE') then raise exception 'authenticated can forge companion memory refreshes'; end if;
+  if not has_function_privilege('service_role','public.refresh_companion_memory(uuid,uuid,text,jsonb,uuid,timestamp with time zone,integer,timestamp with time zone)','EXECUTE') then raise exception 'service role cannot refresh companion memory'; end if;
+  if has_function_privilege('authenticated','public.start_companion_dm(uuid,uuid,text)','EXECUTE') then raise exception 'authenticated can forge persona-started DMs'; end if;
   if has_table_privilege('authenticated','public.content_reports','INSERT') then raise exception 'authenticated can forge report identity directly'; end if;
+  if has_table_privilege('authenticated','public.feedback_submissions','SELECT')
+    or has_table_privilege('authenticated','public.feedback_submissions','INSERT')
+    or has_table_privilege('authenticated','public.feedback_submissions','UPDATE')
+    or has_table_privilege('authenticated','public.feedback_submissions','DELETE')
+  then raise exception 'authenticated can access feedback submissions directly'; end if;
+  if exists(
+    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace,
+      lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    where n.nspname='public' and p.proname='submit_feedback' and acl.grantee=0 and acl.privilege_type='EXECUTE'
+  ) then raise exception 'PUBLIC can submit feedback'; end if;
+  if has_function_privilege('anon','public.submit_feedback(public.feedback_type,text)','EXECUTE') then raise exception 'anonymous users can submit feedback'; end if;
+  if not has_function_privilege('authenticated','public.submit_feedback(public.feedback_type,text)','EXECUTE') then raise exception 'authenticated users cannot submit feedback'; end if;
+  if not has_function_privilege('service_role','public.submit_feedback(public.feedback_type,text)','EXECUTE') then raise exception 'service role cannot submit feedback'; end if;
   if has_table_privilege('authenticated','public.blocked_users','INSERT') then raise exception 'authenticated can forge block identity directly'; end if;
 end $$;
 
 do $$
+declare scheduled integer;
 begin
+  scheduled := public.reconcile_persona_engagements('2099-01-16'::date);
+  if scheduled <= 0 then raise exception 'persona reconciler did not create daily actions'; end if;
+  if public.reconcile_persona_engagements('2099-01-16'::date) <> 0 then
+    raise exception 'persona engagement reconciliation is not idempotent';
+  end if;
+  update public.ai_jobs job set status='cancelled',attempts=max_attempts,last_error='terminal test failure'
+  from public.social_ai_engagements engagement
+  where engagement.source='daily_quota' and engagement.kind='reply'
+    and engagement.scheduled_for>='2099-01-16'::timestamptz and engagement.scheduled_for<'2099-01-17'::timestamptz
+    and job.dedupe_key='social-action:'||engagement.dedupe_key
+    and job.id=(select candidate.id from public.ai_jobs candidate
+      join public.social_ai_engagements action on candidate.dedupe_key='social-action:'||action.dedupe_key
+      where action.source='daily_quota' and action.kind='reply'
+        and action.scheduled_for>='2099-01-16'::timestamptz and action.scheduled_for<'2099-01-17'::timestamptz
+      order by candidate.id limit 1);
+  if public.reconcile_persona_engagements('2099-01-16'::date) <> 1 then
+    raise exception 'persona engagement reconciliation did not revive one terminal eligible job';
+  end if;
+  if not exists(
+    select 1 from public.ai_jobs job join public.social_ai_engagements engagement
+      on job.dedupe_key='social-action:'||engagement.dedupe_key
+    where engagement.source='daily_quota' and engagement.kind='reply'
+      and engagement.scheduled_for>='2099-01-16'::timestamptz and engagement.scheduled_for<'2099-01-17'::timestamptz
+      and job.status='pending' and job.attempts=0 and engagement.state='planned'
+  ) then raise exception 'revived social action did not return to a clean planned state'; end if;
+  if exists(
+    select 1 from public.social_companions c
+    where c.active and (
+      select count(*) from public.social_ai_engagements e
+      where e.companion_id=c.id and e.source='daily_quota' and e.kind='reply'
+        and e.scheduled_for>='2099-01-16'::timestamptz and e.scheduled_for<'2099-01-17'::timestamptz
+    ) <> 3
+  ) then raise exception 'reconciler did not ensure three daily replies per active persona'; end if;
+  if exists(
+    select 1 from public.social_companions c
+    where c.active and (
+      select count(distinct p.companion_id)
+      from public.social_ai_engagements e join public.social_posts p on p.id=e.post_id
+      where e.companion_id=c.id and e.source='daily_quota' and e.kind='reply'
+        and e.scheduled_for>='2099-01-16'::timestamptz and e.scheduled_for<'2099-01-17'::timestamptz
+    ) < 2
+  ) then raise exception 'daily replies did not target two distinct persona authors'; end if;
+  if exists(
+    select 1 from public.social_companions c where c.active and (
+      select count(*) from public.social_ai_engagements e
+      where e.companion_id=c.id and e.source='daily_quota' and e.kind in ('reaction','repost')
+        and e.scheduled_for>='2099-01-16'::timestamptz and e.scheduled_for<'2099-01-17'::timestamptz
+    ) <> 2
+  ) then raise exception 'daily like/repost cap is not one of each per persona'; end if;
+end $$;
+
+do $$
+begin
+  if exists(select 1 from public.social_companions where active and posting_frequency < 3) then
+    raise exception 'an active persona can fall below the three-post daily minimum';
+  end if;
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='companion_user_memory' and column_name='reset_at'
+      and data_type='timestamp with time zone'
+  ) then raise exception 'companion memory is missing its reset barrier'; end if;
   if not exists(
     select 1 from information_schema.columns
     where table_schema='public' and table_name='tasks' and column_name='priority'
-      and data_type='smallint' and is_nullable='NO' and column_default='4'
-  ) then raise exception 'tasks are missing the required priority field'; end if;
+      and data_type='smallint' and is_nullable='YES' and column_default is null
+  ) then raise exception 'tasks are missing the optional priority field'; end if;
   if not has_column_privilege('authenticated','public.tasks','priority','INSERT') then raise exception 'authenticated cannot set task priority on creation'; end if;
   if not has_column_privilege('authenticated','public.tasks','priority','UPDATE') then raise exception 'authenticated cannot change task priority'; end if;
   if not exists(
@@ -93,6 +195,7 @@ begin
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_reactions_actor_created_idx') then raise exception 'missing profile likes index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='social_replies_author_created_idx') then raise exception 'missing profile replies index'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='ai_jobs_claim_idx') then raise exception 'missing job claim index'; end if;
+  if not exists(select 1 from pg_indexes where schemaname='public' and indexname='user_follows_followed_idx') then raise exception 'missing human follower count index'; end if;
   if has_function_privilege('authenticated', 'public.apply_companion_post_catalog()', 'EXECUTE') then
     raise exception 'authenticated users must not execute the internal companion catalog helper';
   end if;

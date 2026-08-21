@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, CheckCircle2, Globe2, Heart, LockKeyhole, MessageCircle, Pencil, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Globe2, Heart, LockKeyhole, MessageCircle, Pencil } from "lucide-react";
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
 import { ProfileFeedPost } from "@/components/profile/profile-feed-post";
+import { ProfileFollowButton } from "@/components/profile/profile-follow-button";
 import type { ReplyAuthor } from "@/components/social/reply-thread";
 import { Avatar } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/ui/logo";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
 import { companions as previewCompanions } from "@/data/demo";
+import { assertDatabase } from "@/lib/server/http";
 import { signPostMediaByPath } from "@/lib/server/post-media";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
@@ -58,6 +61,8 @@ const previewProfile: UserProfile = {
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
+
+const previewHumanFollowerCount = 3;
 
 const previewPosts: FeedPost[] = [{
   id: "preview-win",
@@ -236,7 +241,9 @@ export default async function ProfilePage({
   let progress = previewProgress;
   let postCount = previewPosts.length;
   let completionCount = previewPosts.length;
-  let followerCount = previewCompanions.length;
+  let humanFollowerCount = previewHumanFollowerCount;
+  let aiFollowerCount = previewCompanions.length;
+  let viewerFollowsProfile = false;
   let isOwner = true;
   let currentUserId: string | null = "preview-user";
   let replyAuthor: ReplyAuthor | null = {
@@ -291,17 +298,22 @@ export default async function ProfilePage({
         countQuery = countQuery.eq("visibility", "public");
         postCountQuery = postCountQuery.eq("visibility", "public");
       }
-      const [countResult, postCountResult, companionCountResult] = await Promise.all([
+      const [countResult, postCountResult, companionCountResult, followSummaryResult] = await Promise.all([
         countQuery,
         postCountQuery,
         supabase
           .from("social_companions")
           .select("id", { count: "exact", head: true })
           .eq("active", true),
+        supabase.rpc("get_profile_follow_summary", { p_user_id: profile.id }),
       ]);
       postCount = postCountResult.count ?? 0;
       completionCount = countResult.count ?? 0;
-      followerCount = companionCountResult.count ?? 0;
+      aiFollowerCount = companionCountResult.count ?? 0;
+      const followSummary = assertDatabase(followSummaryResult)?.[0];
+      if (!followSummary) throw new Error("Profile follow summary unavailable.");
+      humanFollowerCount = followSummary.follower_count;
+      viewerFollowsProfile = followSummary.viewer_follows;
 
       if (selectedTab === "posts") {
         let postQuery = supabase
@@ -406,6 +418,7 @@ export default async function ProfilePage({
           <div className="-mt-14 flex items-end justify-between gap-4">
             <span className="relative z-10 rounded-full bg-canvas p-1.5"><Avatar initials={profileInitials} avatarUrl={profile.avatar_url} name={`${displayName}'s profile photo`} size="xl" /></span>
             {isOwner && <Link href={`/u/${profile.username}/edit`} className="btn btn-secondary mb-1"><Pencil size={16} /> Edit profile</Link>}
+            {!isOwner && currentUserId && profile.profile_visibility === "public" && <ProfileFollowButton userId={profile.id} profileName={displayName} initialFollowing={viewerFollowsProfile} />}
           </div>
           <div className="mt-3">
             <div className="flex items-center gap-2"><h2 id="profile-name" className="display text-2xl font-bold">{displayName}</h2>{profile.profile_visibility === "private" && <LockKeyhole size={17} className="text-muted" aria-label="Private profile" />}</div>
@@ -422,7 +435,8 @@ export default async function ProfilePage({
             <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
               <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{completionCount}</dd></div>
               <div className="flex gap-1.5"><dt className="text-muted">Momentum</dt><dd className="font-bold">{profile.current_streak} days</dd></div>
-              <div><dt className="sr-only">AI followers</dt><dd><Link href="/companions" aria-label={`View ${followerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{followerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
+              <div><dt className="sr-only">Human followers</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></dd></div>
+              <div><dt className="sr-only">AI followers</dt><dd><Link href="/companions" aria-label={`View ${aiFollowerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{aiFollowerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
             </dl>
           </> : <div className="mt-5 rounded-2xl border border-line bg-surface p-5"><div className="flex items-center gap-2 font-bold"><LockKeyhole size={18} /> This profile is private</div><p className="mt-2 text-sm leading-6 text-muted">Only {displayName} can view this social timeline. Public tasks and private posts are not shown here.</p></div>}
         </div>
@@ -441,7 +455,7 @@ export default async function ProfilePage({
 
         {selectedTab === "posts" && <section aria-label={`${displayName}'s posts`}>
           {posts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} />)}
-          {!posts.length && <div className="border-b border-line p-10 text-center"><Sparkles className="mx-auto text-brand" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">Shared wins and progress updates will appear here.</p></div>}
+          {!posts.length && <div className="border-b border-line p-10 text-center"><LogoMark size={40} className="mx-auto" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">Shared wins and progress updates will appear here.</p></div>}
         </section>}
 
         {selectedTab === "replies" && <section aria-label={`${displayName}'s replies`}>
@@ -461,7 +475,7 @@ export default async function ProfilePage({
                 {author.isAI && <AIBadge />}
                 {author.username && <span className="text-muted">@{author.username}</span>}
               </div>
-              <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted">{reply.post.content}</p>
+              {reply.post.content && <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted">{reply.post.content}</p>}
               {reply.post.task_title && <p className="mt-2 text-sm font-bold">{reply.post.task_title}</p>}
             </Link>
           </article>; })}

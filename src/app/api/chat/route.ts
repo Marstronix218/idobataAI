@@ -70,10 +70,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApi(async () => {
-    const { supabase } = await authed(request);
+    const { user, supabase } = await authed(request);
     // Without this, one account could open a thread against every other user,
     // landing in each of their chat lists without ever sending a message.
-    await enforceRateLimit(supabase, "thread:create", 20, 3600);
+    await enforceRateLimit(user.id, "thread:create", 20, 3600);
     const input = await parseJson(request, createThreadSchema);
     const thread = assertDatabase(await supabase.rpc("get_or_create_chat_thread", {
       p_user_id: input.userId ?? null,

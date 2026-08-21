@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, Bot, MailPlus, Search, Send, Sparkles, UserRound, X } from "lucide-react";
+import { ArrowLeft, Bot, MailPlus, Search, Send, UserRound, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/ui/logo";
 import { AIBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import type { ChatContact, ChatMessage, ChatPeer, ChatThread, ChatThreadDetail, ChatThreadSummary } from "@/types";
@@ -391,7 +392,7 @@ export function ChatPanel() {
             </span>
           </button>;
         })}
-        {!visibleThreads.length && !loading && <div className="px-6 py-12 text-center"><Sparkles className="mx-auto text-brand" size={24} /><h2 className="display mt-4 text-lg font-bold">{query ? "No conversations found" : "Your inbox is quiet"}</h2><p className="mt-2 text-sm leading-6 text-muted">{query ? "Try another name or message." : "Start a private chat with a person or a clearly labeled AI profile."}</p><button type="button" className="btn btn-primary mt-5" onClick={() => setNewChatOpen(true)}>New conversation</button></div>}
+        {!visibleThreads.length && !loading && <div className="px-6 py-12 text-center"><LogoMark size={36} className="mx-auto" /><h2 className="display mt-4 text-lg font-bold">{query ? "No conversations found" : "Your inbox is quiet"}</h2><p className="mt-2 text-sm leading-6 text-muted">{query ? "Try another name or message." : "Start a private chat with a person or a clearly labeled AI profile."}</p><button type="button" className="btn btn-primary mt-5" onClick={() => setNewChatOpen(true)}>New conversation</button></div>}
       </div>
     </section>
 

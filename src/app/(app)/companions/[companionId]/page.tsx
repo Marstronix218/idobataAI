@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, Check, Heart, MessageCircle, Sparkles, Volume2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Heart, MessageCircle, Volume2 } from "lucide-react";
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
+import { CompanionRelationshipControls, type CompanionRelationshipState } from "@/components/companions/companion-relationship-controls";
 import { Avatar } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/ui/logo";
 import { AIBadge } from "@/components/ui/status";
 import { AI_DAILY_POST_GOAL, companionCompletionPosts } from "@/data/companion-posts";
 import { companions as previewCatalog } from "@/data/demo";
@@ -44,6 +46,7 @@ export default async function CompanionProfilePage({
   let companion: SocialCompanion | null = null;
   let companionPosts: CompanionPost[] = [];
   let postCount = 0;
+  let relationship: CompanionRelationshipState | null = null;
 
   if (useDatabase) {
     if (!/^[a-z0-9-]{2,40}$/.test(slug)) notFound();
@@ -51,6 +54,15 @@ export default async function CompanionProfilePage({
     const { data } = await supabase.from("social_companions").select("*").eq("slug", slug).eq("active", true).maybeSingle();
     companion = data;
     if (companion) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: ownRelationship } = await supabase.from("user_companion_relationships")
+          .select("user_followed_at, companion_follow_state, dm_opt_in")
+          .eq("user_id", user.id)
+          .eq("companion_id", companion.id)
+          .maybeSingle();
+        relationship = ownRelationship;
+      }
       const { data: posts, count } = await supabase.from("social_posts")
         .select("id, content, task_title, category, created_at", { count: "exact" })
         .eq("companion_id", companion.id).eq("kind", "ai_completion")
@@ -121,11 +133,11 @@ export default async function CompanionProfilePage({
   return <AppTabLayout>
     <div className="min-w-0 border-x border-line bg-canvas">
       <header className="sticky top-0 z-20 flex min-h-14 items-center gap-4 border-b border-line bg-canvas/88 px-4 backdrop-blur-xl">
-        <Link href="/companions" className="icon-btn border-transparent bg-transparent" aria-label="Back to AI followers"><ArrowLeft size={19} /></Link>
+        <Link href="/companions" className="icon-btn border-transparent bg-transparent" aria-label="Back to AI personas"><ArrowLeft size={19} /></Link>
         <div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate font-bold">{companion.name}</h1><AIBadge /></div><p className="text-xs text-muted">{postCount} {postCount === 1 ? "post" : "posts"}</p></div>
       </header>
 
-      {!useDatabase && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> This AI follower profile uses demo content.</div>}
+      {!useDatabase && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> This socially active AI persona profile uses demo content.</div>}
 
       <section aria-labelledby="profile-name">
         <div className="relative h-[84px] overflow-hidden bg-[linear-gradient(125deg,var(--brand-soft),var(--community-soft))] sm:h-[108px]">
@@ -151,6 +163,7 @@ export default async function CompanionProfilePage({
             <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{postCount}</dd></div>
             <div className="flex gap-1.5"><dt className="text-muted">Daily pace</dt><dd className="font-bold">{companion.posting_frequency} {companion.posting_frequency === 1 ? "post" : "posts"}</dd></div>
           </dl>
+          <CompanionRelationshipControls companionId={companion.id} companionName={companion.name} initialRelationship={relationship} />
         </div>
       </section>
 
@@ -172,17 +185,19 @@ export default async function CompanionProfilePage({
           {post.task_title && <div className="mt-3 rounded-2xl border border-line bg-surface/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">Completed</p><h3 className="mt-0.5 font-bold">{post.task_title}</h3><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}</div></div>}
           <div className="mt-3 flex items-center gap-8 text-sm text-muted" aria-label="Post engagement"><span className="flex items-center gap-2"><MessageCircle size={17} /> {post.reply_count}</span><span className="flex items-center gap-2"><Heart size={17} /> {post.reaction_count}</span></div>
         </article>)}
-        {!companionPosts.length && <div className="border-b border-line p-10 text-center"><Sparkles className="mx-auto text-community" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">The next daily completion will appear here after its scheduled time.</p></div>}
+        {!companionPosts.length && <div className="border-b border-line p-10 text-center"><LogoMark size={40} className="mx-auto" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">The next daily completion will appear here after its scheduled time.</p></div>}
       </section> : <section aria-label={`About ${companion.name}`}>
         <div className="border-b border-line p-4 sm:p-5">
           <h2 className="display text-xl font-bold">Writing style</h2>
           <p className="mt-3 leading-7 text-muted">{companion.writing_style}</p>
         </div>
         <div className="border-b border-line p-4 sm:p-5">
-          <h2 className="display text-xl font-bold">How {companion.name} may participate</h2>
+          <h2 className="display text-xl font-bold">How {companion.name} participates socially</h2>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-muted">{[
-            "Posts one task completion at a varied time each day",
-            "Keeps generated replies concise and pressure-free",
+            "Contributes toward at least three original AI persona posts each day",
+            "Contributes toward at least three AI replies each day across at least two distinct personas",
+            "May follow up in human threads or repost relevant public progress",
+            "Keeps all generated replies concise, pressure-free, and visibly labeled as AI",
             companion.safety_instructions,
             "Steps back from unsafe or reported content",
           ].map((item) => <li key={item} className="flex gap-2"><Check size={16} className="mt-1 shrink-0 text-success" />{item}</li>)}</ul>

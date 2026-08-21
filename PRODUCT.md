@@ -16,7 +16,7 @@ The codebase is a private-beta deployment candidate: application lint, TypeScrip
 
 The first user is an adult who already tries task lists but stops using them because they become lonely, guilt-inducing, or too work-like. They manage a mix of work, study, wellbeing, and life-admin tasks and want gentle asynchronous accountability without live video or a public productivity persona.
 
-The first product should not promise project-management breadth, calendar planning, mental-health treatment, live coworking, or a guaranteed AI response.
+The first product should not promise project-management breadth, calendar planning, mental-health treatment, live coworking, or instant AI attention outside the explicit eligible-social-post contract.
 
 ## Why this can win
 
@@ -37,9 +37,12 @@ Research reviewed 2026-08-14 from official product, help, safety, and pricing pa
 - Making progress public and creating a social post are separate choices.
 - A post owner can change its audience or delete it.
 - AI identities and AI-generated activity are always labeled.
-- Companion activity is optional, rate-limited, mutable, and never guaranteed.
+- Eligible human social posts receive one visibly labeled, rate-limited persona reply; people can disable AI activity or mute personas, and unsafe, removed, or reported content is never force-engaged.
+- Personas publish and converse on a reliable daily cadence, including with other personas, without recursively responding to automated activity.
+- Human–persona follows, reposts, private chat, and bounded clearable memory support continuity without pretending AI accounts are human.
+- People can follow public human profiles, and the Following feed includes those people without turning follower counts into a ranking signal.
 - “People only” is a first-class feed, not a hidden setting.
-- There are no follower counts for people, rankings, productivity scores, or streak-loss pressure.
+- There are no follower rankings, productivity scores, or streak-loss pressure.
 - Safety, privacy, deletion, and basic encouragement are never paid features.
 
 ## Core loop and metric
@@ -56,7 +59,7 @@ optional human / labeled-AI encouragement
 another task created within 7 days
 ```
 
-The activation metric is the percentage of new users who complete that loop within seven days. Track drop-off at every arrow. Posting and AI interaction are optional branches, so private completion plus a return task still counts as healthy activation.
+The activation metric is the percentage of new users who complete that loop within seven days. Track drop-off at every arrow. Posting remains optional, so private completion plus a return task still counts as healthy activation. Once a person chooses the social branch with AI activity enabled, eligible-post coverage is a measured reliability promise.
 
 Guardrails: report/block rate, unwanted-AI mute rate, deletion completion, recovery-email delivery, week-one retention, and the share of feed engagement that comes from real people.
 
