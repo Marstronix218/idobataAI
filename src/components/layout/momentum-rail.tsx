@@ -31,7 +31,10 @@ function isToday(value: string | null) {
 
 function dueTime(value: string | null) {
   if (!value) return "Today";
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  const date = new Date(value);
+  // Due dates are date-only; do not expose their noon storage sentinel as a deadline time.
+  date.setHours(0, 0, 0, 0);
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 export function MomentumRail() {

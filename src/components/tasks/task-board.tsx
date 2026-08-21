@@ -29,7 +29,7 @@ import { useDialog } from "@/lib/client/use-dialog";
 import type { Task, TaskCategory, TaskPriority, UserProfile } from "@/types";
 
 type Filter = "Today" | "Upcoming" | "All" | "Completed";
-type TaskGroup = { key: string; title: string; hint: string; tasks: Task[] };
+type TaskGroup = { key: string; title: string; tasks: Task[] };
 
 const EDIT_CATEGORIES_VALUE = "__edit_categories__";
 const priorityOptions: Array<{ value: TaskPriority; label: string }> = [
@@ -115,21 +115,20 @@ function priorityTitle(priority: TaskPriority) {
 function groupsFor(filter: Filter, tasks: Task[]): TaskGroup[] {
   if (filter === "Today") {
     return [
-      { key: "overdue", title: "Overdue", hint: "Still worth doing", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() < dayBoundary()) },
-      { key: "today", title: "Today", hint: "Your next clear steps", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() >= dayBoundary()) },
+      { key: "overdue", title: "Overdue", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() < dayBoundary()) },
+      { key: "today", title: "Today", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() >= dayBoundary()) },
     ].filter((group) => group.tasks.length);
   }
   if (filter === "All") {
     return [
-      { key: "today", title: "Today", hint: "Due now", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() <= dayBoundary(0, true)) },
-      { key: "upcoming", title: "Upcoming", hint: "Planned ahead", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() > dayBoundary(0, true)) },
-      { key: "anytime", title: "Anytime", hint: "No date yet", tasks: tasks.filter((task) => !task.due_at) },
+      { key: "today", title: "Today", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() <= dayBoundary(0, true)) },
+      { key: "upcoming", title: "Upcoming", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() > dayBoundary(0, true)) },
+      { key: "anytime", title: "Anytime", tasks: tasks.filter((task) => !task.due_at) },
     ].filter((group) => group.tasks.length);
   }
   return [{
     key: filter.toLowerCase(),
     title: filter === "Completed" ? "Completed" : "Upcoming",
-    hint: filter === "Completed" ? "Ready to revisit or post" : "What is coming next",
     tasks,
   }].filter((group) => group.tasks.length);
 }
@@ -502,7 +501,7 @@ export function TaskBoard() {
       {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2><p className="mt-1 text-sm text-muted">It stays off the feed unless you share it.</p><div className="mt-3 flex flex-wrap gap-2"><Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-secondary">Share</Link><button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
 
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
-        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.hint} · {group.tasks.length}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">{task.priority && <span className="badge badge-priority" title={priorityTitle(task.priority)}>Priority {task.priority}</span>}{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Share</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
+        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.tasks.length} {group.tasks.length === 1 ? "task" : "tasks"}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">{task.priority && <span className="badge badge-priority" title={priorityTitle(task.priority)}>Priority {task.priority}</span>}{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Share</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
       </section>
       <StatusMessage message={categoryManagerOpen ? "" : announcement} tone={categoryManagerOpen ? "status" : announcementTone} className={justCompleted ? "sr-only" : ""} onRetry={announcementTone === "error" && !categoryManagerOpen ? () => void load() : undefined} />
     </div>
@@ -532,9 +531,27 @@ export function TaskBoard() {
             </div>
           </div>
           <div><label className="field-label" htmlFor="edit-due">Due date</label><input className="field" id="edit-due" name="dueAt" type="date" defaultValue={editing.due_at?.slice(0, 10) ?? ""} /></div>
-          <div><label className="field-label" htmlFor="edit-priority">Priority <span className="font-medium normal-case tracking-normal text-muted">(optional)</span></label><select className="field" id="edit-priority" name="priority" defaultValue={editing.priority ?? ""}><option value="">No priority</option>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-          <div><label className="field-label" htmlFor="edit-recurring">Repeat</label><select className="field" id="edit-recurring" name="recurrenceRule" defaultValue={editing.recurrence_rule ?? ""}><option value="">Does not repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select></div>
-          <div><label className="field-label" htmlFor="edit-visibility">Visibility</label><select className="field" id="edit-visibility" name="visibility" defaultValue={editing.visibility}><option value="private">Private</option><option value="public">Public progress</option></select></div>
+          <div>
+            <label className="field-label" htmlFor="edit-priority">Priority <span className="font-medium normal-case tracking-normal text-muted">(optional)</span></label>
+            <div className="relative">
+              <select className="field field-suffixed appearance-none" id="edit-priority" name="priority" defaultValue={editing.priority ?? ""}><option value="">No priority</option>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+              <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+            </div>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="edit-recurring">Repeat</label>
+            <div className="relative">
+              <select className="field field-suffixed appearance-none" id="edit-recurring" name="recurrenceRule" defaultValue={editing.recurrence_rule ?? ""}><option value="">Does not repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select>
+              <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+            </div>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="edit-visibility">Visibility</label>
+            <div className="relative">
+              <select className="field field-suffixed appearance-none" id="edit-visibility" name="visibility" defaultValue={editing.visibility}><option value="private">Private</option><option value="public">Public progress</option></select>
+              <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+            </div>
+          </div>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">Priority is optional. Posting remains a separate choice after completion.</p>
         {editError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm font-bold text-danger"><span className="min-w-0 flex-1 break-words">{editError}</span></div>}

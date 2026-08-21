@@ -21,6 +21,33 @@ describe("TaskBoard", () => {
     expect(screen.queryByText(/XP/)).not.toBeInTheDocument();
   });
 
+  it("labels task groups with task counts instead of guidance copy", () => {
+    render(<TaskBoard />);
+
+    for (const title of ["Write the release note", "Send the follow-up"]) {
+      fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: title } });
+      fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    }
+
+    expect(screen.getByRole("heading", { name: "Today" }).parentElement).toHaveTextContent("3 tasks");
+    expect(screen.queryByText("Your next clear steps")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Upcoming/ }));
+    expect(screen.getByRole("heading", { name: "Upcoming" }).parentElement).toHaveTextContent("1 task");
+    expect(screen.queryByText("What is coming next")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /All/ }));
+    expect(screen.getByRole("heading", { name: "Today" }).parentElement).toHaveTextContent("3 tasks");
+    expect(screen.getByRole("heading", { name: "Upcoming" }).parentElement).toHaveTextContent("1 task");
+    expect(screen.getByRole("heading", { name: "Anytime" }).parentElement).toHaveTextContent("1 task");
+    expect(screen.queryByText("Due now")).not.toBeInTheDocument();
+    expect(screen.queryByText("Planned ahead")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Completed/ }));
+    expect(screen.getByRole("heading", { name: "Completed" }).parentElement).toHaveTextContent("1 task");
+    expect(screen.queryByText("Ready to revisit or post")).not.toBeInTheDocument();
+  });
+
   it("captures a dated recurring chore without a separate chore column", () => {
     render(<TaskBoard />);
 
@@ -147,6 +174,29 @@ describe("TaskBoard", () => {
     expect(screen.getByLabelText("Repeat schedule")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Priority (optional)")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Filter by category")).toHaveClass("field-prefixed", "field-suffixed");
+  });
+
+  it("aligns every edit-task dropdown arrow", () => {
+    render(<TaskBoard />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Draft the project kickoff outline" }));
+
+    const editDialog = screen.getByRole("dialog", { name: "Edit task" });
+    const dropdowns = [
+      within(editDialog).getByRole("combobox", { name: "Category (optional)" }),
+      within(editDialog).getByRole("combobox", { name: "Priority (optional)" }),
+      within(editDialog).getByRole("combobox", { name: "Repeat" }),
+      within(editDialog).getByRole("combobox", { name: "Visibility" }),
+    ];
+
+    for (const dropdown of dropdowns) {
+      expect(dropdown).toHaveClass("field-suffixed", "appearance-none");
+      expect(dropdown.parentElement).toHaveClass("relative");
+      const arrow = dropdown.parentElement?.querySelector("svg");
+      expect(arrow).toHaveClass("absolute", "right-3", "top-1/2", "-translate-y-1/2");
+      expect(arrow).toHaveAttribute("width", "16");
+      expect(arrow).toHaveAttribute("height", "16");
+    }
   });
 
   it("keeps the quick controls stacked through tablet widths before using the roomy desktop grid", () => {
