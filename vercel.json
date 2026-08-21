@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/cron/companions", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/companions", "schedule": "5 0 * * *" },
     { "path": "/api/cron/rollover", "schedule": "10 0 * * *" },
-    { "path": "/api/workers/ai?limit=25", "schedule": "*/5 * * * *" }
+    { "path": "/api/workers/ai?limit=25", "schedule": "35 0 * * *" }
   ]
 }
