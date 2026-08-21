@@ -14,13 +14,14 @@ export async function GET() {
     const supabase = createClient(supabaseUrl(), supabaseAnonKey(), {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { error } = await supabase
+    const { status } = await supabase
       .from("social_companions")
       .select("id", { count: "exact", head: true })
       .abortSignal(AbortSignal.timeout(3_000))
       .limit(1);
-    // RLS refusing an anonymous read still proves the database answered.
-    database = error && !error.code ? "unavailable" : "ok";
+    // Any HTTP response proves the database answered. A transport failure uses
+    // status 0, while RLS can intentionally return an HTTP error to anonymous users.
+    database = status > 0 ? "ok" : "unavailable";
   } catch {
     database = "unavailable";
   }
