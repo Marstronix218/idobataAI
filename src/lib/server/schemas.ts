@@ -55,6 +55,12 @@ export const replySchema = z.object({
 
 export const reactionSchema = z.object({ reaction: z.literal("like") }).strict();
 
+export const quoteRepostSchema = z.object({
+  content: clean(500),
+  visibility: z.enum(["private", "public"]),
+  idempotencyKey: clean(160),
+}).strict();
+
 export const postUpdateSchema = z.object({
   visibility: z.enum(["private", "public"]),
 }).strict();

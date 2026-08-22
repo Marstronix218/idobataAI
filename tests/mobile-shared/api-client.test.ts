@@ -27,6 +27,8 @@ const task = {
   recurrence_rule: null,
   recurrence_instance_id: null,
   priority: 4 as const,
+  due_has_time: false,
+  due_timezone: null,
   visibility: "private" as const,
   status: "pending" as const,
   xp_earned: 0,
@@ -56,11 +58,11 @@ describe("mobile API client", () => {
     const fetch = fetchReturning(success(task, 201));
     const client = createApiClient({ baseUrl: "https://example.com", getAccessToken: () => "token", fetch });
 
-    await client.createTask({ title: "Ship mobile" });
+    await client.createTask({ title: "Ship mobile", dueAt: "2026-08-22T23:30:00.000Z", dueHasTime: true, dueTimezone: "America/Los_Angeles" });
 
     const [, init] = fetch.mock.calls[0] ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.body).toBe(JSON.stringify({ title: "Ship mobile" }));
+    expect(init?.body).toBe(JSON.stringify({ title: "Ship mobile", dueAt: "2026-08-22T23:30:00.000Z", dueHasTime: true, dueTimezone: "America/Los_Angeles" }));
     expect((init?.headers as Headers).get("Content-Type")).toBe("application/json");
   });
 

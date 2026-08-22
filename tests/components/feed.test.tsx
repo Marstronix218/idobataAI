@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,6 +69,51 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.getAllByRole("button", { name: /^Repost/ })).toHaveLength(previewFeed.length);
     expect(screen.queryByRole("button", { name: "View conversation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Cheer|Respect|Relatable|Inspired/ })).not.toBeInTheDocument();
+  });
+
+  it("opens X-style repost options with complete menu keyboard behavior", async () => {
+    render(<Feed />);
+    const trigger = screen.getAllByRole("button", { name: /^Repost/ })[0];
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("menu", { name: /Repost options for/ })).toBeVisible();
+    const repost = screen.getByRole("menuitem", { name: "Repost" });
+    const quote = screen.getByRole("menuitem", { name: "Quote repost" });
+    await waitFor(() => expect(repost).toHaveFocus());
+
+    fireEvent.keyDown(repost, { key: "ArrowDown" });
+    expect(quote).toHaveFocus();
+    fireEvent.keyDown(quote, { key: "Home" });
+    expect(repost).toHaveFocus();
+    fireEvent.keyDown(repost, { key: "End" });
+    expect(quote).toHaveFocus();
+    fireEvent.keyDown(quote, { key: "Escape" });
+
+    expect(screen.queryByRole("menu", { name: /Repost options for/ })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    const firstItem = await screen.findByRole("menuitem", { name: "Repost" });
+    await waitFor(() => expect(firstItem).toHaveFocus());
+    fireEvent.keyDown(firstItem, { key: "Tab", shiftKey: true });
+
+    expect(screen.queryByRole("menu", { name: /Repost options for/ })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("returns focus to the repost trigger when the quote composer closes", async () => {
+    render(<Feed />);
+    const source = screen.getByRole("article", { name: "Open post by Mina" });
+    const trigger = within(source).getByRole("button", { name: /^Repost/ });
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Quote repost" }));
+    const dialog = screen.getByRole("dialog", { name: "Quote repost" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog", { name: "Quote repost" })).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("reports AI posts from the top-right overflow menu", () => {
@@ -179,10 +224,34 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(repost).toHaveAttribute("aria-pressed", "false");
     expect(repost).toHaveTextContent("0");
     fireEvent.click(repost);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Repost" }));
 
     expect(screen.getAllByRole("button", { name: /^Repost/ })[0]).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("button", { name: /^Repost/ })[0]).toHaveTextContent("1");
     expect(screen.getByText("Repost saved. Preview only.")).toBeInTheDocument();
+  });
+
+  it("creates a quote repost with commentary and an explicit audience", async () => {
+    render(<Feed />);
+    const source = screen.getByRole("article", { name: "Open post by Mina" });
+
+    fireEvent.click(within(source).getByRole("button", { name: /^Repost/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Quote repost" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Quote repost" });
+    const comment = within(dialog).getByRole("textbox", { name: "Add a comment" });
+    const submit = within(dialog).getByRole("button", { name: "Post" });
+    expect(within(dialog).getByRole("combobox", { name: "Audience" })).toHaveValue("public");
+    expect(within(dialog).getByRole("link", { name: "View quoted post by Mina" })).toBeVisible();
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(comment, { target: { value: "A useful reminder for tomorrow." } });
+    fireEvent.click(submit);
+
+    expect(await screen.findByText("Quote repost posted. Preview only.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Quote repost" })).not.toBeInTheDocument();
+    expect(screen.getByText("A useful reminder for tomorrow.")).toBeVisible();
+    expect(screen.getByText("Quote repost")).toBeVisible();
   });
 
   it("announces a saved reaction to assistive technology", () => {
@@ -262,8 +331,8 @@ describe("Feed", { timeout: 15_000 }, () => {
   it("links generated posts to the correct AI profile", () => {
     render(<Feed />);
 
-    expect(screen.getByRole("link", { name: "Nova Reyes" })).toHaveAttribute("href", "/companions/nova-reyes");
-    expect(screen.getByRole("link", { name: "Pixel" })).toHaveAttribute("href", "/companions/pixel");
+    expect(screen.getByRole("link", { name: "Nova Reyes" })).toHaveAttribute("href", "/ai-personas/nova-reyes");
+    expect(screen.getByRole("link", { name: "Pixel" })).toHaveAttribute("href", "/ai-personas/pixel");
   });
 
   it("supports arrow-key navigation between feed tabs", () => {

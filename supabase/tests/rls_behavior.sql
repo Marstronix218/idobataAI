@@ -13,8 +13,10 @@ insert into public.social_companions(id,slug,name,personality,writing_style,inte
 values
   ('10000000-0000-4000-8000-000000000001','test-one','Test One','Specific and calm.','Brief.','{}','No pressure.',array['One safe fallback.'],array['One safe daily note.'],true,3,
     '[{"task_title":"Test one A","category":"Test","content":"One A"},{"task_title":"Test one B","category":"Test","content":"One B"},{"task_title":"Test one C","category":"Test","content":"One C"}]'::jsonb),
-  ('10000000-0000-4000-8000-000000000002','test-two','Test Two','Practical and kind.','Plainspoken.','{}','No pressure.',array['Another safe fallback.'],array['Another safe daily note.'],false,0,'[]'::jsonb),
-  ('10000000-0000-4000-8000-000000000003','test-three','Test Three','Thoughtful and warm.','Concise.','{}','No pressure.',array['A third safe fallback.'],array['A third safe daily note.'],false,0,'[]'::jsonb)
+  ('10000000-0000-4000-8000-000000000002','test-two','Test Two','Practical and kind.','Plainspoken.','{}','No pressure.',array['Another safe fallback.'],array['Another safe daily note.'],true,3,
+    '[{"task_title":"Test two A","category":"Test","content":"Two A"},{"task_title":"Test two B","category":"Test","content":"Two B"},{"task_title":"Test two C","category":"Test","content":"Two C"}]'::jsonb),
+  ('10000000-0000-4000-8000-000000000003','test-three','Test Three','Thoughtful and warm.','Concise.','{}','No pressure.',array['A third safe fallback.'],array['A third safe daily note.'],true,3,
+    '[{"task_title":"Test three A","category":"Test","content":"Three A"},{"task_title":"Test three B","category":"Test","content":"Three B"},{"task_title":"Test three C","category":"Test","content":"Three C"}]'::jsonb)
 on conflict (id) do nothing;
 
 insert into public.tasks(id,owner_id,title,recurrence_rule,visibility,status)
@@ -129,6 +131,21 @@ do $$ begin
   end;
 end $$;
 
+-- A larger AI-follower set must not fan one human post out to multiple
+-- guaranteed persona replies.
+select set_config('app.companion_follow_transition','allowed',true);
+insert into public.user_companion_relationships(
+  user_id,companion_id,companion_follow_state,companion_follow_requested_at,companion_followed_at
+)
+select 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',companion.id,'following',now(),now()
+from public.social_companions companion
+where companion.id in (
+  '10000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000002',
+  '10000000-0000-4000-8000-000000000003'
+);
+select set_config('app.companion_follow_transition','',true);
+
 insert into public.social_posts(id,author_id,kind,visibility,content,idempotency_key)
 values
   ('aaaaaaaa-1000-4000-8000-000000000001','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','private','Private post','private-fixture'),
@@ -142,9 +159,38 @@ do $$ begin
   if exists(select 1 from public.social_ai_engagements where post_id='aaaaaaaa-1000-4000-8000-000000000004') then
     raise exception 'AI-authored post recursively enqueued persona engagement';
   end if;
-  if (select count(*) from public.social_ai_engagements where post_id='aaaaaaaa-1000-4000-8000-000000000002') <> 2 then
-    raise exception 'eligible human post did not enqueue exactly one guaranteed reply and ambient like';
-  end if;
+  if (
+    select count(*) from public.social_ai_engagements
+    where post_id='aaaaaaaa-1000-4000-8000-000000000002'
+      and source='human_post_guarantee' and kind='reply'
+  ) <> 1 then raise exception 'eligible human post did not cap guaranteed AI replies at one'; end if;
+  if (
+    select count(*) from public.social_ai_engagements
+    where post_id='aaaaaaaa-1000-4000-8000-000000000002'
+      and source='ambient' and kind='reaction'
+  ) <> 1 then raise exception 'eligible human post did not plan exactly one ambient like'; end if;
+end $$;
+
+delete from public.user_companion_relationships
+where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  and companion_id in (
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000003'
+  );
+
+do $$ begin
+  begin
+    insert into public.user_companion_relationships(
+      user_id,companion_id,companion_follow_state,companion_follow_requested_at
+    ) values(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      '10000000-0000-4000-8000-000000000001',
+      'pending',now()
+    );
+    raise exception 'direct companion follow transition bypassed the consent guard';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 set local role authenticated;
@@ -189,11 +235,111 @@ select public.set_human_reaction('aaaaaaaa-1000-4000-8000-000000000002','like');
 select public.set_human_reaction('aaaaaaaa-1000-4000-8000-000000000002','like');
 select public.set_human_repost('aaaaaaaa-1000-4000-8000-000000000002',true);
 select public.set_human_repost('aaaaaaaa-1000-4000-8000-000000000002',true);
+select public.publish_quote_repost('aaaaaaaa-1000-4000-8000-000000000002','Worth keeping in mind.','public','rls-quote-idempotency');
+select public.publish_quote_repost('aaaaaaaa-1000-4000-8000-000000000002','Worth keeping in mind.','public','rls-quote-idempotency');
 reset role;
 do $$ begin
   if (select count(*) from public.social_reactions where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') <> 1 then raise exception 'reaction uniqueness/upsert failed'; end if;
   if not exists(select 1 from public.social_reactions where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and reaction='like') then raise exception 'like upsert failed'; end if;
   if (select count(*) from public.social_reposts where post_id='aaaaaaaa-1000-4000-8000-000000000002' and actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') <> 1 then raise exception 'repost uniqueness/upsert failed'; end if;
+  if (select count(*) from public.social_posts where author_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and kind='human_quote' and quoted_post_id='aaaaaaaa-1000-4000-8000-000000000002') <> 1 then raise exception 'quote repost idempotency/reference failed'; end if;
+  if not exists(select 1 from public.social_posts where author_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and kind='human_quote' and content='Worth keeping in mind.' and visibility='public') then raise exception 'quote repost content/audience failed'; end if;
+end $$;
+
+-- Quote reposts must never turn an inaccessible source into readable content.
+-- User C exercises each rejection independently so these calls do not consume
+-- User B's post-publishing rate-limit budget used above.
+insert into public.social_posts(id,author_id,kind,visibility,content,content_status,idempotency_key)
+values
+  ('aaaaaaaa-1000-4000-8000-000000000005','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','public','Hidden source must stay hidden.','hidden','hidden-quote-source'),
+  ('aaaaaaaa-1000-4000-8000-000000000006','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','human_progress','public','Sensitive source text that must not be copied.','active','mutable-quote-source');
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+do $$ begin
+  begin
+    perform public.publish_quote_repost('aaaaaaaa-1000-4000-8000-000000000001','Private source quote.','public','reject-private-source');
+    raise exception 'private post was accepted as a quote source';
+  exception when no_data_found then null;
+  end;
+end $$;
+
+do $$ begin
+  begin
+    perform public.publish_quote_repost('aaaaaaaa-1000-4000-8000-000000000005','Hidden source quote.','public','reject-hidden-source');
+    raise exception 'hidden post was accepted as a quote source';
+  exception when no_data_found then null;
+  end;
+end $$;
+
+select public.set_user_block('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
+do $$ begin
+  begin
+    perform public.publish_quote_repost('aaaaaaaa-1000-4000-8000-000000000002','Blocked source quote.','public','reject-blocked-source');
+    raise exception 'blocked author post was accepted as a quote source';
+  exception when no_data_found then null;
+  end;
+end $$;
+select public.set_user_block('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', false);
+
+select public.set_companion_mute('10000000-0000-4000-8000-000000000001', true);
+do $$ begin
+  begin
+    perform public.publish_quote_repost('aaaaaaaa-1000-4000-8000-000000000004','Muted source quote.','public','reject-muted-source');
+    raise exception 'muted companion post was accepted as a quote source';
+  exception when no_data_found then null;
+  end;
+end $$;
+select public.set_companion_mute('10000000-0000-4000-8000-000000000001', false);
+
+select public.publish_quote_repost(
+  'aaaaaaaa-1000-4000-8000-000000000006',
+  'Commentary remains after source changes.',
+  'private',
+  'source-lifecycle'
+);
+reset role;
+
+update public.social_posts
+set visibility='private'
+where id='aaaaaaaa-1000-4000-8000-000000000006';
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+do $$ begin
+  if not exists(
+    select 1 from public.social_posts
+    where author_id=auth.uid() and kind='human_quote'
+      and content='Commentary remains after source changes.'
+  ) then raise exception 'quote disappeared when its source became private'; end if;
+  if exists(
+    select 1
+    from public.social_posts quote
+    join public.social_posts source on source.id=quote.quoted_post_id
+    where quote.author_id=auth.uid()
+      and quote.content='Commentary remains after source changes.'
+  ) then raise exception 'private quote source remained readable through its quote'; end if;
+end $$;
+reset role;
+
+delete from public.social_posts
+where id='aaaaaaaa-1000-4000-8000-000000000006';
+
+do $$ begin
+  if not exists(
+    select 1 from public.social_posts
+    where author_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      and kind='human_quote'
+      and content='Commentary remains after source changes.'
+      and quoted_post_id is null
+  ) then raise exception 'source deletion did not preserve the quote with a cleared reference'; end if;
+  if exists(
+    select 1 from public.social_posts
+    where author_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      and kind='human_quote'
+      and content like '%Sensitive source text%'
+  ) then raise exception 'quote copied stale source content into its own row'; end if;
 end $$;
 
 do $$
@@ -218,12 +364,25 @@ begin
   if not exists(select 1 from public.social_ai_engagements where id=selected_action and state='completed' and reply_id is not null) then
     raise exception 'action ledger did not record completed reply result';
   end if;
-  if not exists(select 1 from public.user_companion_relationships where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona and companion_follow_state='pending') then
-    raise exception 'reply to private-profile human did not request companion follow';
+  if exists(select 1 from public.user_companion_relationships where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona) then
+    raise exception 'AI reply silently created a companion relationship';
+  end if;
+  if exists(select 1 from public.notifications where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona and kind='follow') then
+    raise exception 'AI reply silently created a follow notification';
+  end if;
+
+  update public.user_profiles set profile_visibility='public'
+  where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  perform public.request_companion_follow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',persona);
+  perform public.request_companion_follow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',persona);
+  if (select count(*) from public.user_companion_relationships where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona and companion_follow_state='pending' and companion_followed_at is null) <> 1 then
+    raise exception 'explicit companion follow request was not consent-gated or idempotent';
   end if;
   if (select count(*) from public.notifications where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona and kind='follow') <> 1 then
-    raise exception 'private-profile follow request notification was not created exactly once';
+    raise exception 'explicit companion follow request notification was not idempotent';
   end if;
+  update public.user_profiles set profile_visibility='private'
+  where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 end $$;
 
 set local role authenticated;
@@ -233,6 +392,9 @@ declare persona uuid;
 begin
   select companion_id into persona from public.user_companion_relationships
     where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_follow_state='pending' limit 1;
+  if public.get_profile_ai_follower_count(auth.uid()) <> 0 then
+    raise exception 'pending companion request was counted as an AI follower';
+  end if;
   begin
     perform public.set_companion_dm_opt_in(persona,true);
     raise exception 'DM opt-in succeeded before mutual follow';
@@ -240,6 +402,9 @@ begin
     if sqlerrm='DM opt-in succeeded before mutual follow' then raise; end if;
   end;
   perform public.respond_companion_follow(persona,true);
+  if public.get_profile_ai_follower_count(auth.uid()) <> 1 then
+    raise exception 'accepted companion request was not counted as an AI follower';
+  end if;
   perform public.set_user_companion_follow(persona,true);
   perform public.set_companion_dm_opt_in(persona,true);
   if not exists(select 1 from public.user_companion_relationships where user_id=auth.uid() and companion_id=persona and user_followed_at is not null and companion_follow_state='following' and dm_opt_in) then
@@ -296,7 +461,7 @@ begin
   if not exists(
     select 1 from public.user_companion_relationships
     where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona and companion_follow_state='following'
-  ) then raise exception 'later reply reset an accepted private-profile follow request'; end if;
+  ) then raise exception 'later reply changed an explicit mutual-follow relationship'; end if;
 
   select version into memory_version from public.companion_user_memory
   where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and companion_id=persona;
@@ -354,6 +519,11 @@ do $$ begin
   if exists(select 1 from public.search_chat_contacts('user_c')) then
     raise exception 'private profile was enumerable through contact search';
   end if;
+  begin
+    perform public.get_profile_ai_follower_count('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    raise exception 'private AI follower count was readable';
+  exception when no_data_found then null;
+  end;
 end $$;
 reset role;
 
@@ -371,6 +541,38 @@ do $$ begin
     raise exception 'public profile was not findable through contact search';
   end if;
 end $$;
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+select public.set_user_block('cccccccc-cccc-4ccc-8ccc-cccccccccccc', true);
+do $$ begin
+  begin
+    perform public.get_profile_ai_follower_count('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    raise exception 'viewer-blocked AI follower count was readable';
+  exception when no_data_found then null;
+  end;
+end $$;
+select public.set_user_block('cccccccc-cccc-4ccc-8ccc-cccccccccccc', false);
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+select public.set_user_block('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', true);
+reset role;
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+do $$ begin
+  begin
+    perform public.get_profile_ai_follower_count('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    raise exception 'target-blocked AI follower count was readable';
+  exception when no_data_found then null;
+  end;
+end $$;
+reset role;
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+select public.set_user_block('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', false);
 reset role;
 
 -- Human follows are one-way, public-profile relationships. The database owns
@@ -468,6 +670,7 @@ update public.account_deletion_requests set user_id=null,user_fingerprint=encode
 delete from auth.users where id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 do $$ begin
   if exists(select 1 from public.user_profiles where id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') then raise exception 'profile did not cascade on auth deletion'; end if;
+  if exists(select 1 from public.social_posts where author_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') then raise exception 'quote posts did not cascade on author deletion'; end if;
   if exists(select 1 from public.social_reactions where actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') then raise exception 'reactions did not cascade on auth deletion'; end if;
   if exists(select 1 from public.social_reposts where actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') then raise exception 'reposts did not cascade on auth deletion'; end if;
   if exists(select 1 from public.user_follows where follower_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' or followed_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') then raise exception 'human follows did not cascade on auth deletion'; end if;
@@ -557,6 +760,123 @@ begin
   -- A non-recurring completed task must never be reopened.
   if exists(select 1 from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000003' and status='pending') then
     raise exception 'rollover reopened a task that does not repeat';
+  end if;
+
+  -- America/Los_Angeles enters daylight saving time on 2026-03-08. A
+  -- recurring 09:30 deadline must therefore move from 17:30 UTC to 16:30 UTC
+  -- while remaining 09:30 in its saved local zone.
+  insert into public.tasks(
+    id, owner_id, title, due_at, due_has_time, due_timezone,
+    recurrence_rule, recurrence_instance_id, visibility, status, completed_at
+  ) values (
+    'aaaaaaaa-0000-4000-8000-000000000005',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'DST recurring deadline',
+    '2026-03-07 17:30:00+00',
+    true,
+    'America/Los_Angeles',
+    'daily',
+    '2026-03-07',
+    'private',
+    'completed',
+    '2026-03-07 18:00:00+00'
+  );
+
+  if public.rollover_recurring_tasks(date '2026-03-08') <> 1 then
+    raise exception 'DST rollover did not reopen the exact recurring deadline';
+  end if;
+  select * into task from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000005';
+  if task.due_at <> timestamptz '2026-03-08 16:30:00+00' then
+    raise exception 'DST rollover shifted the recurring local wall-clock deadline';
+  end if;
+  if (task.due_at at time zone task.due_timezone)::time <> time '09:30' then
+    raise exception 'DST rollover did not preserve 09:30 in America/Los_Angeles';
+  end if;
+
+  -- 17:30 on August 21 in Los Angeles is already August 22 UTC. Completion
+  -- identity must still use the deadline's August 21 local occurrence so the
+  -- August 22 local occurrence can reopen normally.
+  insert into public.tasks(
+    id, owner_id, title, due_at, due_has_time, due_timezone,
+    recurrence_rule, visibility, status
+  ) values (
+    'aaaaaaaa-0000-4000-8000-000000000006',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'UTC boundary recurring deadline',
+    '2026-08-21 16:30:00+00',
+    true,
+    'America/Los_Angeles',
+    'daily',
+    'private',
+    'pending'
+  );
+  if public.rollover_recurring_tasks(date '2026-08-22') <> 0 then
+    raise exception 'UTC-boundary cron reopened an exact task before it was completed';
+  end if;
+  update public.tasks
+     set status='completed', completed_at='2026-08-22 00:30:00+00'
+   where id='aaaaaaaa-0000-4000-8000-000000000006';
+  select * into task from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000006';
+  if task.recurrence_instance_id <> '2026-08-21' then
+    raise exception 'UTC-boundary completion used the UTC date instead of its local occurrence';
+  end if;
+  if public.rollover_recurring_tasks(date '2026-08-23') <> 1 then
+    raise exception 'first cron after UTC-boundary completion skipped the next local occurrence';
+  end if;
+  select * into task from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000006';
+  if task.due_at <> timestamptz '2026-08-22 16:30:00+00' then
+    raise exception 'UTC-boundary rollover did not advance to the next local deadline';
+  end if;
+  if public.rollover_recurring_tasks(date '2026-08-23') <> 0 then
+    raise exception 'exact rollover rewrote an already reopened occurrence';
+  end if;
+
+  insert into public.tasks(
+    id, owner_id, title, due_at, due_has_time, due_timezone,
+    recurrence_rule, recurrence_instance_id, visibility, status, completed_at
+  ) values (
+    'aaaaaaaa-0000-4000-8000-000000000007',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'Weekday recurring deadline',
+    '2026-08-21 16:30:00+00',
+    true,
+    'America/Los_Angeles',
+    'weekdays',
+    '2026-08-21',
+    'private',
+    'completed',
+    '2026-08-22 00:30:00+00'
+  );
+  if public.rollover_recurring_tasks(date '2026-08-23') <> 1 then
+    raise exception 'first post-completion cron did not create the next local Monday occurrence';
+  end if;
+  if (select due_at from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000007')
+      <> timestamptz '2026-08-24 16:30:00+00' then
+    raise exception 'weekday rollover chose the wrong local due date';
+  end if;
+
+  insert into public.tasks(
+    id, owner_id, title, due_at, due_has_time, due_timezone,
+    recurrence_rule, recurrence_instance_id, visibility, status, completed_at
+  ) values (
+    'aaaaaaaa-0000-4000-8000-000000000008',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'Weekly recurring deadline',
+    '2026-08-19 16:30:00+00',
+    true,
+    'America/Los_Angeles',
+    'weekly',
+    '2026-W34',
+    'private',
+    'completed',
+    '2026-08-22 00:30:00+00'
+  );
+  if public.rollover_recurring_tasks(date '2026-08-23') <> 1 then
+    raise exception 'first post-completion cron did not create the next local due-weekday occurrence';
+  end if;
+  if (select due_at from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000008')
+      <> timestamptz '2026-08-26 16:30:00+00' then
+    raise exception 'weekly rollover did not preserve the due weekday and local time';
   end if;
 end $$;
 

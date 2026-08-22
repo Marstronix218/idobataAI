@@ -14,7 +14,13 @@ export async function PATCH(request: Request, { params }: Context) {
       ...(input.title !== undefined && { title: input.title }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.category !== undefined && { category: input.category }),
-      ...(input.dueAt !== undefined && { due_at: input.dueAt }),
+      ...(input.dueAt !== undefined
+        ? {
+            due_at: input.dueAt,
+            due_has_time: Boolean(input.dueAt && input.dueHasTime),
+            due_timezone: input.dueAt && input.dueHasTime ? input.dueTimezone ?? null : null,
+          }
+        : input.dueHasTime !== undefined && { due_has_time: false, due_timezone: null }),
       ...(input.recurrenceRule !== undefined && { recurrence_rule: input.recurrenceRule }),
       ...(input.priority !== undefined && { priority: input.priority }),
       ...(input.visibility !== undefined && { visibility: input.visibility }),

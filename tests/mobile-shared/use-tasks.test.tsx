@@ -13,6 +13,7 @@ vi.mock("../../apps/mobile/src/providers/api-provider", () => ({
 }));
 
 import { useTasks } from "../../apps/mobile/src/features/tasks/use-tasks";
+import { currentTimeZone, taskDeadlineLabel } from "../../apps/mobile/src/features/tasks/deadline";
 
 function task(id: string, priority: Task["priority"] = null): Task {
   return {
@@ -25,6 +26,8 @@ function task(id: string, priority: Task["priority"] = null): Task {
     recurrence_rule: null,
     recurrence_instance_id: null,
     priority,
+    due_has_time: false,
+    due_timezone: null,
     visibility: "private",
     status: "pending",
     xp_earned: 0,
@@ -48,6 +51,68 @@ describe("mobile task state", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.listTasks.mockResolvedValue([]);
+  });
+
+  it("creates a task with an optional exact deadline", async () => {
+    const dueAt = "2026-08-22T23:30:00.000Z";
+    const dueTimezone = currentTimeZone();
+    const created = { ...task("11111111-1111-4111-8111-111111111111"), title: "Outline the proposal", due_at: dueAt, due_has_time: true, due_timezone: dueTimezone };
+    api.createTask.mockResolvedValue(created);
+    const { result } = renderHook(() => useTasks());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let succeeded = false;
+    await act(async () => {
+      succeeded = await result.current.createTask("Outline the proposal", dueAt, true);
+    });
+
+    expect(succeeded).toBe(true);
+    expect(api.createTask).toHaveBeenCalledWith({ title: "Outline the proposal", dueAt, dueHasTime: true, dueTimezone, visibility: "private" });
+    expect(result.current.visibleTasks[0]).toMatchObject({ due_at: dueAt, due_has_time: true, due_timezone: dueTimezone });
+  });
+
+  it("updates a timed deadline label after its exact cutoff without shaming completed tasks", () => {
+    const timed = {
+      ...task("11111111-1111-4111-8111-111111111111"),
+      due_at: "2026-08-22T23:30:00.000Z",
+      due_has_time: true,
+      due_timezone: currentTimeZone(),
+    };
+
+    expect(taskDeadlineLabel(timed, Date.parse("2026-08-22T23:29:00.000Z"))).not.toContain("Overdue");
+    expect(taskDeadlineLabel(timed, Date.parse("2026-08-22T23:31:00.000Z"))).toContain("Overdue");
+    expect(taskDeadlineLabel({ ...timed, status: "completed" }, Date.parse("2026-08-22T23:31:00.000Z"))).not.toContain("Overdue");
+  });
+
+  it("sets and clears a deadline without changing task status", async () => {
+    const original = { ...task("11111111-1111-4111-8111-111111111111"), due_at: "2026-08-22T23:30:00.000Z", due_has_time: true, due_timezone: currentTimeZone() };
+    const updated = { ...original, due_at: null, due_has_time: false, due_timezone: null };
+    api.listTasks.mockResolvedValue([original]);
+    api.updateTask.mockResolvedValue(updated);
+    const { result } = renderHook(() => useTasks());
+    await waitFor(() => expect(result.current.visibleTasks).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.setTaskDeadline(original, null, false);
+    });
+
+    expect(api.updateTask).toHaveBeenCalledWith(original.id, { dueAt: null, dueHasTime: false, dueTimezone: null });
+    expect(result.current.visibleTasks[0]).toMatchObject({ due_at: null, due_has_time: false, due_timezone: null, status: "pending" });
+  });
+
+  it("rolls an optimistic deadline change back when the API rejects it", async () => {
+    const original = task("11111111-1111-4111-8111-111111111111");
+    api.listTasks.mockResolvedValue([original]);
+    api.updateTask.mockRejectedValue(new Error("Deadline update failed"));
+    const { result } = renderHook(() => useTasks());
+    await waitFor(() => expect(result.current.visibleTasks).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.setTaskDeadline(original, "2026-08-22T23:30:00.000Z", true);
+    });
+
+    expect(result.current.visibleTasks[0]).toEqual(original);
+    expect(result.current.mutationError).toBe("Deadline update failed");
   });
 
   it("keeps independent mutation guards until each request settles", async () => {

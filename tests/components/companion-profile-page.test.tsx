@@ -24,7 +24,7 @@ vi.mock("@/components/layout/momentum-rail", () => ({
   MomentumRail: () => null,
 }));
 
-import CompanionProfilePage from "@/app/(app)/companions/[companionId]/page";
+import CompanionProfilePage from "@/app/(app)/ai-personas/[companionId]/page";
 
 describe("CompanionProfilePage", () => {
   it("uses the companion slug for the preview avatar path", async () => {
@@ -41,9 +41,9 @@ describe("CompanionProfilePage", () => {
       params: Promise.resolve({ companionId: "moss" }),
     }));
 
-    expect(screen.getByRole("link", { name: "Back to AI personas" })).toHaveAttribute("href", "/companions");
+    expect(screen.getByRole("link", { name: "Back to AI personas" })).toHaveAttribute("href", "/ai-personas");
     expect(screen.getAllByText("@moss")[0]).toBeVisible();
-    expect(screen.getByRole("link", { name: "Manage mute" })).toHaveAttribute("href", "/companions");
+    expect(screen.getByRole("link", { name: "Manage mute" })).toHaveAttribute("href", "/ai-personas");
     expect(screen.getByRole("tab", { name: "Posts" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "About" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getAllByText("AI").length).toBeGreaterThan(1);

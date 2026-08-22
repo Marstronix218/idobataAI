@@ -166,6 +166,85 @@ describe("TaskBoard", () => {
     expect(within(taskArticle!).queryByText(/Priority [1-4]/)).not.toBeInTheDocument();
   });
 
+  it("lets users add and remove an exact deadline time without losing the due date", () => {
+    render(<TaskBoard />);
+
+    const dueDate = screen.getByLabelText("Due date");
+    const deadlineTime = screen.getByLabelText("Deadline time (optional)");
+    const originalDueDate = (dueDate as HTMLInputElement).value;
+    expect(deadlineTime).toHaveValue("");
+    expect(deadlineTime).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Outline the proposal" } });
+    fireEvent.change(deadlineTime, { target: { value: "13:45" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    const timedTask = screen.getByRole("heading", { name: "Outline the proposal" }).closest("article");
+    expect(timedTask).not.toBeNull();
+    expect(within(timedTask!).getByText(/deadline/)).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Outline the proposal" }));
+    const editDialog = screen.getByRole("dialog", { name: "Edit task" });
+    const editDueDate = within(editDialog).getByLabelText("Due date");
+    const editDeadlineTime = within(editDialog).getByLabelText("Deadline time (optional)");
+    expect(editDueDate).toHaveValue(originalDueDate);
+    expect(editDeadlineTime).toHaveValue("13:45");
+    fireEvent.change(editDeadlineTime, { target: { value: "" } });
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Save changes" }));
+
+    const updatedTask = screen.getByRole("heading", { name: "Outline the proposal" }).closest("article");
+    expect(updatedTask).not.toBeNull();
+    expect(within(updatedTask!).getByText("Today")).toBeVisible();
+    expect(within(updatedTask!).queryByText(/deadline/)).not.toBeInTheDocument();
+  });
+
+  it("clears deadline time when its due date is removed", () => {
+    render(<TaskBoard />);
+
+    const dueDate = screen.getByLabelText("Due date");
+    const deadlineTime = screen.getByLabelText("Deadline time (optional)");
+    fireEvent.change(deadlineTime, { target: { value: "09:30" } });
+    fireEvent.change(dueDate, { target: { value: "" } });
+
+    expect(deadlineTime).toBeDisabled();
+    expect(deadlineTime).toHaveValue("");
+  });
+
+  it("treats a past timed task as overdue while a date-only task stays due today", () => {
+    render(<TaskBoard />);
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Flexible task" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    const flexibleTask = screen.getByRole("heading", { name: "Flexible task" }).closest("article");
+    expect(flexibleTask).not.toBeNull();
+    expect(within(flexibleTask!).getByText("Today")).toBeVisible();
+    expect(within(flexibleTask!).queryByText(/Overdue/)).not.toBeInTheDocument();
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const previousDate = [
+      yesterday.getFullYear(),
+      String(yesterday.getMonth() + 1).padStart(2, "0"),
+      String(yesterday.getDate()).padStart(2, "0"),
+    ].join("-");
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Timed task" } });
+    fireEvent.change(screen.getByLabelText("Due date"), { target: { value: previousDate } });
+    fireEvent.change(screen.getByLabelText("Deadline time (optional)"), { target: { value: "13:59" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    const timedTask = screen.getByRole("heading", { name: "Timed task" }).closest("article");
+    expect(timedTask).not.toBeNull();
+    expect(within(timedTask!).getByText(/Overdue · .* at/)).toBeVisible();
+
+    fireEvent.click(within(timedTask!).getByRole("button", { name: "Complete: Timed task" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss completion message" }));
+    fireEvent.click(screen.getByRole("button", { name: /Completed/ }));
+    const completedTask = screen.getByRole("heading", { name: "Timed task" }).closest("article");
+    expect(completedTask).not.toBeNull();
+    expect(within(completedTask!).queryByText(/Overdue/)).not.toBeInTheDocument();
+    expect(within(completedTask!).getByText(/deadline/)).toBeVisible();
+  });
+
   it("keeps leading and trailing task-field icons clear of their labels", () => {
     render(<TaskBoard />);
 
@@ -173,6 +252,8 @@ describe("TaskBoard", () => {
     expect(screen.getByLabelText("Category (optional)")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Repeat schedule")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Priority (optional)")).toHaveClass("field-prefixed", "field-suffixed");
+    expect(screen.getByLabelText("Deadline time (optional)")).toHaveClass("field-prefixed");
+    expect(screen.getByLabelText("Deadline time (optional)")).not.toHaveClass("field-suffixed");
     expect(screen.getByLabelText("Filter by category")).toHaveClass("field-prefixed", "field-suffixed");
   });
 
@@ -205,7 +286,7 @@ describe("TaskBoard", () => {
     const recurrence = screen.getByRole("combobox", { name: "Repeat schedule" });
     const controlGrid = recurrence.closest("div.grid");
     expect(controlGrid).not.toBeNull();
-    expect(controlGrid).toHaveClass("sm:grid-cols-2", "lg:grid-cols-[175px_minmax(150px,1fr)_195px_210px]");
+    expect(controlGrid).toHaveClass("sm:grid-cols-2", "lg:grid-cols-3", "xl:grid-cols-[155px_minmax(145px,1fr)_175px_190px_165px]");
     expect(controlGrid).not.toHaveClass("md:grid-cols-[175px_minmax(150px,1fr)_180px_125px]");
   });
 

@@ -7,7 +7,7 @@ import { tasks as demoTasks } from "@/data/demo";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import type { Task, UserProfile } from "@/types";
 
-type RailTask = Pick<Task, "id" | "title" | "due_at" | "status" | "completed_at"> & {
+type RailTask = Pick<Task, "id" | "title" | "due_at" | "due_has_time" | "status" | "completed_at"> & {
   previewDueLabel?: string;
 };
 
@@ -15,6 +15,7 @@ const previewTasks: RailTask[] = demoTasks.map((task) => ({
   id: task.id,
   title: task.title,
   due_at: null,
+  due_has_time: false,
   status: task.completed ? "completed" : "pending",
   completed_at: null,
   previewDueLabel: task.due,
@@ -29,12 +30,16 @@ function isToday(value: string | null) {
   return Boolean(value && new Date(value).toDateString() === new Date().toDateString());
 }
 
-function dueTime(value: string | null) {
-  if (!value) return "Today";
-  const date = new Date(value);
-  // Due dates are date-only; do not expose their noon storage sentinel as a deadline time.
-  date.setHours(0, 0, 0, 0);
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+function dueTime(task: RailTask) {
+  if (!task.due_at || !task.due_has_time) return "Today";
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(task.due_at));
+}
+
+function dueSortTime(task: RailTask) {
+  if (!task.due_at) return Number.MAX_SAFE_INTEGER;
+  const due = new Date(task.due_at);
+  if (!task.due_has_time) due.setHours(23, 59, 59, 999);
+  return due.getTime();
 }
 
 export function MomentumRail() {
@@ -58,7 +63,7 @@ export function MomentumRail() {
 
   const todayTasks = useMemo(() => tasks
     .filter((task) => task.status === "pending" && (isPreviewMode ? !["Tomorrow", "No due date"].includes(task.previewDueLabel ?? "") : isToday(task.due_at)))
-    .sort((a, b) => new Date(a.due_at ?? 0).getTime() - new Date(b.due_at ?? 0).getTime())
+    .sort((a, b) => dueSortTime(a) - dueSortTime(b))
     .slice(0, 3), [tasks]);
   const completedToday = tasks.filter((task) => task.status === "completed" && (isPreviewMode || isToday(task.completed_at)));
   const completedCount = completedToday.length;
@@ -72,7 +77,7 @@ export function MomentumRail() {
           <div><p className="text-xs font-bold text-community">Your Tasks</p><h2 id="today-focus-heading" className="display mt-1 text-xl font-bold">Today’s tasks</h2><p className="mt-1 text-xs leading-5 text-muted">Plan and complete them in the task workspace.</p></div>
           <ListChecks size={19} className="mt-0.5 shrink-0 text-community" />
         </div>
-        {loading ? <p className="px-4 py-5 text-sm text-muted">Loading today’s tasks…</p> : todayTasks.length ? <ul className="divide-y divide-line">{todayTasks.map((task) => <li key={task.id}><Link href="/tasks" aria-label={`Open ${task.title} in Your Tasks`} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--hover)]"><Circle size={16} className="mt-0.5 shrink-0 text-brand" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-5">{task.title}</span><span className="mt-1 block text-xs text-muted">Due {task.previewDueLabel ?? dueTime(task.due_at)} · Open in Your Tasks</span></span></Link></li>)}</ul> : <div className="px-4 py-5 text-center"><span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-success-soft text-success"><Check size={17} /></span><p className="mt-3 text-sm font-bold">Nothing due today</p><p className="mt-1 text-xs leading-5 text-muted">Open Your Tasks to plan what comes next.</p></div>}
+        {loading ? <p className="px-4 py-5 text-sm text-muted">Loading today’s tasks…</p> : todayTasks.length ? <ul className="divide-y divide-line">{todayTasks.map((task) => <li key={task.id}><Link href="/tasks" aria-label={`Open ${task.title} in Your Tasks`} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--hover)]"><Circle size={16} className="mt-0.5 shrink-0 text-brand" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold leading-5">{task.title}</span><span className="mt-1 block text-xs text-muted">Due {task.previewDueLabel ?? dueTime(task)} · Open in Your Tasks</span></span></Link></li>)}</ul> : <div className="px-4 py-5 text-center"><span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-success-soft text-success"><Check size={17} /></span><p className="mt-3 text-sm font-bold">Nothing due today</p><p className="mt-1 text-xs leading-5 text-muted">Open Your Tasks to plan what comes next.</p></div>}
         <Link href="/tasks" className="flex min-h-11 items-center justify-between border-t border-line px-4 text-sm font-bold text-community transition-colors hover:bg-[var(--hover)]">Go to Your Tasks <ArrowRight size={16} /></Link>
       </section>
 

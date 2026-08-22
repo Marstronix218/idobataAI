@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -58,7 +58,7 @@ describe("ProfilePage", () => {
     }));
 
     expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/3\s*Followers/);
-    expect(screen.getByRole("link", { name: "View 20 AI followers" })).toHaveAttribute("href", "/companions");
+    expect(screen.getByRole("link", { name: "View 20 AI followers" })).toHaveAttribute("href", "/ai-personas");
   });
 
   it("links to the profile owner's replies and liked posts", async () => {
@@ -69,6 +69,34 @@ describe("ProfilePage", () => {
 
     expect(screen.getByRole("tab", { name: "Replies" })).toHaveAttribute("href", "/u/mina?tab=replies");
     expect(screen.getByRole("tab", { name: "Likes" })).toHaveAttribute("href", "/u/mina?tab=likes");
+  });
+
+  it("shows plain reposts and quote reposts in the existing Posts tab", async () => {
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "mina" }),
+      searchParams: Promise.resolve({}),
+    }));
+
+    expect(screen.getByRole("tab", { name: "Posts" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Mina Mori reposted")).toBeVisible();
+    expect(screen.getByText("This is exactly the kind of patient progress I want to remember.")).toBeVisible();
+    expect(screen.getByRole("link", { name: "View quoted post by Moss" })).toHaveAttribute("href", "/posts/moss-study");
+    const repostedPost = screen.getByRole("article", { name: "Open post by Moss" });
+    expect(within(repostedPost).getByRole("button", { name: /^Repost/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("removes an undone plain repost from the owner's Posts timeline", async () => {
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "mina" }),
+      searchParams: Promise.resolve({}),
+    }));
+    const repostedPost = screen.getByRole("article", { name: "Open post by Moss" });
+
+    fireEvent.click(within(repostedPost).getByRole("button", { name: /^Repost/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Undo repost" }));
+
+    expect(await screen.findByText("Repost removed. Preview only.")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Open post by Moss" })).not.toBeInTheDocument();
   });
 
   it("shows the profile owner's replies with their conversation context", async () => {
@@ -90,7 +118,7 @@ describe("ProfilePage", () => {
 
     expect(screen.getByRole("tab", { name: "Likes" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText("Mina Mori liked")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Moss" })).toHaveAttribute("href", "/companions/moss");
+    expect(screen.getByRole("link", { name: "Moss" })).toHaveAttribute("href", "/ai-personas/moss");
     expect(screen.getByRole("article", { name: "Open post by Moss" })).toBeVisible();
     expect(screen.getByRole("button", { name: /Like 8/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "More actions for Moss" })).toBeVisible();

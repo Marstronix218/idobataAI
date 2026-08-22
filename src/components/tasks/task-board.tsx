@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Circle,
+  Clock,
   Flame,
   Flag,
   LockKeyhole,
@@ -39,11 +40,33 @@ const priorityOptions: Array<{ value: TaskPriority; label: string }> = [
   { value: 4, label: "Priority 4 — Low" },
 ];
 
-const todayInputValue = () => {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-};
+function localDateInputValue(value: Date | string = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeInputValue(value: string) {
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function dueAtFromInputs(dateValue: string, timeValue: string) {
+  if (!dateValue) return null;
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hours, minutes] = (timeValue || "12:00").split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+}
+
+function currentTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+const todayInputValue = () => localDateInputValue();
 
 const previewTasks: Task[] = demoTasks.map((task, index) => ({
   id: task.id,
@@ -59,6 +82,8 @@ const previewTasks: Task[] = demoTasks.map((task, index) => ({
   recurrence_rule: task.recurring ? "weekdays" : null,
   recurrence_instance_id: null,
   priority: null,
+  due_has_time: false,
+  due_timezone: null,
   visibility: task.isPublic ? "public" : "private",
   status: task.completed ? "completed" : "pending",
   xp_earned: task.xp,
@@ -94,13 +119,38 @@ function dayBoundary(offsetDays = 0, end = false) {
   return value.getTime();
 }
 
-function dueLabel(value: string | null) {
-  if (!value) return "Anytime";
-  const time = new Date(value).getTime();
-  if (time < dayBoundary()) return "Overdue";
-  if (time <= dayBoundary(0, true)) return "Today";
-  if (time <= dayBoundary(1, true)) return "Tomorrow";
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(value));
+function endOfLocalDueDay(value: string) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date.getTime();
+}
+
+function effectiveDueTime(task: Task) {
+  if (!task.due_at) return Number.MAX_SAFE_INTEGER;
+  return task.due_has_time ? new Date(task.due_at).getTime() : endOfLocalDueDay(task.due_at);
+}
+
+function isOverdue(task: Task, now: number) {
+  return task.status === "pending" && Boolean(task.due_at) && effectiveDueTime(task) < now;
+}
+
+function dueLabel(task: Task, now: number) {
+  if (!task.due_at) return "Anytime";
+  const due = new Date(task.due_at);
+  const dateLabel = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(due);
+  const timeLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(due);
+  const dueDay = localDateInputValue(due);
+  const today = localDateInputValue(new Date(now));
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = localDateInputValue(tomorrowDate);
+  const relativeDate = dueDay === today ? "Today" : dueDay === tomorrow ? "Tomorrow" : dateLabel;
+
+  if (isOverdue(task, now)) {
+    if (!task.due_has_time) return `Overdue · ${dateLabel}`;
+    return dueDay === today ? `Overdue · deadline ${timeLabel}` : `Overdue · ${dateLabel} at ${timeLabel}`;
+  }
+  return task.due_has_time ? `${relativeDate} · deadline ${timeLabel}` : relativeDate;
 }
 
 function recurrenceLabel(value: string) {
@@ -112,11 +162,11 @@ function priorityTitle(priority: TaskPriority) {
   return priorityOptions.find((option) => option.value === priority)?.label ?? `Priority ${priority}`;
 }
 
-function groupsFor(filter: Filter, tasks: Task[]): TaskGroup[] {
+function groupsFor(filter: Filter, tasks: Task[], now: number): TaskGroup[] {
   if (filter === "Today") {
     return [
-      { key: "overdue", title: "Overdue", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() < dayBoundary()) },
-      { key: "today", title: "Today", tasks: tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() >= dayBoundary()) },
+      { key: "overdue", title: "Overdue", tasks: tasks.filter((task) => isOverdue(task, now)) },
+      { key: "today", title: "Today", tasks: tasks.filter((task) => !isOverdue(task, now)) },
     ].filter((group) => group.tasks.length);
   }
   if (filter === "All") {
@@ -144,8 +194,11 @@ export function TaskBoard() {
   const [quickCategory, setQuickCategory] = useState("");
   const [quickRecurrence, setQuickRecurrence] = useState("");
   const [quickPriority, setQuickPriority] = useState<TaskPriority | "">("");
+  const [quickDeadlineTime, setQuickDeadlineTime] = useState("");
   const [justCompleted, setJustCompleted] = useState<Task | null>(null);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editDeadlineTime, setEditDeadlineTime] = useState("");
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [announcementTone, setAnnouncementTone] = useState<"status" | "error">("status");
@@ -154,6 +207,7 @@ export function TaskBoard() {
   const [loading, setLoading] = useState(!isPreviewMode);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [categoryBusyId, setCategoryBusyId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const editDialogRef = useRef<HTMLDivElement | null>(null);
 
   const notify = useCallback((message: string, tone: "status" | "error" = "status") => {
@@ -162,10 +216,22 @@ export function TaskBoard() {
   }, []);
   const closeEditor = useCallback(() => {
     setEditing(null);
+    setEditDueDate("");
+    setEditDeadlineTime("");
     setEditError("");
     setConfirmingDelete(false);
   }, []);
+  const openEditor = useCallback((task: Task) => {
+    setEditing(task);
+    setEditDueDate(task.due_at ? localDateInputValue(task.due_at) : "");
+    setEditDeadlineTime(task.due_at && task.due_has_time ? localTimeInputValue(task.due_at) : "");
+  }, []);
   useDialog(editDialogRef, { open: Boolean(editing), onClose: closeEditor });
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   async function load(signal?: AbortSignal) {
     if (isPreviewMode) return;
@@ -239,11 +305,11 @@ export function TaskBoard() {
     const leftPriority = a.priority ?? Number.MAX_SAFE_INTEGER;
     const rightPriority = b.priority ?? Number.MAX_SAFE_INTEGER;
     if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-    const left = a.due_at ? new Date(a.due_at).getTime() : Number.MAX_SAFE_INTEGER;
-    const right = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const left = effectiveDueTime(a);
+    const right = effectiveDueTime(b);
     return left - right;
   }), [category, filter, items]);
-  const groups = groupsFor(filter, visible);
+  const groups = groupsFor(filter, visible, now);
 
   // Ticking a task is the most repeated interaction in the product, so it
   // applies immediately and rolls back on failure rather than freezing the
@@ -282,7 +348,9 @@ export function TaskBoard() {
     event?.preventDefault();
     const title = draft.trim();
     if (!title) return;
-    const dueAt = quickDue ? new Date(`${quickDue}T12:00:00`).toISOString() : null;
+    const dueAt = dueAtFromInputs(quickDue, quickDeadlineTime);
+    const dueHasTime = Boolean(dueAt && quickDeadlineTime);
+    const dueTimezone = dueHasTime ? currentTimeZone() : null;
     const recurrenceRule = quickRecurrence ? quickRecurrence as "daily" | "weekdays" | "weekly" : null;
     setBusyId("new");
     notify("");
@@ -294,6 +362,8 @@ export function TaskBoard() {
             title,
             category: quickCategory.trim() || null,
             due_at: dueAt,
+            due_has_time: dueHasTime,
+            due_timezone: dueTimezone,
             recurrence_rule: recurrenceRule,
             priority: quickPriority || null,
             visibility: profile?.default_task_visibility ?? "private",
@@ -305,13 +375,22 @@ export function TaskBoard() {
           } as Task
         : await apiRequest<Task>("/api/tasks", {
             method: "POST",
-            body: JSON.stringify({ title, category: quickCategory.trim() || null, dueAt, recurrenceRule, priority: quickPriority || null }),
+            body: JSON.stringify({
+              title,
+              category: quickCategory.trim() || null,
+              dueAt,
+              dueHasTime,
+              dueTimezone,
+              recurrenceRule,
+              priority: quickPriority || null,
+            }),
           });
       setItems((current) => [created, ...current]);
       setDraft("");
       setQuickCategory("");
       setQuickRecurrence("");
       setQuickPriority("");
+      setQuickDeadlineTime("");
       notify(`${title} added ${created.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
       notify(errorMessage(error), "error");
@@ -326,10 +405,15 @@ export function TaskBoard() {
     const data = new FormData(event.currentTarget);
     const recurrence = String(data.get("recurrenceRule"));
     const priority = String(data.get("priority"));
+    const dueAt = dueAtFromInputs(editDueDate, editDeadlineTime);
+    const dueHasTime = Boolean(dueAt && editDeadlineTime);
+    const dueTimezone = dueHasTime ? currentTimeZone() : null;
     const patch = {
       title: String(data.get("title")),
       category: String(data.get("category")) || null,
-      dueAt: data.get("dueAt") ? new Date(`${data.get("dueAt")}T12:00:00`).toISOString() : null,
+      dueAt,
+      dueHasTime,
+      dueTimezone,
       recurrenceRule: recurrence ? recurrence as "daily" | "weekdays" | "weekly" : null,
       priority: priority ? Number(priority) as TaskPriority : null,
       visibility: String(data.get("visibility")) as "private" | "public",
@@ -338,7 +422,7 @@ export function TaskBoard() {
     setEditError("");
     try {
       const updated = isPreviewMode
-        ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, recurrence_rule: patch.recurrenceRule, priority: patch.priority, visibility: patch.visibility }
+        ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, due_has_time: patch.dueHasTime, due_timezone: patch.dueTimezone, recurrence_rule: patch.recurrenceRule, priority: patch.priority, visibility: patch.visibility }
         : await apiRequest<Task>(`/api/tasks/${editing.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       setItems((current) => current.map((task) => task.id === updated.id ? updated : task));
       closeEditor();
@@ -468,12 +552,13 @@ export function TaskBoard() {
           <input id="quick-task" value={draft} onChange={(event) => setDraft(event.target.value)} className="field min-w-0 flex-1 border-0 bg-transparent text-base shadow-none" placeholder="Add a task…" maxLength={160} />
           <button className="btn btn-primary shrink-0 px-4" disabled={busyId === "new" || !draft.trim()}><Plus size={18} /><span className="hidden sm:inline">Add task</span></button>
         </div>
-        <div className="grid gap-2 border-t border-line bg-canvas/55 p-3 sm:grid-cols-2 sm:items-center sm:px-4 lg:grid-cols-[175px_minmax(150px,1fr)_195px_210px]">
-          <label><span className="sr-only">Due date</span><input type="date" className="field min-h-10 py-2 text-xs font-bold" value={quickDue} onChange={(event) => setQuickDue(event.target.value)} /></label>
+        <div className="grid gap-2 border-t border-line bg-canvas/55 p-3 sm:grid-cols-2 sm:items-center sm:px-4 lg:grid-cols-3 xl:grid-cols-[155px_minmax(145px,1fr)_175px_190px_165px]">
+          <label><span className="sr-only">Due date</span><input type="date" className="field min-h-10 py-2 text-xs font-bold" value={quickDue} onChange={(event) => { const value = event.target.value; setQuickDue(value); if (!value) setQuickDeadlineTime(""); }} /></label>
+          <label className="relative min-w-0"><span className="sr-only">Deadline time (optional)</span><Clock aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><input type="time" className="field field-prefixed min-h-10 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60" value={quickDeadlineTime} onChange={(event) => setQuickDeadlineTime(event.target.value)} disabled={!quickDue} /></label>
           <label className="relative min-w-0"><span className="sr-only">Category (optional)</span><Tag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickCategory} onChange={(event) => { const value = event.target.value; if (value === EDIT_CATEGORIES_VALUE) { setAnnouncement(""); setCategoryManagerOpen(true); return; } setQuickCategory(value); }}><option value="">No category</option>{taskCategories.map((taskCategory) => <option key={taskCategory.id} value={taskCategory.name}>{taskCategory.name}</option>)}<option value={EDIT_CATEGORIES_VALUE}>Edit categories…</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
           <label className="relative min-w-0"><span className="sr-only">Repeat schedule</span><Repeat2 aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickRecurrence} onChange={(event) => setQuickRecurrence(event.target.value)}><option value="">Doesn’t repeat</option><option value="daily">Daily routine</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly chore</option></select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
           <label className="relative min-w-0"><span className="sr-only">Priority (optional)</span><Flag aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-10 appearance-none py-2 text-xs font-bold" value={quickPriority} onChange={(event) => { const value = event.target.value; setQuickPriority(value ? Number(value) as TaskPriority : ""); }}><option value="">No priority</option>{priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
-          <span className="flex items-center gap-1.5 px-1 text-xs font-bold text-muted sm:col-span-2 lg:col-span-4"><LockKeyhole size={13} /> Starts {profile?.default_task_visibility ?? "private"}</span>
+          <span className="flex items-center gap-1.5 px-1 text-xs font-bold text-muted sm:col-span-2 lg:col-span-3 xl:col-span-5"><LockKeyhole size={13} /> Starts {profile?.default_task_visibility ?? "private"}</span>
         </div>
       </form>
 
@@ -501,7 +586,41 @@ export function TaskBoard() {
       {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2><p className="mt-1 text-sm text-muted">It stays off the feed unless you share it.</p><div className="mt-3 flex flex-wrap gap-2"><Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-secondary">Share</Link><button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
 
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
-        {loading ? <div className="p-10 text-center text-muted">Loading your tasks…</div> : groups.length ? groups.map((group) => <div key={group.key} className="border-b border-line last:border-b-0"><div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5"><h2 className="display text-lg font-bold">{group.title}</h2><p className="text-xs font-semibold text-muted">{group.tasks.length} {group.tasks.length === 1 ? "task" : "tasks"}</p></div><div className="divide-y divide-line">{group.tasks.map((task) => <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5"><button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>{task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}</button><div className="min-w-0 flex-1"><h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">{task.priority && <span className="badge badge-priority" title={priorityTitle(task.priority)}>Priority {task.priority}</span>}{task.category && <span className="badge badge-category">{task.category}</span>}<PrivacyBadge isPublic={task.visibility === "public"} /><span className={`flex items-center gap-1 text-xs font-semibold ${dueLabel(task.due_at) === "Overdue" ? "text-danger" : "text-muted"}`}><CalendarDays size={13} /> {dueLabel(task.due_at)}</span>{task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}</div></div>{task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Share</Link>}<button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => setEditing(task)}><MoreHorizontal size={18} /></button></article>)}</div></div>) : <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>}
+        {loading ? (
+          <div className="p-10 text-center text-muted">Loading your tasks…</div>
+        ) : groups.length ? (
+          groups.map((group) => (
+            <div key={group.key} className="border-b border-line last:border-b-0">
+              <div className="flex items-baseline justify-between gap-4 bg-surface-raised/45 px-4 py-3 sm:px-5">
+                <h2 className="display text-lg font-bold">{group.title}</h2>
+                <p className="text-xs font-semibold text-muted">{group.tasks.length} {group.tasks.length === 1 ? "task" : "tasks"}</p>
+              </div>
+              <div className="divide-y divide-line">
+                {group.tasks.map((task) => (
+                  <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5">
+                    <button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>
+                      {task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <h3 className={`font-bold leading-5 ${task.status === "completed" ? "text-muted line-through" : ""}`}>{task.title}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                        {task.priority && <span className="badge badge-priority" title={priorityTitle(task.priority)}>Priority {task.priority}</span>}
+                        {task.category && <span className="badge badge-category">{task.category}</span>}
+                        <PrivacyBadge isPublic={task.visibility === "public"} />
+                        <span className={`flex items-center gap-1 text-xs font-semibold ${isOverdue(task, now) ? "text-danger" : "text-muted"}`}>{task.due_has_time ? <Clock aria-hidden="true" size={13} /> : <CalendarDays aria-hidden="true" size={13} />} {task.due_at ? <time dateTime={task.due_at}>{dueLabel(task, now)}</time> : "Anytime"}</span>
+                        {task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 aria-hidden="true" size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}
+                      </div>
+                    </div>
+                    {task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Share</Link>}
+                    <button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => openEditor(task)}><MoreHorizontal size={18} /></button>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success-soft text-success"><Check size={20} /></span><h2 className="display mt-5 text-xl font-bold">{filter === "Today" ? "Today is clear." : "Nothing here yet."}</h2><p className="mt-2 text-sm text-muted">{category === "All" ? "Add a task or choose another view." : `No ${category} tasks match this view.`}</p></div>
+        )}
       </section>
       <StatusMessage message={categoryManagerOpen ? "" : announcement} tone={categoryManagerOpen ? "status" : announcementTone} className={justCompleted ? "sr-only" : ""} onRetry={announcementTone === "error" && !categoryManagerOpen ? () => void load() : undefined} />
     </div>
@@ -530,7 +649,8 @@ export function TaskBoard() {
               <ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
             </div>
           </div>
-          <div><label className="field-label" htmlFor="edit-due">Due date</label><input className="field" id="edit-due" name="dueAt" type="date" defaultValue={editing.due_at?.slice(0, 10) ?? ""} /></div>
+          <div><label className="field-label" htmlFor="edit-due">Due date</label><input className="field" id="edit-due" name="dueAt" type="date" value={editDueDate} onChange={(event) => { const value = event.target.value; setEditDueDate(value); if (!value) setEditDeadlineTime(""); }} /></div>
+          <div><label className="field-label" htmlFor="edit-deadline-time">Deadline time <span className="font-medium normal-case tracking-normal text-muted">(optional)</span></label><input className="field disabled:cursor-not-allowed disabled:opacity-60" id="edit-deadline-time" name="deadlineTime" type="time" value={editDeadlineTime} onChange={(event) => setEditDeadlineTime(event.target.value)} disabled={!editDueDate} /></div>
           <div>
             <label className="field-label" htmlFor="edit-priority">Priority <span className="font-medium normal-case tracking-normal text-muted">(optional)</span></label>
             <div className="relative">
@@ -553,7 +673,7 @@ export function TaskBoard() {
             </div>
           </div>
         </div>
-        <p className="mt-4 text-xs leading-5 text-muted">Priority is optional. Posting remains a separate choice after completion.</p>
+        <p className="mt-4 text-xs leading-5 text-muted">Leave the time blank when the task can be finished any time that day. Posting remains a separate choice after completion.</p>
         {editError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm font-bold text-danger"><span className="min-w-0 flex-1 break-words">{editError}</span></div>}
         </div>
         {/* Deleting a task is irreversible, so it confirms in place rather than

@@ -86,7 +86,7 @@ export function replyIdentity(reply: Pick<ThreadReply, "user_profiles" | "social
     name: companion?.name ?? profile?.display_name?.trim() ?? profile?.username ?? "Community member",
     handle: companion?.slug ?? profile?.username ?? null,
     avatarUrl: companion?.avatar_url ?? profile?.avatar_url ?? null,
-    href: companion?.slug ? `/companions/${companion.slug}` : profile?.username ? `/u/${profile.username}` : null,
+    href: companion?.slug ? `/ai-personas/${companion.slug}` : profile?.username ? `/u/${profile.username}` : null,
     ai: Boolean(companion),
   };
 }

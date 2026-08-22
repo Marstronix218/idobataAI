@@ -21,11 +21,11 @@ describe("MomentumRail production due dates", () => {
     apiRequest.mockReset();
   });
 
-  it("shows date-only deadlines at midnight instead of their stored noon sentinel", async () => {
+  it("keeps date-only due dates untimed and shows exact deadline times", async () => {
     const storedDueDate = new Date();
     storedDueDate.setHours(12, 0, 0, 0);
-    const midnight = new Date(storedDueDate);
-    midnight.setHours(0, 0, 0, 0);
+    const timedDeadline = new Date(storedDueDate);
+    timedDeadline.setHours(15, 30, 0, 0);
     const formatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
     apiRequest.mockImplementation((path: string) => {
@@ -34,6 +34,14 @@ describe("MomentumRail production due dates", () => {
           id: "today-task",
           title: "Review the launch checklist",
           due_at: storedDueDate.toISOString(),
+          due_has_time: false,
+          status: "pending",
+          completed_at: null,
+        }, {
+          id: "timed-task",
+          title: "Submit the launch brief",
+          due_at: timedDeadline.toISOString(),
+          due_has_time: true,
           status: "pending",
           completed_at: null,
         }]);
@@ -45,7 +53,9 @@ describe("MomentumRail production due dates", () => {
     render(<MomentumRail />);
 
     expect(await screen.findByText("Review the launch checklist")).toBeVisible();
-    expect(screen.getByText(`Due ${formatter.format(midnight)} · Open in Your Tasks`)).toBeVisible();
+    expect(screen.getByText("Due Today · Open in Your Tasks")).toBeVisible();
+    expect(screen.getByText(`Due ${formatter.format(timedDeadline)} · Open in Your Tasks`)).toBeVisible();
     expect(screen.queryByText(`Due ${formatter.format(storedDueDate)} · Open in Your Tasks`)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Submit the launch brief");
   });
 });

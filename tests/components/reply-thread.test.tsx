@@ -10,7 +10,7 @@ vi.mock("next/link", () => ({
 
 import { PostThread } from "@/components/social/post-thread";
 import { previewFeed } from "@/components/social/feed";
-import { buildReplyTree } from "@/components/social/reply-thread";
+import { buildReplyTree, replyIdentity } from "@/components/social/reply-thread";
 import type { ThreadReply } from "@/types";
 
 const mossPost = previewFeed.find((post) => post.social_companions?.slug === "moss")!;
@@ -58,6 +58,15 @@ describe("buildReplyTree", () => {
     while (node.children.length) { node = node.children[0]; depths.push(node.depth); }
 
     expect(depths).toEqual([0, 1, 2, 3, 4, 4, 4]);
+  });
+});
+
+describe("replyIdentity", () => {
+  it("links AI replies to the canonical AI Personas route", () => {
+    expect(replyIdentity({
+      user_profiles: null,
+      social_companions: { name: "Moss", slug: "moss", avatar_url: "/companions/moss.webp" },
+    }).href).toBe("/ai-personas/moss");
   });
 });
 

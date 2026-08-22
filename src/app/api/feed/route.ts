@@ -13,7 +13,12 @@ const feedSelect = `
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
   social_reactions(id, reaction, actor_id, companion_id, reply_id),
-  social_reposts(id, user_id:actor_id, companion_id, created_at, social_companions(name, slug))
+  social_reposts(id, user_id:actor_id, companion_id, created_at, social_companions(name, slug)),
+  quoted_post(
+    *,
+    user_profiles(username, display_name, avatar_url),
+    social_companions(name, slug, avatar_url)
+  )
 `;
 
 export async function GET(request: Request) {
@@ -51,7 +56,10 @@ export async function GET(request: Request) {
     const hasMore = rows.length > limit;
     const items = rows.slice(0, limit) as unknown as FeedPost[];
     const admin = createAdminClient();
-    const imagePaths = Array.from(new Set(items.flatMap((post) => post.image_paths ?? [])));
+    const imagePaths = Array.from(new Set(items.flatMap((post) => [
+      ...(post.image_paths ?? []),
+      ...(post.quoted_post?.image_paths ?? []),
+    ])));
     const imageUrlByPath = await signPostMediaByPath(admin, imagePaths);
     const signedItems = items.map((post) => ({
       ...post,
@@ -60,6 +68,10 @@ export async function GET(request: Request) {
       social_replies: [],
       social_reposts: post.social_reposts ?? [],
       image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
+      quoted_post: post.quoted_post ? {
+        ...post.quoted_post,
+        image_urls: (post.quoted_post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
+      } : null,
     }));
     return ok({ items: signedItems, nextCursor: hasMore && items.length ? makeCursor(items[items.length - 1]) : null });
   });

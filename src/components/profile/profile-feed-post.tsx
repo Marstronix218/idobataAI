@@ -9,17 +9,21 @@ export function ProfileFeedPost({
   post: initialPost,
   currentUserId,
   replyAuthor,
+  repostedBy,
+  repostActorId,
 }: {
   post: FeedPost;
   currentUserId: string | null;
   replyAuthor?: ReplyAuthor | null;
+  repostedBy?: string;
+  repostActorId?: string;
 }) {
   const router = useRouter();
   const [post, setPost] = useState(initialPost);
   const [notice, setNotice] = useState("");
   const [deleted, setDeleted] = useState(false);
 
-  if (deleted) return null;
+  if (deleted) return notice ? <p className="sr-only" aria-live="polite">{notice}</p> : null;
 
   return <>
     <p className="sr-only" aria-live="polite">{notice}</p>
@@ -29,6 +33,9 @@ export function ProfileFeedPost({
       replyAuthor={replyAuthor}
       onChange={setPost}
       onDelete={() => setDeleted(true)}
+      onQuoteCreated={() => router.refresh()}
+      onRepostChange={(reposted) => { if (!reposted && repostActorId === currentUserId) setDeleted(true); }}
+      repostAttribution={repostedBy ? { name: repostedBy } : undefined}
       onNotice={setNotice}
       onOpen={(postId) => router.push(`/posts/${encodeURIComponent(postId)}`)}
     />

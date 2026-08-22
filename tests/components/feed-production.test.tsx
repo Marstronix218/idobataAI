@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiRequest, push } = vi.hoisted(() => ({ apiRequest: vi.fn(), push: vi.fn() }));
@@ -105,5 +105,86 @@ describe("Feed production data loading", () => {
     expect(screen.getByText("Build the shelf")).toBeVisible();
     expect(post.querySelector("p.leading-7")).toBeNull();
     expect(screen.queryByText("Glad to have this one wrapped up.")).not.toBeInTheDocument();
+  });
+
+  it("posts quote commentary with a request key and returns the new feed item", async () => {
+    const source = { ...previewFeed[0], author_id: "user-2" };
+    const saved = {
+      ...source,
+      id: "33333333-3333-4333-8333-333333333333",
+      author_id: "user-1",
+      quoted_post_id: source.id,
+      kind: "human_quote" as const,
+      content: "Keep this one close.",
+      task_title: null,
+      category: null,
+      social_reactions: undefined,
+      social_reposts: undefined,
+      social_replies: undefined,
+      quoted_post: undefined,
+      user_profiles: undefined,
+      social_companions: undefined,
+      image_urls: undefined,
+    };
+    apiRequest.mockResolvedValueOnce(saved);
+    const onQuoteCreated = vi.fn();
+    render(<PostCard
+      post={source}
+      currentUserId="user-1"
+      replyAuthor={{ name: "Mina", username: "mina", avatarUrl: null }}
+      onChange={vi.fn()}
+      onNotice={vi.fn()}
+      onQuoteCreated={onQuoteCreated}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Repost/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Quote repost" }));
+    const dialog = screen.getByRole("dialog", { name: "Quote repost" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Add a comment" }), { target: { value: "Keep this one close." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Post" }));
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/posts/${source.id}/repost`, expect.objectContaining({ method: "POST" })));
+    const request = apiRequest.mock.calls[0][1];
+    expect(JSON.parse(request.body)).toEqual({
+      content: "Keep this one close.",
+      visibility: "public",
+      idempotencyKey: expect.any(String),
+    });
+    expect(onQuoteCreated).toHaveBeenCalledWith(expect.objectContaining({
+      id: saved.id,
+      kind: "human_quote",
+      quoted_post: expect.objectContaining({ id: source.id }),
+    }));
+  });
+
+  it("keeps focus in the quote composer while a failed submission settles", async () => {
+    const source = { ...previewFeed[0], author_id: "user-2" };
+    let rejectRequest: (error: Error) => void = () => {};
+    apiRequest.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectRequest = reject; }));
+    render(<PostCard
+      post={source}
+      currentUserId="user-1"
+      replyAuthor={{ name: "Mina", username: "mina", avatarUrl: null }}
+      onChange={vi.fn()}
+      onNotice={vi.fn()}
+    />);
+    const trigger = screen.getByRole("button", { name: /^Repost/ });
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Quote repost" }));
+    const dialog = screen.getByRole("dialog", { name: "Quote repost" });
+    const comment = within(dialog).getByRole("textbox", { name: "Add a comment" });
+    fireEvent.change(comment, { target: { value: "Keep this one close." } });
+    comment.focus();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Post" }));
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(1));
+    expect(comment).toHaveFocus();
+    expect(trigger).not.toHaveFocus();
+    rejectRequest(new Error("Quote service unavailable."));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Quote service unavailable.");
+    expect(comment).toHaveFocus();
+    expect(trigger).not.toHaveFocus();
   });
 });

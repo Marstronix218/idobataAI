@@ -11,7 +11,12 @@ const postSelect = `
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
   social_reactions(id, reaction, actor_id, companion_id, reply_id),
-  social_reposts(id, user_id:actor_id, companion_id, created_at, social_companions(name, slug))
+  social_reposts(id, user_id:actor_id, companion_id, created_at, social_companions(name, slug)),
+  quoted_post(
+    *,
+    user_profiles(username, display_name, avatar_url),
+    social_companions(name, slug, avatar_url)
+  )
 `;
 
 type Context = { params: Promise<{ id: string }> };
@@ -26,7 +31,10 @@ export async function GET(request: Request, { params }: Context) {
     ]);
     const post = assertDatabase(postResult, true) as unknown as Omit<FeedPost, "social_replies" | "image_urls">;
 
-    const imageUrlByPath = await signPostMediaByPath(createAdminClient(), post.image_paths ?? []);
+    const imageUrlByPath = await signPostMediaByPath(createAdminClient(), [
+      ...(post.image_paths ?? []),
+      ...(post.quoted_post?.image_paths ?? []),
+    ]);
     return ok({
       ...post,
       // The post's own like row is the one with no reply target; reply likes now
@@ -35,6 +43,10 @@ export async function GET(request: Request, { params }: Context) {
       social_replies: replies,
       reply_count: replies.length,
       image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
+      quoted_post: post.quoted_post ? {
+        ...post.quoted_post,
+        image_urls: (post.quoted_post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
+      } : null,
     });
   });
 }

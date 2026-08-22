@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 const FOCUSABLE = [
   "a[href]",
@@ -21,12 +21,16 @@ const FOCUSABLE = [
  */
 export function useDialog(
   ref: RefObject<HTMLElement | null>,
-  { open, onClose }: { open: boolean; onClose: () => void },
+  { open, onClose, returnFocusRef }: { open: boolean; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> },
 ) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
     const container = ref.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    const returnFocus = returnFocusRef?.current ?? previouslyFocused;
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
 
@@ -38,7 +42,7 @@ export function useDialog(
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -60,7 +64,7 @@ export function useDialog(
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = overflow;
-      previouslyFocused?.focus?.();
+      returnFocus?.focus?.();
     };
-  }, [open, onClose, ref]);
+  }, [open, ref, returnFocusRef]);
 }

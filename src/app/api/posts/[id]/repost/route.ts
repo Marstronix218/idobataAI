@@ -1,7 +1,24 @@
 import { z } from "zod";
-import { ApiError, assertDatabase, authed, noContent, ok, withApi } from "@/lib/server/http";
+import { quoteRepostSchema } from "@/lib/server/schemas";
+import { ApiError, assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
 
 type Context = { params: Promise<{ id: string }> };
+
+export async function POST(request: Request, { params }: Context) {
+  return withApi(async () => {
+    const postId = z.uuid().parse((await params).id);
+    const { supabase } = await authed(request);
+    const input = await parseJson(request, quoteRepostSchema);
+    const quote = assertDatabase(await supabase.rpc("publish_quote_repost", {
+      p_post_id: postId,
+      p_content: input.content,
+      p_visibility: input.visibility,
+      p_idempotency_key: input.idempotencyKey,
+    }));
+    if (!quote) throw new ApiError(409, "The quote repost could not be created.", "quote_repost_not_created");
+    return ok(quote, { status: 201 });
+  });
+}
 
 export async function PUT(request: Request, { params }: Context) {
   return withApi(async () => {

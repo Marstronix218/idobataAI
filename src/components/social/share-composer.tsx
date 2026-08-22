@@ -19,6 +19,8 @@ const previewTask = (taskId: string): Task => ({
   description: null,
   category: "Work",
   due_at: null,
+  due_has_time: false,
+  due_timezone: null,
   recurrence_rule: null,
   recurrence_instance_id: null,
   priority: null,

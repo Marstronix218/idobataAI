@@ -4,9 +4,12 @@ import { taskCreateSchema, taskSchema, taskUpdateSchema } from "../../packages/c
 
 describe("mobile task contracts", () => {
   it("normalizes valid task creation input", () => {
-    expect(taskCreateSchema.parse({ title: "  Focus  ", description: null })).toEqual({
-      title: "Focus",
+    expect(taskCreateSchema.parse({ title: "  Deadline  ", description: null, dueAt: "2026-08-22T23:30:00.000Z", dueHasTime: true, dueTimezone: "America/Los_Angeles" })).toEqual({
+      title: "Deadline",
       description: null,
+      dueAt: "2026-08-22T23:30:00.000Z",
+      dueHasTime: true,
+      dueTimezone: "America/Los_Angeles",
     });
   });
 
@@ -24,10 +27,12 @@ describe("mobile task contracts", () => {
       title: "Task",
       description: null,
       category: null,
-      due_at: null,
+      due_at: "2026-08-22T23:30:00.000Z",
       recurrence_rule: null,
       recurrence_instance_id: null,
       priority: null,
+      due_has_time: true,
+      due_timezone: "America/Los_Angeles",
       visibility: "private",
       status: "pending",
       xp_earned: 0,
@@ -38,6 +43,31 @@ describe("mobile task contracts", () => {
     });
 
     expect(result.success).toBe(true);
-    if (result.success) expect("additive_field" in result.data).toBe(false);
+    if (result.success) {
+      expect(result.data.due_has_time).toBe(true);
+      expect("additive_field" in result.data).toBe(false);
+    }
+  });
+
+  it("rejects impossible task responses with a timed deadline but no due date", () => {
+    expect(taskSchema.safeParse({
+      id: "11111111-1111-4111-8111-111111111111",
+      owner_id: "22222222-2222-4222-8222-222222222222",
+      title: "Task",
+      description: null,
+      category: null,
+      due_at: null,
+      due_has_time: true,
+      due_timezone: "America/Los_Angeles",
+      recurrence_rule: null,
+      recurrence_instance_id: null,
+      priority: null,
+      visibility: "private",
+      status: "pending",
+      xp_earned: 0,
+      completed_at: null,
+      created_at: "2026-08-20T12:00:00.000Z",
+      updated_at: "2026-08-20T12:00:00.000Z",
+    }).success).toBe(false);
   });
 });

@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Heart, MessageCircle, MoreHorizontal, RefreshCw, Repeat2 } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { posts as demoPosts } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
 import { PostMediaGrid } from "@/components/social/post-media-grid";
+import { QuoteRepostDialog, type QuoteRepostInput } from "@/components/social/quote-repost-dialog";
+import { QuotedPostCard } from "@/components/social/quoted-post-card";
 import { ReplyThread, initials, postReply, type ReplyAuthor } from "@/components/social/reply-thread";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
+import { toQuotedFeedPost } from "@/lib/domain/social-post";
 import { createClient } from "@/lib/supabase/client";
-import type { FeedPost, FeedRepost, ReactionKind, SocialReaction, ThreadReply, UserProfile } from "@/types";
+import type { FeedPost, FeedRepost, ReactionKind, SocialPost, SocialReaction, ThreadReply, UserProfile } from "@/types";
 
 type FeedPage = { items: FeedPost[]; nextCursor: string | null };
 type FeedTab = "for-you" | "following" | "people";
@@ -29,6 +32,7 @@ export const previewFeed: FeedPost[] = demoPosts.map((post) => ({
   author_id: post.ai ? null : post.authorSlug === "mina" ? "preview-user" : `preview-human-${post.authorSlug}`,
   companion_id: post.ai ? `preview-ai-${post.authorSlug}` : null,
   task_id: null,
+  quoted_post_id: null,
   kind: post.ai ? "ai_completion" : "human_completion",
   visibility: "public", content_status: "active", content: post.message, task_title: post.task, category: post.category,
   xp_earned: post.xp, streak: null, completed_at: new Date(Date.now() - post.minutesAgo * 60_000).toISOString(), idempotency_key: null, source_key: post.ai ? `preview-completion:${post.authorSlug}` : null, image_paths: [], image_urls: [],
@@ -43,6 +47,7 @@ export const previewFeed: FeedPost[] = demoPosts.map((post) => ({
     reply_id: null,
   })),
   social_replies: [],
+  quoted_post: null,
   social_reposts: post.authorSlug === "moss" ? [{
     id: `${post.id}-repost-orbit`, user_id: null, companion_id: "preview-ai-orbit",
     created_at: new Date(Date.now() - Math.max(1, post.minutesAgo - 1) * 60_000).toISOString(),
@@ -50,16 +55,19 @@ export const previewFeed: FeedPost[] = demoPosts.map((post) => ({
   }] : [],
 }));
 
-function postType(kind: FeedPost["kind"]) { return kind.includes("completion") ? "Completed a task" : kind.includes("daily_task") ? "Daily task" : "Progress update"; }
+function postType(kind: FeedPost["kind"]) { return kind === "human_quote" ? "Quote repost" : kind.includes("completion") ? "Completed a task" : kind.includes("daily_task") ? "Daily task" : "Progress update"; }
 
 const postControlSelector = "a, button, input, textarea, select, form, label, [role='menu'], [role='menuitem']";
 
-export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete, onNotice, detail = false, onOpen }: { post: FeedPost; currentUserId: string | null; replyAuthor?: ReplyAuthor | null; onChange: (post: FeedPost) => void; onDelete?: (postId: string) => void; onNotice: (message: string) => void; detail?: boolean; onOpen?: (postId: string) => void }) {
-  const [replying, setReplying] = useState(false); const [menuOpen, setMenuOpen] = useState(false); const [reply, setReply] = useState(""); const [busy, setBusy] = useState(false);
+export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete, onNotice, onQuoteCreated, onRepostChange, repostAttribution, detail = false, onOpen }: { post: FeedPost; currentUserId: string | null; replyAuthor?: ReplyAuthor | null; onChange: (post: FeedPost) => void; onDelete?: (postId: string) => void; onNotice: (message: string) => void; onQuoteCreated?: (post: FeedPost) => void; onRepostChange?: (reposted: boolean) => void; repostAttribution?: { name: string }; detail?: boolean; onOpen?: (postId: string) => void }) {
+  const [replying, setReplying] = useState(false); const [menuOpen, setMenuOpen] = useState(false); const [repostMenuOpen, setRepostMenuOpen] = useState(false); const [quoteOpen, setQuoteOpen] = useState(false); const [quoteIdempotencyKey, setQuoteIdempotencyKey] = useState(""); const [quoteError, setQuoteError] = useState(""); const [reply, setReply] = useState(""); const [busy, setBusy] = useState(false);
+  const repostTriggerRef = useRef<HTMLButtonElement>(null);
+  const repostMenuRef = useRef<HTMLDivElement>(null);
+  const closeQuote = useCallback(() => { if (!busy) { setQuoteOpen(false); setQuoteIdempotencyKey(""); setQuoteError(""); } }, [busy]);
   const ai = Boolean(post.companion_id); const name = post.social_companions?.name ?? post.user_profiles?.display_name ?? post.user_profiles?.username ?? "Community member";
   const owned = Boolean(currentUserId && post.author_id === currentUserId);
   const avatarUrl = post.social_companions?.avatar_url ?? post.user_profiles?.avatar_url ?? null;
-  const profileHref = post.social_companions?.slug ? `/companions/${post.social_companions.slug}` : post.user_profiles?.username ? `/u/${post.user_profiles.username}` : null;
+  const profileHref = post.social_companions?.slug ? `/ai-personas/${post.social_companions.slug}` : post.user_profiles?.username ? `/u/${post.user_profiles.username}` : null;
   // The list feed carries `reply_count` and omits reply bodies; only the post
   // detail route populates `social_replies`.
   const replies = post.social_replies ?? [];
@@ -95,6 +103,8 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
 
   async function toggleRepost() {
     if (busy || !currentUserId) return;
+    setRepostMenuOpen(false);
+    repostTriggerRef.current?.focus();
     setBusy(true);
     const prior = reposts;
     const optimistic = viewerRepost
@@ -110,10 +120,69 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
           onChange({ ...post, social_reposts: [...prior, saved] });
         }
       }
+      onRepostChange?.(!viewerRepost);
       onNotice(`Repost ${viewerRepost ? "removed" : "saved"}.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
       onChange({ ...post, social_reposts: prior });
       onNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitQuote(input: QuoteRepostInput) {
+    if (busy || !currentUserId) return;
+    setBusy(true);
+    setQuoteError("");
+    try {
+      const now = new Date().toISOString();
+      const idempotencyKey = quoteIdempotencyKey || crypto.randomUUID();
+      const saved = isPreviewMode
+        ? ({
+          id: `preview-quote-${idempotencyKey}`,
+          author_id: currentUserId,
+          companion_id: null,
+          task_id: null,
+          quoted_post_id: post.id,
+          kind: "human_quote",
+          visibility: input.visibility,
+          content_status: "active",
+          content: input.content,
+          task_title: null,
+          category: null,
+          xp_earned: null,
+          streak: null,
+          completed_at: null,
+          idempotency_key: `quote:${idempotencyKey}`,
+          source_key: null,
+          image_paths: [],
+          is_ai_generated: false,
+          reply_count: 0,
+          created_at: now,
+          updated_at: now,
+        } satisfies SocialPost)
+        : await apiRequest<SocialPost>(`/api/posts/${post.id}/repost`, {
+          method: "POST",
+          body: JSON.stringify({ ...input, idempotencyKey }),
+        });
+      const created: FeedPost = {
+        ...saved,
+        image_urls: [],
+        user_profiles: replyAuthor ? { username: replyAuthor.username, display_name: replyAuthor.name, avatar_url: replyAuthor.avatarUrl } : null,
+        social_companions: null,
+        social_reactions: [],
+        social_reposts: [],
+        social_replies: [],
+        quoted_post: toQuotedFeedPost(post),
+      };
+      onQuoteCreated?.(created);
+      setQuoteOpen(false);
+      setQuoteIdempotencyKey("");
+      onNotice(`Quote repost posted.${isPreviewMode ? " Preview only." : ""}`);
+    } catch (error) {
+      const message = errorMessage(error);
+      setQuoteError(message);
+      onNotice(message);
     } finally {
       setBusy(false);
     }
@@ -130,6 +199,45 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
 
   function changeReplies(next: ThreadReply[]) {
     onChange({ ...post, social_replies: next, reply_count: next.length });
+  }
+
+  function toggleRepostMenu() {
+    const opening = !repostMenuOpen;
+    setRepostMenuOpen(opening);
+    if (opening) {
+      requestAnimationFrame(() => repostMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus());
+    }
+  }
+
+  function handleRepostMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setRepostMenuOpen(false);
+      repostTriggerRef.current?.focus();
+      return;
+    }
+    if (event.key === "Tab") {
+      setRepostMenuOpen(false);
+      if (event.shiftKey) {
+        event.preventDefault();
+        repostTriggerRef.current?.focus();
+      }
+      return;
+    }
+
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = Array.from(repostMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? []);
+    if (!items.length) return;
+    event.preventDefault();
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : event.key === "ArrowDown"
+          ? (currentIndex + 1 + items.length) % items.length
+          : (currentIndex - 1 + items.length) % items.length;
+    items[nextIndex]?.focus();
   }
 
   async function reportPost() {
@@ -188,12 +296,39 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
       if (onOpen && event.target === event.currentTarget && event.key === "Enter") onOpen(post.id);
     }}
   >
-    <div className={`p-4 ${detail || replying ? "" : "pb-0"}`}>{aiReposters.length > 0 && <div className="mb-3 flex items-center gap-2 pl-1 text-xs font-bold text-muted"><Repeat2 size={15} className="text-community" /><span>{aiReposters[0].name}{aiReposters.length > 1 ? ` and ${aiReposters.length - 1} more` : ""} reposted</span><AIBadge /></div>}<header className="flex items-start gap-2.5"><Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{owned && <PrivacyBadge isPublic={post.visibility === "public"} />}<span className="text-xs text-muted">· <RelativeTime value={post.created_at} /></span></div><p className="text-xs text-muted">{postType(post.kind)}</p></div><div className="relative shrink-0" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") { setMenuOpen(false); event.currentTarget.querySelector("button")?.focus(); } }}><button type="button" className="post-menu-trigger" aria-label={`More actions for ${name}`} aria-expanded={menuOpen} aria-controls={`post-menu-${post.id}`} onClick={() => setMenuOpen((open) => !open)} disabled={busy}><MoreHorizontal aria-hidden="true" size={19} /></button>{menuOpen && <div id={`post-menu-${post.id}`} role="menu" aria-label={`Actions for ${name}`} className="absolute right-0 top-10 z-30 min-w-48 overflow-hidden rounded-xl border border-line bg-surface-raised p-1 shadow-lg">{owned ? <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void toggleAudience()}>{post.visibility === "public" ? "Make post private" : "Share post publicly"}</button><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void deletePost()}>Delete post</button></> : <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void reportPost()}>{ai ? "Report AI post" : "Report post"}</button>{post.author_id && <button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void blockAuthor()}>Block {name}</button>}</>}</div>}</div></header>
-      {post.content && <p className="mt-3 text-[.98rem] leading-7">{post.content}</p>}<PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />{post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
-      <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Post actions"><button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="hidden text-xs text-community sm:inline">{aiLikeCount} AI</span>}</button><button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button><button type="button" aria-pressed={Boolean(viewerRepost)} onClick={() => void toggleRepost()} disabled={busy || !currentUserId} className={`btn btn-ghost post-action ${viewerRepost ? "bg-community-soft text-community" : "text-muted"}`}><Repeat2 size={17} /> Repost <span>{reposts.length}</span></button></div>
+    <div className={`p-4 ${detail || replying ? "" : "pb-0"}`}>
+      {repostAttribution ? <div className="mb-3 flex items-center gap-2 pl-1 text-xs font-bold text-muted"><Repeat2 size={15} className="text-community" /><span>{repostAttribution.name} reposted</span></div> : aiReposters.length > 0 && <div className="mb-3 flex items-center gap-2 pl-1 text-xs font-bold text-muted"><Repeat2 size={15} className="text-community" /><span>{aiReposters[0].name}{aiReposters.length > 1 ? ` and ${aiReposters.length - 1} more` : ""} reposted</span><AIBadge /></div>}
+      <header className="flex items-start gap-2.5">
+        <Avatar initials={initials(name)} ai={ai} avatarUrl={avatarUrl} name={name} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">{profileHref ? <Link href={profileHref} className="font-bold hover:underline">{name}</Link> : <p className="font-bold">{name}</p>}{ai && <AIBadge />}{owned && <PrivacyBadge isPublic={post.visibility === "public"} />}<span className="text-xs text-muted">· <RelativeTime value={post.created_at} /></span></div>
+          <p className="text-xs text-muted">{postType(post.kind)}</p>
+        </div>
+        <div className="relative shrink-0" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") { setMenuOpen(false); event.currentTarget.querySelector("button")?.focus(); } }}>
+          <button type="button" className="post-menu-trigger" aria-label={`More actions for ${name}`} aria-expanded={menuOpen} aria-controls={`post-menu-${post.id}`} onClick={() => setMenuOpen((open) => !open)} disabled={busy}><MoreHorizontal aria-hidden="true" size={19} /></button>
+          {menuOpen && <div id={`post-menu-${post.id}`} role="menu" aria-label={`Actions for ${name}`} className="absolute right-0 top-10 z-30 min-w-48 overflow-hidden rounded-xl border border-line bg-surface-raised p-1 shadow-lg">{owned ? <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void toggleAudience()}>{post.visibility === "public" ? "Make post private" : "Share post publicly"}</button><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void deletePost()}>Delete post</button></> : <><button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void reportPost()}>{ai ? "Report AI post" : "Report post"}</button>{post.author_id && <button type="button" role="menuitem" className="btn btn-ghost w-full justify-start px-3 text-sm text-danger" onClick={() => void blockAuthor()}>Block {name}</button>}</>}</div>}
+        </div>
+      </header>
+      {post.content && <p className="mt-3 text-[.98rem] leading-7">{post.content}</p>}
+      <PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />
+      {post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
+      {post.kind === "human_quote" && (post.quoted_post ? <QuotedPostCard post={post.quoted_post} /> : <div className="mt-3 rounded-2xl border border-line bg-surface/55 p-4 text-sm text-muted">The quoted post is no longer available.</div>)}
+      <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Post actions">
+        <button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="hidden text-xs text-community sm:inline">{aiLikeCount} AI</span>}</button>
+        <button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button>
+        <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setRepostMenuOpen(false); }} onKeyDown={handleRepostMenuKeyDown}>
+          <button ref={repostTriggerRef} type="button" aria-pressed={Boolean(viewerRepost)} aria-haspopup="menu" aria-expanded={repostMenuOpen} aria-controls={`repost-menu-${post.id}`} onClick={toggleRepostMenu} disabled={busy || !currentUserId || (post.visibility !== "public" && !viewerRepost)} className={`btn btn-ghost post-action w-full ${viewerRepost ? "bg-community-soft text-community" : "text-muted"}`}><Repeat2 size={17} /> Repost <span>{reposts.length}</span></button>
+          {repostMenuOpen && <div ref={repostMenuRef} id={`repost-menu-${post.id}`} role="menu" aria-label={`Repost options for ${name}`} className="absolute bottom-full right-0 z-40 mb-1 min-w-44 overflow-hidden rounded-xl border border-line bg-surface-raised p-1 shadow-lg">
+            <button type="button" role="menuitem" tabIndex={-1} className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => void toggleRepost()}>{viewerRepost ? "Undo repost" : "Repost"}</button>
+            <button type="button" role="menuitem" tabIndex={-1} disabled={post.visibility !== "public"} className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => { repostTriggerRef.current?.focus(); setRepostMenuOpen(false); setQuoteIdempotencyKey(crypto.randomUUID()); setQuoteError(""); setQuoteOpen(true); }}>Quote repost</button>
+          </div>}
+        </div>
+      </div>
       {detail && <ReplyThread postId={post.id} replies={replies} currentUserId={currentUserId} replyAuthor={replyAuthor ?? null} onChange={changeReplies} onNotice={onNotice} />}
       {replying && <form className="mt-3 flex items-center gap-3 border-t border-line pt-3" onSubmit={submitReply}><Avatar initials={initials(replyAuthor?.name ?? "You")} avatarUrl={replyAuthor?.avatarUrl} name={replyAuthor?.name ?? "You"} /><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-base text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} placeholder="Post your reply" autoFocus /><button type="submit" className="btn btn-community shrink-0 rounded-full px-4 text-sm" disabled={busy || !reply.trim()}>{busy ? "Replying…" : "Reply"}</button></form>}
-    </div></article>;
+    </div>
+    {quoteOpen && <QuoteRepostDialog post={toQuotedFeedPost(post)} author={replyAuthor ?? null} busy={busy} error={quoteError} returnFocusRef={repostTriggerRef} onClose={closeQuote} onSubmit={submitQuote} />}
+  </article>;
 }
 
 export function Feed() {
@@ -228,6 +363,10 @@ export function Feed() {
     return () => controller.abort();
   }, [tab, category]);
   function changePost(changed: FeedPost) { setItems((current) => current.map((post) => post.id === changed.id ? changed : post)); }
+  function addQuote(post: FeedPost) {
+    if (tab === "following" || (category && post.category !== category)) return;
+    setItems((current) => [post, ...current]);
+  }
   function changeTab(nextTab: FeedTab) {
     if (!isPreviewMode) setLoading(true);
     setLoadError("");
@@ -280,7 +419,7 @@ export function Feed() {
       <p className="sr-only" aria-live="polite">{loading ? "Refreshing feed." : status}</p>
       {loadError && <p role="alert" className="border-b border-line bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{loadError}</p>}
 
-      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} onChange={changePost} onDelete={(postId) => setItems((current) => current.filter((item) => item.id !== postId))} onNotice={setStatus} onOpen={(postId) => router.push(`/posts/${encodeURIComponent(postId)}`)} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
+      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} onChange={changePost} onDelete={(postId) => setItems((current) => current.filter((item) => item.id !== postId))} onQuoteCreated={addQuote} onNotice={setStatus} onOpen={(postId) => router.push(`/posts/${encodeURIComponent(postId)}`)} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
       {(cursor || isPreviewMode) && <div className="border-b border-line p-4"><button className="btn btn-ghost w-full text-community" onClick={() => isPreviewMode ? setStatus("All preview posts are loaded.") : void load({ append: true })} disabled={loading}>Show more posts</button></div>}
       </div>
   </div>;

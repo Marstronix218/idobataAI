@@ -84,7 +84,7 @@ export function ActivityList() {
   async function openNotification(item: ActivityItem) {
     if (!item.read_at) await markRead([item.id]);
     if (item.kind === "follow" && item.social_companions?.slug) {
-      router.push(`/companions/${encodeURIComponent(item.social_companions.slug)}`);
+      router.push(`/ai-personas/${encodeURIComponent(item.social_companions.slug)}`);
       return;
     }
     if (item.post_id && item.social_posts?.content_status === "active") {
@@ -92,7 +92,7 @@ export function ActivityList() {
       return;
     }
     if (item.social_companions?.slug) {
-      router.push(`/companions/${encodeURIComponent(item.social_companions.slug)}`);
+      router.push(`/ai-personas/${encodeURIComponent(item.social_companions.slug)}`);
       return;
     }
     if (item.user_profiles?.username) router.push(`/u/${encodeURIComponent(item.user_profiles.username)}`);

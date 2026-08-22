@@ -71,4 +71,60 @@ describe("task update route", () => {
     expect(response.status).toBe(200);
     expect(update).toHaveBeenCalledWith({ priority: null });
   });
+
+  it("sets an exact deadline time", async () => {
+    parseJson.mockResolvedValueOnce({
+      dueAt: "2026-08-22T00:30:00.000Z",
+      dueHasTime: true,
+      dueTimezone: "America/Los_Angeles",
+    });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({
+      due_at: "2026-08-22T00:30:00.000Z",
+      due_has_time: true,
+      due_timezone: "America/Los_Angeles",
+    });
+  });
+
+  it("clears deadline precision without clearing the due date", async () => {
+    parseJson.mockResolvedValueOnce({ dueHasTime: false });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ due_has_time: false, due_timezone: null });
+  });
+
+  it("keeps legacy due-date updates date-only when precision is omitted", async () => {
+    parseJson.mockResolvedValueOnce({ dueAt: "2026-08-23T19:00:00.000Z" });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ due_at: "2026-08-23T19:00:00.000Z", due_has_time: false, due_timezone: null });
+  });
+
+  it("clears deadline precision whenever the due date is cleared", async () => {
+    parseJson.mockResolvedValueOnce({ dueAt: null });
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ due_at: null, due_has_time: false, due_timezone: null });
+  });
 });

@@ -21,4 +21,10 @@ describe("auth proxy", () => {
 
     expect(response.headers.get("location")).toBe("https://idobata.test/login?next=%2Fupdate-password");
   });
+
+  it("protects AI persona pages at their canonical route", async () => {
+    const response = await proxy(new NextRequest("https://idobata.test/ai-personas/moss?tab=about"));
+
+    expect(response.headers.get("location")).toBe("https://idobata.test/login?next=%2Fai-personas%2Fmoss%3Ftab%3Dabout");
+  });
 });

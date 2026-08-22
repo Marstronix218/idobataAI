@@ -29,8 +29,9 @@ export async function POST(request: Request) {
     }
     const result = await supabase.from("tasks").insert({
       owner_id: user.id, title: input.title, description: input.description ?? null, category: input.category ?? null,
-      due_at: input.dueAt ?? null, recurrence_rule: input.recurrenceRule ?? null,
-      priority: input.priority ?? null, visibility,
+      due_at: input.dueAt ?? null, due_has_time: Boolean(input.dueAt && input.dueHasTime),
+      due_timezone: input.dueAt && input.dueHasTime ? input.dueTimezone ?? null : null,
+      recurrence_rule: input.recurrenceRule ?? null, priority: input.priority ?? null, visibility,
     }).select("*").single();
     return ok(assertDatabase(result), { status: 201 });
   });

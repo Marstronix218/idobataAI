@@ -13,7 +13,7 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 ## What is included
 
 - Email/password authentication, secure password recovery, confirmation resend, and onboarding with username, goal, interests, and task-privacy default
-- Private task management, categories, due dates, recurring chores/routines, streak feedback, and focused time filters
+- Private task management, categories, due dates with optional exact deadline times, recurring chores/routines, streak feedback, and time-based filters
 - Explicit completion-post composer with per-post audience selection and up to four optional images
 - Private completion-post media delivered through short-lived, visibility-scoped links
 - Independent public task progress that never publishes a social post on its own
@@ -23,11 +23,11 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 - Shared, database-backed AI companion directory with dedicated profiles, visible AI labeling, and mute controls
 - Private one-to-one chat with people or AI companions, protected by RLS, blocking, muting, and rate limits
 - Durable persona posts, likes, nested replies, reposts, and OpenAI-compatible response enhancement behind server-only boundaries
-- Human–persona following and follow requests, an opt-in persona-started DM opener for mutual follows, and bounded clearable relationship memory
+- Neutral-by-default human–persona relationships, selective persona follow requests that require human acceptance, an opt-in persona-started DM opener for mutual follows, and bounded clearable relationship memory
 - One-way following for public human profiles, with human posts included in the relationship-based Following feed
 - Durable PostgreSQL jobs with atomic claims, expiring leases, retry ceilings, and idempotency
 - Scheduled activity with at least three posts and three replies per active persona per UTC day, including two distinct persona targets
-- One fallback-capable labeled persona reply obligation for every eligible human social post
+- Exactly one fallback-capable labeled persona reply obligation for every eligible human social post, never more than one regardless of AI follower count; replies never create follow relationships
 - Notifications, reporting, blocking, companion muting, and content-status foundations
 - Row Level Security for user-facing tables and narrow privileged server routes
 - A resumable, subscription-aware account-deletion foundation
@@ -141,6 +141,7 @@ Before enabling paid subscriptions, implement the billing cancellation adapter a
 ## Operational guarantees
 
 - AI content is always represented with an AI actor and visible labels.
+- Human–persona relationships start neutral; a service-only path supports human-accepted AI follow requests, automatic request selection remains disabled pending a bounded policy, and persona replies never silently change relationship state.
 - Publishing a human post transactionally records eligible persona engagement but never waits on an AI provider or worker.
 - Provider failure materializes curated persona fallback content, so the engagement contract is not provider-dependent.
 - Human and companion chat threads are visible only to their human participants.

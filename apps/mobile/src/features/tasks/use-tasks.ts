@@ -3,6 +3,7 @@ import type { Task, TaskStatus } from "@idobata/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useApiClient } from "../../providers/api-provider";
+import { currentTimeZone, taskDueSortTime } from "./deadline";
 
 export type TaskFilter = "pending" | "completed";
 
@@ -47,13 +48,17 @@ export function useTasks() {
     return () => clearTimeout(timeout);
   }, [load]);
 
-  const createTask = useCallback(async (title: string) => {
+  const createTask = useCallback(async (title: string, dueAt: string | null = null, dueHasTime = false) => {
     if (!client) return false;
     setCreating(true);
     setMutationError(null);
     try {
+      const exactDeadline = Boolean(dueAt && dueHasTime);
       const created = await client.createTask({
         title,
+        dueAt,
+        dueHasTime: exactDeadline,
+        dueTimezone: exactDeadline ? currentTimeZone() : null,
         visibility: "private",
       });
       setTasks((current) => [created, ...current]);
@@ -108,6 +113,43 @@ export function useTasks() {
     }
   }, [client]);
 
+  const setTaskDeadline = useCallback(async (task: Task, dueAt: string | null, dueHasTime: boolean) => {
+    if (!client || inFlightTaskIds.current.has(task.id)) return false;
+    const exactDeadline = Boolean(dueAt && dueHasTime);
+    const dueTimezone = exactDeadline ? currentTimeZone() : null;
+    const optimistic: Task = {
+      ...task,
+      due_at: dueAt,
+      due_has_time: exactDeadline,
+      due_timezone: dueTimezone,
+      updated_at: new Date().toISOString(),
+    };
+
+    inFlightTaskIds.current.add(task.id);
+    setBusyTaskIds(new Set(inFlightTaskIds.current));
+    setMutationError(null);
+    setTasks((current) => current.map((item) => item.id === task.id ? optimistic : item));
+    setRecentlyCompleted((current) => current?.id === task.id ? optimistic : current);
+    try {
+      const updated = await client.updateTask(task.id, {
+        dueAt,
+        dueHasTime: exactDeadline,
+        dueTimezone,
+      });
+      setTasks((current) => current.map((item) => item.id === task.id ? updated : item));
+      setRecentlyCompleted((current) => current?.id === task.id ? updated : current);
+      return true;
+    } catch (updateError) {
+      setTasks((current) => current.map((item) => item.id === task.id ? task : item));
+      setRecentlyCompleted((current) => current?.id === task.id ? task : current);
+      setMutationError(errorMessage(updateError));
+      return false;
+    } finally {
+      inFlightTaskIds.current.delete(task.id);
+      setBusyTaskIds(new Set(inFlightTaskIds.current));
+    }
+  }, [client]);
+
   const visibleTasks = useMemo(
     () => tasks
       .filter((task) => task.status === filter)
@@ -115,8 +157,8 @@ export function useTasks() {
         const leftPriority = left.priority ?? Number.MAX_SAFE_INTEGER;
         const rightPriority = right.priority ?? Number.MAX_SAFE_INTEGER;
         if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-        const leftDue = left.due_at ? new Date(left.due_at).getTime() : Number.MAX_SAFE_INTEGER;
-        const rightDue = right.due_at ? new Date(right.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+        const leftDue = taskDueSortTime(left);
+        const rightDue = taskDueSortTime(right);
         return leftDue - rightDue;
       }),
     [filter, tasks],
@@ -147,6 +189,7 @@ export function useTasks() {
     dismissCompletion,
     load,
     createTask,
+    setTaskDeadline,
     setTaskStatus,
   };
 }

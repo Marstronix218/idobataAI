@@ -11,10 +11,11 @@ import { AIBadge, PrivacyBadge } from "@/components/ui/status";
 import { companions as previewCompanions } from "@/data/demo";
 import { assertDatabase } from "@/lib/server/http";
 import { signPostMediaByPath } from "@/lib/server/post-media";
+import { toQuotedFeedPost } from "@/lib/domain/social-post";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import type { FeedPost, SocialReply, UserProfile } from "@/types";
+import type { FeedPost, QuotedFeedPost, SocialReply, UserProfile } from "@/types";
 
 type ProfileTab = "posts" | "replies" | "likes" | "progress";
 
@@ -31,7 +32,18 @@ type ProfileReply = Pick<SocialReply, "id" | "content" | "created_at"> & {
   post: FeedPost;
 };
 
-type UnsignedFeedPost = Omit<FeedPost, "image_urls" | "social_replies">;
+type ProfileTimelineItem = {
+  key: string;
+  activityAt: string;
+  post: FeedPost;
+  repostedBy?: string;
+  repostActorId?: string;
+};
+
+type UnsignedQuotedPost = Omit<QuotedFeedPost, "image_urls">;
+type UnsignedFeedPost = Omit<FeedPost, "image_urls" | "social_replies" | "quoted_post"> & {
+  quoted_post: UnsignedQuotedPost | null;
+};
 
 // Profile cards render a reply *count* and never a reply body, so the reply
 // rows are left to `reply_count` rather than expanded here -- the same reason
@@ -41,7 +53,13 @@ const profilePostSelect = `
   *,
   user_profiles(username, display_name, avatar_url),
   social_companions(name, slug, avatar_url),
-  social_reactions(id, reaction, actor_id, companion_id, reply_id)
+  social_reactions(id, reaction, actor_id, companion_id, reply_id),
+  social_reposts(id, user_id:actor_id, companion_id, created_at, social_companions(name, slug)),
+  quoted_post(
+    *,
+    user_profiles(username, display_name, avatar_url),
+    social_companions(name, slug, avatar_url)
+  )
 `;
 
 const previewProfile: UserProfile = {
@@ -69,6 +87,7 @@ const previewPosts: FeedPost[] = [{
   author_id: "preview-user",
   companion_id: null,
   task_id: null,
+  quoted_post_id: null,
   kind: "human_completion",
   visibility: "public",
   content_status: "active",
@@ -96,6 +115,7 @@ const previewPosts: FeedPost[] = [{
   })),
   social_replies: [],
   reply_count: 0,
+  quoted_post: null,
 }];
 
 const previewLikedPosts: FeedPost[] = [{
@@ -103,6 +123,7 @@ const previewLikedPosts: FeedPost[] = [{
   author_id: null,
   companion_id: "preview-ai-moss",
   task_id: null,
+  quoted_post_id: null,
   kind: "ai_completion",
   visibility: "public",
   content_status: "active",
@@ -130,7 +151,58 @@ const previewLikedPosts: FeedPost[] = [{
   })),
   social_replies: [],
   reply_count: 0,
+  quoted_post: null,
 }];
+
+const previewQuotedSource: QuotedFeedPost = toQuotedFeedPost(previewLikedPosts[0]);
+
+const previewQuotePost: FeedPost = {
+  id: "preview-quote",
+  author_id: "preview-user",
+  companion_id: null,
+  task_id: null,
+  quoted_post_id: previewQuotedSource.id,
+  kind: "human_quote",
+  visibility: "public",
+  content_status: "active",
+  content: "This is exactly the kind of patient progress I want to remember.",
+  task_title: null,
+  category: null,
+  xp_earned: null,
+  streak: null,
+  completed_at: null,
+  idempotency_key: "preview-quote",
+  source_key: null,
+  image_paths: [],
+  image_urls: [],
+  is_ai_generated: false,
+  reply_count: 0,
+  created_at: new Date(Date.now() - 2 * 60_000).toISOString(),
+  updated_at: new Date().toISOString(),
+  user_profiles: { username: "mina", display_name: "Mina Mori", avatar_url: null },
+  social_companions: null,
+  social_reactions: [],
+  social_reposts: [],
+  social_replies: [],
+  quoted_post: previewQuotedSource,
+};
+
+const previewRepostAt = new Date(Date.now() - 4 * 60_000).toISOString();
+const previewRepostedPost: FeedPost = {
+  ...previewLikedPosts[0],
+  social_reposts: [{
+    id: "preview-repost",
+    user_id: "preview-user",
+    companion_id: null,
+    created_at: previewRepostAt,
+  }],
+};
+
+const previewTimeline: ProfileTimelineItem[] = [
+  ...previewPosts.map((post) => ({ key: `post:${post.id}`, activityAt: post.created_at, post })),
+  { key: `post:${previewQuotePost.id}`, activityAt: previewQuotePost.created_at, post: previewQuotePost },
+  { key: "repost:preview-repost", activityAt: previewRepostAt, post: previewRepostedPost, repostedBy: "Mina Mori", repostActorId: "preview-user" },
+].sort((left, right) => right.activityAt.localeCompare(left.activityAt));
 
 const previewReplies: ProfileReply[] = [{
   id: "preview-reply",
@@ -141,6 +213,7 @@ const previewReplies: ProfileReply[] = [{
     author_id: "preview-human-jonah",
     companion_id: null,
     task_id: null,
+    quoted_post_id: null,
     kind: "human_completion",
     visibility: "public",
     content_status: "active",
@@ -168,6 +241,7 @@ const previewReplies: ProfileReply[] = [{
     })),
     social_replies: [],
     reply_count: 0,
+    quoted_post: null,
   },
 }];
 
@@ -197,7 +271,10 @@ function initials(value: string) {
 }
 
 async function signPosts(basePosts: UnsignedFeedPost[]) {
-  const imagePaths = Array.from(new Set(basePosts.flatMap((post) => post.image_paths ?? [])));
+  const imagePaths = Array.from(new Set(basePosts.flatMap((post) => [
+    ...(post.image_paths ?? []),
+    ...(post.quoted_post?.image_paths ?? []),
+  ])));
   const imageUrlByPath = imagePaths.length
     ? await signPostMediaByPath(createAdminClient(), imagePaths)
     : new Map<string, string>();
@@ -207,6 +284,10 @@ async function signPosts(basePosts: UnsignedFeedPost[]) {
     // come from the post detail route.
     social_replies: [],
     image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
+    quoted_post: post.quoted_post ? {
+      ...post.quoted_post,
+      image_urls: (post.quoted_post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
+    } : null,
   }));
 }
 
@@ -235,12 +316,12 @@ export default async function ProfilePage({
     : "posts";
   const useDatabase = hasPublicSupabaseEnv() && !(process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && process.env.NODE_ENV !== "production");
   let profile = previewProfile;
-  let posts = previewPosts;
+  let posts = previewTimeline;
   let replies = previewReplies;
   let likedPosts = previewLikedPosts;
   let progress = previewProgress;
-  let postCount = previewPosts.length;
-  let completionCount = previewPosts.length;
+  let postCount = previewTimeline.length;
+  let completionCount = previewPosts.filter((post) => post.kind === "human_completion").length;
   let humanFollowerCount = previewHumanFollowerCount;
   let aiFollowerCount = previewCompanions.length;
   let viewerFollowsProfile = false;
@@ -294,22 +375,27 @@ export default async function ProfilePage({
         .select("id", { count: "exact", head: true })
         .eq("author_id", profile.id)
         .eq("content_status", "active");
+      const repostCountQuery = supabase
+        .from("social_reposts")
+        .select("id", { count: "exact", head: true })
+        .eq("actor_id", profile.id);
       if (!isOwner) {
         countQuery = countQuery.eq("visibility", "public");
         postCountQuery = postCountQuery.eq("visibility", "public");
       }
-      const [countResult, postCountResult, companionCountResult, followSummaryResult] = await Promise.all([
+      const [countResult, postCountResult, repostCountResult, aiFollowerCountResult, followSummaryResult] = await Promise.all([
         countQuery,
         postCountQuery,
-        supabase
-          .from("social_companions")
-          .select("id", { count: "exact", head: true })
-          .eq("active", true),
+        repostCountQuery,
+        supabase.rpc("get_profile_ai_follower_count", { p_user_id: profile.id }),
         supabase.rpc("get_profile_follow_summary", { p_user_id: profile.id }),
       ]);
-      postCount = postCountResult.count ?? 0;
+      assertDatabase(countResult);
+      assertDatabase(postCountResult);
+      assertDatabase(repostCountResult);
+      postCount = (postCountResult.count ?? 0) + (repostCountResult.count ?? 0);
       completionCount = countResult.count ?? 0;
-      aiFollowerCount = companionCountResult.count ?? 0;
+      aiFollowerCount = assertDatabase(aiFollowerCountResult) ?? 0;
       const followSummary = assertDatabase(followSummaryResult)?.[0];
       if (!followSummary) throw new Error("Profile follow summary unavailable.");
       humanFollowerCount = followSummary.follower_count;
@@ -325,8 +411,30 @@ export default async function ProfilePage({
           .order("created_at", { ascending: false })
           .limit(20);
         if (!isOwner) postQuery = postQuery.eq("visibility", "public");
-        const postResult = await postQuery;
-        posts = await signPosts((postResult.data ?? []) as unknown as UnsignedFeedPost[]);
+        const [postResult, repostResult] = await Promise.all([
+          postQuery,
+          supabase
+            .from("social_reposts")
+            .select("id, post_id, actor_id, created_at")
+            .eq("actor_id", profile.id)
+            .order("created_at", { ascending: false })
+            .limit(20),
+        ]);
+        const authoredPosts = await signPosts((assertDatabase(postResult) ?? []) as unknown as UnsignedFeedPost[]);
+        const repostRows = assertDatabase(repostResult) ?? [];
+        const repostedPostIds = Array.from(new Set(repostRows.map((repost) => repost.post_id)));
+        const repostedPostResult = repostedPostIds.length
+          ? await supabase.from("social_posts").select(profilePostSelect).is("social_reactions.reply_id", null).in("id", repostedPostIds).eq("content_status", "active")
+          : { data: [], error: null };
+        const repostedPosts = await signPosts((assertDatabase(repostedPostResult) ?? []) as unknown as UnsignedFeedPost[]);
+        const repostedPostById = new Map(repostedPosts.map((post) => [post.id, post]));
+        posts = [
+          ...authoredPosts.map((post): ProfileTimelineItem => ({ key: `post:${post.id}`, activityAt: post.created_at, post })),
+          ...repostRows.flatMap((repost): ProfileTimelineItem[] => {
+            const post = repostedPostById.get(repost.post_id);
+            return post ? [{ key: `repost:${repost.id}`, activityAt: repost.created_at, post, repostedBy: profile.display_name?.trim() || profile.username, repostActorId: profile.id }] : [];
+          }),
+        ].sort((left, right) => right.activityAt.localeCompare(left.activityAt) || right.key.localeCompare(left.key)).slice(0, 20);
       }
 
       if (selectedTab === "replies") {
@@ -337,12 +445,12 @@ export default async function ProfilePage({
           .eq("content_status", "active")
           .order("created_at", { ascending: false })
           .limit(20);
-        const replyRows = replyResult.data ?? [];
+        const replyRows = assertDatabase(replyResult) ?? [];
         const postIds = Array.from(new Set(replyRows.map((reply) => reply.post_id)));
         const postResult = postIds.length
           ? await supabase.from("social_posts").select(profilePostSelect).is("social_reactions.reply_id", null).in("id", postIds).eq("content_status", "active")
-          : { data: [] };
-        const hydratedPosts = await signPosts((postResult.data ?? []) as unknown as UnsignedFeedPost[]);
+          : { data: [], error: null };
+        const hydratedPosts = await signPosts((assertDatabase(postResult) ?? []) as unknown as UnsignedFeedPost[]);
         const postById = new Map(hydratedPosts.map((post) => [post.id, post]));
         replies = replyRows.flatMap((reply) => {
           const post = postById.get(reply.post_id);
@@ -359,12 +467,12 @@ export default async function ProfilePage({
           .is("reply_id", null)
           .order("created_at", { ascending: false })
           .limit(20);
-        const reactionRows = reactionResult.data ?? [];
+        const reactionRows = assertDatabase(reactionResult) ?? [];
         const postIds = reactionRows.map((reaction) => reaction.post_id);
         const postResult = postIds.length
           ? await supabase.from("social_posts").select(profilePostSelect).is("social_reactions.reply_id", null).in("id", postIds).eq("content_status", "active")
-          : { data: [] };
-        const hydratedPosts = await signPosts((postResult.data ?? []) as unknown as UnsignedFeedPost[]);
+          : { data: [], error: null };
+        const hydratedPosts = await signPosts((assertDatabase(postResult) ?? []) as unknown as UnsignedFeedPost[]);
         const postById = new Map(hydratedPosts.map((post) => [post.id, post]));
         likedPosts = reactionRows.flatMap((reaction) => {
           const post = postById.get(reaction.post_id);
@@ -379,7 +487,7 @@ export default async function ProfilePage({
           .eq("owner_id", profile.id)
           .order("updated_at", { ascending: false })
           .limit(20);
-        progress = (progressResult.data ?? []) as PublicProgress[];
+        progress = (assertDatabase(progressResult) ?? []) as PublicProgress[];
       }
     } else {
       postCount = 0;
@@ -436,7 +544,7 @@ export default async function ProfilePage({
               <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{completionCount}</dd></div>
               <div className="flex gap-1.5"><dt className="text-muted">Momentum</dt><dd className="font-bold">{profile.current_streak} days</dd></div>
               <div><dt className="sr-only">Human followers</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></dd></div>
-              <div><dt className="sr-only">AI followers</dt><dd><Link href="/companions" aria-label={`View ${aiFollowerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{aiFollowerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
+              <div><dt className="sr-only">AI followers</dt><dd><Link href="/ai-personas" aria-label={`View ${aiFollowerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{aiFollowerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
             </dl>
           </> : <div className="mt-5 rounded-2xl border border-line bg-surface p-5"><div className="flex items-center gap-2 font-bold"><LockKeyhole size={18} /> This profile is private</div><p className="mt-2 text-sm leading-6 text-muted">Only {displayName} can view this social timeline. Public tasks and private posts are not shown here.</p></div>}
         </div>
@@ -454,8 +562,8 @@ export default async function ProfilePage({
         </nav>
 
         {selectedTab === "posts" && <section aria-label={`${displayName}'s posts`}>
-          {posts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} />)}
-          {!posts.length && <div className="border-b border-line p-10 text-center"><LogoMark size={40} className="mx-auto" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">Shared wins and progress updates will appear here.</p></div>}
+          {posts.map((item) => <ProfileFeedPost key={item.key} post={item.post} currentUserId={currentUserId} replyAuthor={replyAuthor} repostedBy={item.repostedBy} repostActorId={item.repostActorId} />)}
+          {!posts.length && <div className="border-b border-line p-10 text-center"><LogoMark size={40} className="mx-auto" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">Posts, reposts, and shared wins will appear here.</p></div>}
         </section>}
 
         {selectedTab === "replies" && <section aria-label={`${displayName}'s replies`}>

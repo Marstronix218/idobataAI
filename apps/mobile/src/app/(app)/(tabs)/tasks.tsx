@@ -1,13 +1,15 @@
 import type { Task } from "@idobata/contracts";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,8 +22,68 @@ import { colors, radius, spacing, typography } from "@/constants/theme";
 import { TaskCard } from "@/features/tasks/task-card";
 import { type TaskFilter, useTasks } from "@/features/tasks/use-tasks";
 
+type DeadlineTarget = Task | "draft";
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function localDateValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function localTimeValue(value: string | null, hasTime: boolean) {
+  if (!value || !hasTime) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function parseDeadline(
+  dateValue: string,
+  timeValue: string,
+): { error: string } | { dueAt: string; dueHasTime: boolean } {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue.trim());
+  if (!dateMatch) return { error: "Enter the date as YYYY-MM-DD." };
+  const timeMatch = timeValue.trim() ? /^(\d{2}):(\d{2})$/.exec(timeValue.trim()) : null;
+  if (timeValue.trim() && !timeMatch) return { error: "Enter the time as HH:MM, or leave it blank." };
+
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const hour = timeMatch ? Number(timeMatch[1]) : 12;
+  const minute = timeMatch ? Number(timeMatch[2]) : 0;
+  const date = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (
+    month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59
+    || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day
+  ) return { error: "Enter a valid deadline date and time." };
+
+  return { dueAt: date.toISOString(), dueHasTime: Boolean(timeMatch) };
+}
+
+function deadlineSummary(dueAt: string | null, dueHasTime: boolean) {
+  if (!dueAt) return "Not set";
+  const date = new Date(dueAt);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  const dateText = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+  if (!dueHasTime) return dateText;
+  const timeText = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+  return `${dateText} · ${timeText}`;
+}
+
 export default function TasksScreen() {
+  const [deadlineClock, setDeadlineClock] = useState(() => Date.now());
   const [draft, setDraft] = useState("");
+  const [draftDueAt, setDraftDueAt] = useState<string | null>(null);
+  const [draftDueHasTime, setDraftDueHasTime] = useState(false);
+  const [deadlineTarget, setDeadlineTarget] = useState<DeadlineTarget | null>(null);
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineTime, setDeadlineTime] = useState("");
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
   const {
     visibleTasks,
     counts,
@@ -37,8 +99,14 @@ export default function TasksScreen() {
     dismissCompletion,
     load,
     createTask,
+    setTaskDeadline,
     setTaskStatus,
   } = useTasks();
+
+  useEffect(() => {
+    const interval = setInterval(() => setDeadlineClock(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const syncState = error
     ? { color: colors.danger, label: "Needs retry" }
@@ -49,8 +117,59 @@ export default function TasksScreen() {
   const addTask = async () => {
     const title = draft.trim();
     if (!title) return;
-    const created = await createTask(title);
-    if (created) setDraft("");
+    const created = await createTask(title, draftDueAt, draftDueHasTime);
+    if (created) {
+      setDraft("");
+      setDraftDueAt(null);
+      setDraftDueHasTime(false);
+    }
+  };
+
+  const openDeadlineEditor = (target: DeadlineTarget) => {
+    const dueAt = target === "draft" ? draftDueAt : target.due_at;
+    const dueHasTime = target === "draft" ? draftDueHasTime : target.due_has_time;
+    setDeadlineTarget(target);
+    setDeadlineDate(localDateValue(dueAt));
+    setDeadlineTime(localTimeValue(dueAt, dueHasTime));
+    setDeadlineError(null);
+  };
+
+  const closeDeadlineEditor = () => {
+    setDeadlineTarget(null);
+    setDeadlineError(null);
+  };
+
+  const saveDeadline = async () => {
+    if (!deadlineTarget) return;
+    if (!deadlineDate.trim()) {
+      setDeadlineError("Enter a deadline date, or clear the deadline.");
+      return;
+    }
+    const parsed = parseDeadline(deadlineDate, deadlineTime);
+    if ("error" in parsed) {
+      setDeadlineError(parsed.error);
+      return;
+    }
+    if (deadlineTarget === "draft") {
+      setDraftDueAt(parsed.dueAt);
+      setDraftDueHasTime(parsed.dueHasTime);
+      closeDeadlineEditor();
+      return;
+    }
+    const updated = await setTaskDeadline(deadlineTarget, parsed.dueAt, parsed.dueHasTime);
+    if (updated) closeDeadlineEditor();
+  };
+
+  const clearDeadline = async () => {
+    if (!deadlineTarget) return;
+    if (deadlineTarget === "draft") {
+      setDraftDueAt(null);
+      setDraftDueHasTime(false);
+      closeDeadlineEditor();
+      return;
+    }
+    const updated = await setTaskDeadline(deadlineTarget, null, false);
+    if (updated) closeDeadlineEditor();
   };
 
   const openShare = (task: Task) => {
@@ -98,6 +217,18 @@ export default function TasksScreen() {
         >
           {creating ? <ActivityIndicator color={colors.text} /> : <Text style={styles.addGlyph}>＋</Text>}
         </Pressable>
+        <View style={styles.deadlinePicker}>
+          <Text style={styles.deadlineLabel}>Deadline (optional)</Text>
+          <Pressable
+            accessibilityLabel={`Set deadline for new task. ${deadlineSummary(draftDueAt, draftDueHasTime)}`}
+            accessibilityRole="button"
+            disabled={creating}
+            onPress={() => openDeadlineEditor("draft")}
+            style={styles.deadlineButton}
+          >
+            <Text style={styles.deadlineButtonText}>{deadlineSummary(draftDueAt, draftDueHasTime)}</Text>
+          </Pressable>
+        </View>
         <View style={styles.privateRow}>
           <Text style={styles.privateIcon}>●</Text>
           <Text style={styles.privateText}>Starts private</Text>
@@ -190,12 +321,75 @@ export default function TasksScreen() {
           renderItem={({ item }) => (
             <TaskCard
               busy={busyTaskIds.has(item.id)}
+              now={deadlineClock}
+              onEditDeadline={() => openDeadlineEditor(item)}
               onShare={() => openShare(item)}
               onToggle={() => void setTaskStatus(item, item.status === "pending" ? "completed" : "pending")}
               task={item}
             />
           )}
         />
+        <Modal animationType="fade" onRequestClose={closeDeadlineEditor} transparent visible={Boolean(deadlineTarget)}>
+          <View style={styles.modalRoot}>
+            <Pressable accessibilityLabel="Close deadline editor" accessibilityRole="button" onPress={closeDeadlineEditor} style={styles.modalBackdrop} />
+            {deadlineTarget && (
+              <View accessibilityLabel="Task deadline" accessibilityViewIsModal role="dialog" style={styles.modalCard}>
+                <ScrollView contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+                  <Text style={styles.modalEyebrow}>TASK DETAILS</Text>
+                  <Text style={styles.modalTitle}>Task deadline</Text>
+                  <Text numberOfLines={2} style={styles.modalTaskTitle}>
+                    {deadlineTarget === "draft" ? draft.trim() || "New task" : deadlineTarget.title}
+                  </Text>
+                  <Text style={styles.modalBody}>Set the day this task is due. Add a time only when it has an exact cutoff.</Text>
+                  {deadlineError && <InlineNotice message={deadlineError} tone="danger" />}
+                  {mutationError && <InlineNotice message={mutationError} tone="danger" />}
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Due date</Text>
+                    <TextInput
+                      accessibilityLabel="Deadline date"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={deadlineTarget === "draft" || !busyTaskIds.has(deadlineTarget.id)}
+                      keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "default"}
+                      onChangeText={(value) => { setDeadlineDate(value); setDeadlineError(null); }}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={colors.textMuted}
+                      style={styles.fieldInput}
+                      value={deadlineDate}
+                    />
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Deadline time (optional)</Text>
+                    <TextInput
+                      accessibilityLabel="Deadline time optional"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={deadlineTarget === "draft" || !busyTaskIds.has(deadlineTarget.id)}
+                      keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "default"}
+                      onChangeText={(value) => { setDeadlineTime(value); setDeadlineError(null); }}
+                      placeholder="HH:MM"
+                      placeholderTextColor={colors.textMuted}
+                      style={styles.fieldInput}
+                      value={deadlineTime}
+                    />
+                    <Text style={styles.fieldHint}>Use 24-hour time, or leave blank for any time that day.</Text>
+                  </View>
+                  <View style={styles.modalActions}>
+                    <Pressable accessibilityRole="button" onPress={() => void saveDeadline()} style={styles.saveButton}>
+                      <Text style={styles.saveButtonText}>Save deadline</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => void clearDeadline()} style={styles.clearButton}>
+                      <Text style={styles.clearButtonText}>Clear deadline</Text>
+                    </Pressable>
+                  </View>
+                </ScrollView>
+                <Pressable accessibilityRole="button" onPress={closeDeadlineEditor} style={styles.modalClose}>
+                  <Text style={styles.modalCloseText}>Cancel</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -220,6 +414,10 @@ const styles = StyleSheet.create({
   addButtonDisabled: { opacity: 0.45 },
   addButtonPressed: { opacity: 0.8 },
   addGlyph: { color: colors.text, fontFamily: typography.display, fontSize: 25, fontWeight: "600", lineHeight: 28 },
+  deadlinePicker: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexBasis: "100%", flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginTop: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+  deadlineLabel: { color: colors.textMuted, fontFamily: typography.body, fontSize: 12, fontWeight: "700" },
+  deadlineButton: { alignItems: "center", backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
+  deadlineButtonText: { color: colors.brandBright, fontFamily: typography.body, fontSize: 12, fontWeight: "700" },
   privateRow: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexBasis: "100%", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   privateIcon: { color: colors.textMuted, fontSize: 8 },
   privateText: { color: colors.textMuted, fontFamily: typography.body, fontSize: 12, fontWeight: "700" },
@@ -246,4 +444,23 @@ const styles = StyleSheet.create({
   emptyBody: { color: colors.textMuted, fontFamily: typography.body, fontSize: 14, lineHeight: 21, textAlign: "center" },
   retryButton: { backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   retryLabel: { color: colors.text, fontFamily: typography.body, fontSize: 14, fontWeight: "800" },
+  modalRoot: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xl },
+  modalBackdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
+  modalCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, maxHeight: "90%", maxWidth: 520, padding: spacing.xl, width: "100%" },
+  modalScrollContent: { gap: spacing.md },
+  modalEyebrow: { color: colors.brandBright, fontFamily: typography.mono, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
+  modalTitle: { color: colors.text, fontFamily: typography.display, fontSize: 24, fontWeight: "800" },
+  modalTaskTitle: { color: colors.text, fontFamily: typography.body, fontSize: 15, fontWeight: "700" },
+  modalBody: { color: colors.textMuted, fontFamily: typography.body, fontSize: 13, lineHeight: 19 },
+  fieldGroup: { gap: spacing.sm },
+  fieldLabel: { color: colors.text, fontFamily: typography.body, fontSize: 13, fontWeight: "800" },
+  fieldInput: { backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, fontFamily: typography.mono, fontSize: 16, minHeight: 48, paddingHorizontal: spacing.md },
+  fieldHint: { color: colors.textMuted, fontFamily: typography.body, fontSize: 12, lineHeight: 18 },
+  modalActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+  saveButton: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radius.md, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },
+  saveButtonText: { color: colors.text, fontFamily: typography.body, fontSize: 13, fontWeight: "800" },
+  clearButton: { alignItems: "center", borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },
+  clearButtonText: { color: colors.textMuted, fontFamily: typography.body, fontSize: 13, fontWeight: "800" },
+  modalClose: { alignItems: "center", alignSelf: "flex-end", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
+  modalCloseText: { color: colors.textMuted, fontFamily: typography.body, fontSize: 14, fontWeight: "800" },
 });

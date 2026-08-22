@@ -2,23 +2,21 @@ import type { Task } from "@idobata/contracts";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "@/constants/theme";
+import { taskDeadlineLabel } from "@/features/tasks/deadline";
 
 type TaskCardProps = {
   task: Task;
   busy: boolean;
+  now: number;
+  onEditDeadline: () => void;
   onToggle: () => void;
   onShare: () => void;
 };
 
-function dueLabel(value: string | null) {
-  if (!value) return "No due date";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No due date";
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
-}
-
-export function TaskCard({ task, busy, onToggle, onShare }: TaskCardProps) {
+export function TaskCard({ task, busy, now, onEditDeadline, onToggle, onShare }: TaskCardProps) {
   const isComplete = task.status === "completed";
+  const deadline = taskDeadlineLabel(task, now);
+  const deadlineIsOverdue = deadline.startsWith("Overdue");
   return (
     <View style={styles.card}>
       <Pressable
@@ -46,7 +44,17 @@ export function TaskCard({ task, busy, onToggle, onShare }: TaskCardProps) {
         <View style={styles.metaRow}>
           {task.priority && <Text style={styles.priority}>Priority {task.priority}</Text>}
           {task.category && <Text style={styles.category}>{task.category}</Text>}
-          <Text style={styles.meta}>{dueLabel(task.due_at)}</Text>
+          <Pressable
+            accessibilityLabel={`${task.due_at ? "Change" : "Set"} deadline for ${task.title}. ${deadline}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            hitSlop={8}
+            onPress={onEditDeadline}
+            style={styles.deadlineActionButton}
+          >
+            <Text style={[styles.deadlineAction, deadlineIsOverdue && styles.deadlineOverdue]}>{deadline}</Text>
+          </Pressable>
           <Text style={task.visibility === "private" ? styles.private : styles.public}>
             {task.visibility === "private" ? "Private" : "Community"}
           </Text>
@@ -114,7 +122,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  meta: { color: colors.textMuted, fontFamily: typography.body, fontSize: 12 },
+  deadlineActionButton: { justifyContent: "center", minHeight: 44 },
+  deadlineAction: { color: colors.brandBright, fontFamily: typography.body, fontSize: 12, fontWeight: "700" },
+  deadlineOverdue: { color: colors.danger },
   private: { color: colors.textMuted, fontFamily: typography.body, fontSize: 12, fontWeight: "700" },
   public: { color: colors.community, fontFamily: typography.body, fontSize: 12, fontWeight: "700" },
   share: { color: colors.brandBright, fontFamily: typography.body, fontSize: 13, fontWeight: "800", paddingTop: 4 },

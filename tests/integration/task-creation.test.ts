@@ -35,7 +35,9 @@ describe("task creation route", () => {
     parseJson.mockResolvedValue({
       title: "Prepare the launch notes",
       category: "Work",
-      dueAt: null,
+      dueAt: "2026-08-22T00:30:00.000Z",
+      dueHasTime: true,
+      dueTimezone: "America/Los_Angeles",
       recurrenceRule: null,
       priority: 1,
     });
@@ -83,7 +85,9 @@ describe("task creation route", () => {
       title: "Prepare the launch notes",
       description: null,
       category: "Work",
-      due_at: null,
+      due_at: "2026-08-22T00:30:00.000Z",
+      due_has_time: true,
+      due_timezone: "America/Los_Angeles",
       recurrence_rule: null,
       priority: 1,
       visibility: "private",
@@ -105,5 +109,26 @@ describe("task creation route", () => {
 
     expect(response.status).toBe(201);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ priority: null }));
+  });
+
+  it("stores an omitted deadline time as a date-only due date", async () => {
+    parseJson.mockResolvedValueOnce({
+      title: "Prepare the launch notes",
+      category: "Work",
+      dueAt: "2026-08-22T19:00:00.000Z",
+      recurrenceRule: null,
+    });
+
+    const response = await POST(new Request("http://localhost/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Prepare the launch notes", category: "Work" }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      due_at: "2026-08-22T19:00:00.000Z",
+      due_has_time: false,
+      due_timezone: null,
+    }));
   });
 });

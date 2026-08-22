@@ -16,6 +16,7 @@ describe("CompanionDirectory", () => {
     expect(screen.getByRole("heading", { name: "Moss" })).toBeInTheDocument();
     expect(container.querySelector('img[src="/companions/moss.webp"]')).toBeInTheDocument();
     expect(container.querySelectorAll('img[src^="/companions/"]')).toHaveLength(20);
+    expect(screen.getAllByRole("link", { name: "View profile" })[0]).toHaveAttribute("href", "/ai-personas/moss");
   });
 
   it("shows the six-post daily target for every preview persona", () => {
@@ -28,10 +29,24 @@ describe("CompanionDirectory", () => {
     render(<CompanionDirectory />);
     const follow = screen.getAllByRole("button", { name: "Follow" })[0];
 
-    expect(screen.getByRole("heading", { name: "Meet the AI personas" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "AI Personas", level: 1 })).toBeVisible();
     expect(follow).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(follow);
 
     expect(screen.getAllByRole("button", { name: "Following" })[0]).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps the search text clear of its decorative icon", () => {
+    const { container } = render(<CompanionDirectory />);
+
+    expect(screen.getByRole("textbox", { name: "Search loaded AI personas" })).toHaveClass("field-prefixed");
+    expect(container.querySelector(".lucide-search")?.parentElement).toHaveClass("pointer-events-none", "inset-y-0");
+  });
+
+  it("places the hero logo on a high-contrast surface", () => {
+    const { container } = render(<CompanionDirectory />);
+    const logo = container.querySelector('img[src*="brand%2Fidobata-logo.png"]');
+
+    expect(logo?.parentElement).toHaveClass("bg-white");
   });
 });

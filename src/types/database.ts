@@ -4,7 +4,7 @@ export type TaskVisibility = "private" | "public";
 export type TaskStatus = "pending" | "completed";
 export type TaskPriority = 1 | 2 | 3 | 4;
 export type PostVisibility = "private" | "public";
-export type PostKind = "human_completion" | "human_progress" | "ai_daily_task" | "ai_progress" | "ai_completion";
+export type PostKind = "human_completion" | "human_progress" | "human_quote" | "ai_daily_task" | "ai_progress" | "ai_completion";
 export type ContentStatus = "active" | "hidden" | "removed";
 export type ReactionKind = "like";
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
@@ -39,6 +39,8 @@ export interface Task {
   description: string | null;
   category: string | null;
   due_at: string | null;
+  due_has_time: boolean;
+  due_timezone: string | null;
   recurrence_rule: string | null;
   recurrence_instance_id: string | null;
   priority: TaskPriority | null;
@@ -85,6 +87,7 @@ export interface SocialPost {
   author_id: string | null;
   companion_id: string | null;
   task_id: string | null;
+  quoted_post_id: string | null;
   kind: PostKind;
   visibility: PostVisibility;
   content_status: ContentStatus;
@@ -327,6 +330,10 @@ export interface Database {
       set_human_reaction: { Args: { p_post_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
       set_human_reply_reaction: { Args: { p_reply_id: string; p_reaction: ReactionKind }; Returns: SocialReaction };
       set_human_repost: { Args: { p_post_id: string; p_reposted: boolean }; Returns: SocialRepost };
+      publish_quote_repost: {
+        Args: { p_post_id: string; p_content: string; p_visibility: PostVisibility; p_idempotency_key: string };
+        Returns: SocialPost;
+      };
       set_user_follow: { Args: { p_followed_id: string; p_following: boolean }; Returns: boolean };
       get_profile_follow_summary: {
         Args: { p_user_id: string };
@@ -337,6 +344,8 @@ export interface Database {
         Returns: Array<{ post_id: string; created_at: string }>;
       };
       set_user_companion_follow: { Args: { p_companion_id: string; p_following: boolean }; Returns: UserCompanionRelationship };
+      request_companion_follow: { Args: { p_user_id: string; p_companion_id: string }; Returns: UserCompanionRelationship };
+      get_profile_ai_follower_count: { Args: { p_user_id: string }; Returns: number };
       respond_companion_follow: { Args: { p_companion_id: string; p_accept: boolean }; Returns: UserCompanionRelationship };
       set_companion_dm_opt_in: { Args: { p_companion_id: string; p_opt_in: boolean }; Returns: UserCompanionRelationship };
       start_companion_dm: { Args: { p_user_id: string; p_companion_id: string; p_content: string }; Returns: ChatMessage | null };
@@ -398,6 +407,13 @@ export type FeedPost = SocialPost & {
   social_reactions: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id" | "reply_id">>;
   social_reposts?: FeedRepost[];
   social_replies: ThreadReply[];
+  quoted_post: QuotedFeedPost | null;
+};
+
+export type QuotedFeedPost = SocialPost & {
+  image_urls: string[];
+  user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
+  social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
 };
 
 export type ThreadReply = SocialReply & {

@@ -40,6 +40,24 @@ begin
       where n.nspname='public' and t.typname='feedback_type')
       is distinct from array['idea','issue','other']::text[]
   then raise exception 'feedback type enum does not match the API contract'; end if;
+  if not exists(
+    select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid join pg_namespace n on n.oid=t.typnamespace
+    where n.nspname='public' and t.typname='post_kind' and e.enumlabel='human_quote'
+  ) then raise exception 'quote repost post kind is missing'; end if;
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='social_posts' and column_name='quoted_post_id' and data_type='uuid'
+  ) then raise exception 'quote repost reference is missing'; end if;
+  if not exists(
+    select 1 from pg_constraint
+    where conname='social_posts_quoted_post_id_fkey'
+      and conrelid='public.social_posts'::regclass
+      and confrelid='public.social_posts'::regclass
+      and contype='f'
+      and conkey=array[(select attnum from pg_attribute where attrelid='public.social_posts'::regclass and attname='quoted_post_id')]::smallint[]
+      and confkey=array[(select attnum from pg_attribute where attrelid='public.social_posts'::regclass and attname='id')]::smallint[]
+      and confdeltype='n'
+  ) then raise exception 'quote repost self-relationship is missing'; end if;
   if has_table_privilege('authenticated','public.social_posts','INSERT') then raise exception 'authenticated can bypass post publishing RPC'; end if;
   if not has_table_privilege('authenticated','public.tasks','SELECT') then raise exception 'authenticated cannot read own tasks through RLS'; end if;
   if not has_table_privilege('authenticated','public.social_posts','SELECT') then raise exception 'authenticated cannot read visible posts through RLS'; end if;
@@ -82,7 +100,38 @@ begin
   if not has_function_privilege('service_role','public.finalize_ai_reply_job(uuid,uuid,text)','EXECUTE') then raise exception 'service role cannot finalize AI jobs'; end if;
   if has_function_privilege('authenticated','public.finalize_social_action(uuid,uuid,text)','EXECUTE') then raise exception 'authenticated can finalize persona jobs'; end if;
   if not has_function_privilege('service_role','public.finalize_social_action(uuid,uuid,text)','EXECUTE') then raise exception 'service role cannot finalize persona jobs'; end if;
+  if has_function_privilege('authenticated','public.request_companion_follow(uuid,uuid)','EXECUTE') then raise exception 'authenticated can forge persona follow requests'; end if;
+  if has_function_privilege('anon','public.request_companion_follow(uuid,uuid)','EXECUTE') then raise exception 'anonymous users can forge persona follow requests'; end if;
+  if not has_function_privilege('service_role','public.request_companion_follow(uuid,uuid)','EXECUTE') then raise exception 'service role cannot create consented persona follow requests'; end if;
+  if has_function_privilege('authenticated','public.guard_companion_follow_transition()','EXECUTE') then raise exception 'authenticated can invoke the companion follow transition guard'; end if;
+  if not has_function_privilege('authenticated','public.get_profile_ai_follower_count(uuid)','EXECUTE') then raise exception 'authenticated cannot read visible AI follower counts'; end if;
+  if has_function_privilege('anon','public.get_profile_ai_follower_count(uuid)','EXECUTE') then raise exception 'anonymous users can query AI follower counts'; end if;
   if not has_function_privilege('authenticated','public.set_human_repost(uuid,boolean)','EXECUTE') then raise exception 'authenticated cannot use repost RPC'; end if;
+  if not has_function_privilege('authenticated','public.publish_quote_repost(uuid,text,public.post_visibility,text)','EXECUTE') then raise exception 'authenticated cannot publish quote reposts'; end if;
+  if has_function_privilege('anon','public.publish_quote_repost(uuid,text,public.post_visibility,text)','EXECUTE') then raise exception 'anonymous users can publish quote reposts'; end if;
+  if exists(
+    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace,
+      lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    where n.nspname='public' and p.proname='publish_quote_repost'
+      and pg_get_function_identity_arguments(p.oid)='p_post_id uuid, p_content text, p_visibility post_visibility, p_idempotency_key text'
+      and acl.grantee=0 and acl.privilege_type='EXECUTE'
+  ) then raise exception 'PUBLIC can publish quote reposts'; end if;
+  if not exists(
+    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname='quoted_post'
+      and p.pronargs=1 and p.proargtypes[0]='public.social_posts'::regtype
+      and p.prorettype='public.social_posts'::regtype and p.proretset
+      and p.prorows=1 and p.provolatile='s' and not p.prosecdef
+  ) then raise exception 'RLS-aware quote computed relationship is missing'; end if;
+  if not has_function_privilege('authenticated','public.quoted_post(public.social_posts)','EXECUTE') then raise exception 'authenticated cannot resolve visible quote sources'; end if;
+  if has_function_privilege('anon','public.quoted_post(public.social_posts)','EXECUTE') then raise exception 'anonymous users can resolve quote sources'; end if;
+  if exists(
+    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace,
+      lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    where n.nspname='public' and p.proname='quoted_post'
+      and p.pronargs=1 and p.proargtypes[0]='public.social_posts'::regtype
+      and acl.grantee=0 and acl.privilege_type='EXECUTE'
+  ) then raise exception 'PUBLIC can resolve quote sources'; end if;
   if not has_function_privilege('authenticated','public.reset_companion_memory(uuid)','EXECUTE') then raise exception 'authenticated cannot reset companion memory'; end if;
   if has_function_privilege('authenticated','public.refresh_companion_memory(uuid,uuid,text,jsonb,uuid,timestamp with time zone,integer,timestamp with time zone)','EXECUTE') then raise exception 'authenticated can forge companion memory refreshes'; end if;
   if not has_function_privilege('service_role','public.refresh_companion_memory(uuid,uuid,text,jsonb,uuid,timestamp with time zone,integer,timestamp with time zone)','EXECUTE') then raise exception 'service role cannot refresh companion memory'; end if;
@@ -175,6 +224,27 @@ begin
   ) then raise exception 'tasks are missing the optional priority field'; end if;
   if not has_column_privilege('authenticated','public.tasks','priority','INSERT') then raise exception 'authenticated cannot set task priority on creation'; end if;
   if not has_column_privilege('authenticated','public.tasks','priority','UPDATE') then raise exception 'authenticated cannot change task priority'; end if;
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='tasks' and column_name='due_has_time'
+      and data_type='boolean' and is_nullable='NO' and column_default like 'false%'
+  ) then raise exception 'tasks are missing deadline-time precision metadata'; end if;
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='tasks' and column_name='due_timezone'
+      and data_type='text' and is_nullable='YES'
+  ) then raise exception 'tasks are missing deadline time zones'; end if;
+  if not exists(
+    select 1 from pg_constraint
+    where conrelid='public.tasks'::regclass and conname='tasks_deadline_metadata_consistent'
+      and pg_get_constraintdef(oid) ~ 'NOT due_has_time.*due_timezone IS NULL'
+      and pg_get_constraintdef(oid) ~ 'due_has_time.*due_at IS NOT NULL.*due_timezone IS NOT NULL'
+      and pg_get_constraintdef(oid) ~ 'timezone\(due_timezone, due_at\) IS NOT NULL'
+  ) then raise exception 'task deadline metadata is not constrained to a valid date/time-zone pair'; end if;
+  if not has_column_privilege('authenticated','public.tasks','due_has_time','INSERT') then raise exception 'authenticated cannot set task deadline-time precision on creation'; end if;
+  if not has_column_privilege('authenticated','public.tasks','due_has_time','UPDATE') then raise exception 'authenticated cannot change task deadline-time precision'; end if;
+  if not has_column_privilege('authenticated','public.tasks','due_timezone','INSERT') then raise exception 'authenticated cannot set task deadline time zone on creation'; end if;
+  if not has_column_privilege('authenticated','public.tasks','due_timezone','UPDATE') then raise exception 'authenticated cannot change task deadline time zone'; end if;
   if not exists(
     select 1 from information_schema.columns
     where table_schema='public' and table_name='social_posts' and column_name='image_paths'

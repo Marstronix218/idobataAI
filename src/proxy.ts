@@ -8,7 +8,7 @@ export async function proxy(request: NextRequest) {
   if (demoMode) return NextResponse.next({ request });
   if (!url || !key) {
     const pathname = request.nextUrl.pathname;
-    const protectedRoute = ["/tasks", "/feed", "/chat", "/activity", "/companions", "/settings", "/onboarding", "/update-password", "/u"]
+    const protectedRoute = ["/tasks", "/feed", "/chat", "/activity", "/ai-personas", "/companions", "/settings", "/onboarding", "/update-password", "/u"]
       .some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
     if (!protectedRoute) return NextResponse.next({ request });
     const loginUrl = request.nextUrl.clone();
@@ -36,6 +36,7 @@ export async function proxy(request: NextRequest) {
     "/feed",
     "/chat",
     "/activity",
+    "/ai-personas",
     "/companions",
     "/settings",
     "/onboarding",
