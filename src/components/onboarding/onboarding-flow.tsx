@@ -21,7 +21,7 @@ export function OnboardingFlow() {
   // contract says so explicitly: making progress public and creating a social
   // post are separate choices. Conflating them meant a user who chose the
   // recommended Private profile also silently set every win they later chose to
-  // post to "Only me" — so doing everything right published nothing to anyone.
+  // post to "Only me", so doing everything right published nothing to anyone.
   const [shareAudience, setShareAudience] = useState<"private" | "public">("public");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,8 +29,8 @@ export function OnboardingFlow() {
   const toggleInterest = (item: string) => setSelected((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item]);
   async function finish() {
     if (!/^[A-Za-z0-9_]{3,24}$/.test(username)) { setStep(0); setStatus("Choose a username with 3–24 letters, numbers, or underscores."); return; }
-    // Onboarding used to end on the feed — a wall of posts from strangers, with
-    // no task of your own — despite the landing page promising "start with one
+    // Onboarding used to end on the feed, a wall of posts from strangers, with
+    // no task of your own, despite the landing page promising "start with one
     // private task". It now ends where the product actually begins.
     if (isPreviewMode) { setStatus("Preview mode: your setup is available for this demo only and was not saved."); router.push("/tasks"); return; }
     setBusy(true); setStatus("");
@@ -52,7 +52,7 @@ export function OnboardingFlow() {
           {step === 2 && <div className="animate-rise"><p className="eyebrow">Privacy first</p><h1 className="display balance mt-3 text-4xl font-bold">Who can see your shared progress?</h1><p className="mt-3 text-muted">Two separate questions. A completion appears in the feed only after you press Post. AI accounts stay active either way.</p><div className="mt-8 space-y-3"><button type="button" aria-pressed={privacy === "private"} onClick={() => setPrivacy("private")} className={`flex w-full items-start gap-4 rounded-2xl border p-5 text-left ${privacy === "private" ? "border-brand bg-brand-soft shadow-[0_0_0_2px_var(--brand)]" : "border-line bg-surface"}`}><span className="grid h-11 w-11 place-items-center rounded-full bg-white text-brand"><LockKeyhole size={20} /></span><span className="flex-1"><span className="flex items-center gap-2 font-bold">Private <span className="badge badge-category">Recommended</span></span><span className="mt-1 block text-sm leading-6 text-muted">Only you can open your social profile. Nobody can browse your page.</span></span></button><button type="button" aria-pressed={privacy === "public"} onClick={() => setPrivacy("public")} className={`flex w-full items-start gap-4 rounded-2xl border p-5 text-left ${privacy === "public" ? "border-community bg-community-soft shadow-[0_0_0_2px_var(--community)]" : "border-line bg-surface"}`}><span className="grid h-11 w-11 place-items-center rounded-full bg-white text-community"><Globe2 size={20} /></span><span><span className="font-bold">Public</span><span className="mt-1 block text-sm leading-6 text-muted">Signed-in users can open your profile and see completions you explicitly post publicly.</span></span></button></div>
           <div className="mt-8 border-t border-line pt-6">
             <h2 className="display text-xl font-bold">And when you do choose to post a win?</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">Separate from your profile. Completing a task still never posts anything — this only sets who sees a win once you press Post.</p>
+            <p className="mt-2 text-sm leading-6 text-muted">Separate from your profile. Completing a task still never posts anything. This only sets who sees a win once you press Post.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button type="button" aria-pressed={shareAudience === "public"} onClick={() => setShareAudience("public")} className={`rounded-2xl border p-4 text-left ${shareAudience === "public" ? "border-community bg-community-soft shadow-[0_0_0_2px_var(--community)]" : "border-line bg-surface"}`}><span className="flex items-center gap-2 font-bold"><Globe2 size={17} /> The community</span><span className="mt-1 block text-sm leading-6 text-muted">Where encouragement comes from.</span></button>
               <button type="button" aria-pressed={shareAudience === "private"} onClick={() => setShareAudience("private")} className={`rounded-2xl border p-4 text-left ${shareAudience === "private" ? "border-brand bg-brand-soft shadow-[0_0_0_2px_var(--brand)]" : "border-line bg-surface"}`}><span className="flex items-center gap-2 font-bold"><LockKeyhole size={17} /> Only me</span><span className="mt-1 block text-sm leading-6 text-muted">Keep a private record instead.</span></button>

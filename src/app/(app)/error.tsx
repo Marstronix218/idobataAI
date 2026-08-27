@@ -5,7 +5,7 @@ import { useEffect } from "react";
 
 /**
  * Without a boundary at this level, a crash in one page took down the whole app
- * shell — sidebar, navigation and all — and replaced it with a bare full-screen
+ * shell (sidebar, navigation and all) and replaced it with a bare full-screen
  * error. Scoping it here keeps the user oriented and one tap from somewhere
  * that works.
  */

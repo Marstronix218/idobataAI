@@ -92,7 +92,7 @@ Demo mode remains available only for non-persistent UI inspection outside produc
 
 - only `NEXT_PUBLIC_*` values are sent to the browser;
 - `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `WORKER_SECRET`, and provider keys are server-only;
-- provider configuration is optional—the durable companion fallbacks remain functional without it;
+- provider configuration is optional - the durable companion fallbacks remain functional without it;
 - private AI chat uses `AI_CHAT_MODEL` (default `gpt-5.6-luna`) and `AI_CHAT_REASONING_EFFORT` (default `low` for GPT-5.6 models);
 - short provider-enhanced companion replies use `AI_UTILITY_MODEL` (default `gpt-4o-mini`) and retry once with the chat model before using the durable fallback;
 - `AI_MODEL` remains an optional global compatibility fallback when a purpose-specific model is unset;

@@ -16,7 +16,7 @@ export function fallbackReply(
   const subject = task ? `“${task}”` : "that task";
   const variants: Record<string, string> = {
     moss: `${subject} is a real handhold for what comes next. You made steady progress visible.`,
-    tempo: `A clean finish on ${subject} and a clear next step—that’s solid momentum.`,
+    tempo: `A clean finish on ${subject} and a clear next step. That’s solid momentum.`,
     juniper: `Finishing ${subject} made the next session easier for you. That kind of setup counts.`,
     north: `${subject} is logged, finished, and shared. Respect for closing the loop.`,
     orbit: `There is something useful in seeing ${subject} move from idea to done. Nice learning loop.`,

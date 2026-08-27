@@ -145,7 +145,7 @@ describe("TaskBoard", () => {
     expect(prioritySelect).toHaveValue("");
     expect(within(prioritySelect).getAllByRole("option").map((option) => option.getAttribute("value"))).toEqual(["", "1", "2", "3", "4"]);
     expect(within(prioritySelect).getByRole("option", { name: "No priority" })).toBeInTheDocument();
-    expect(within(prioritySelect).getByRole("option", { name: "Priority 1 — Highest" })).toBeInTheDocument();
+    expect(within(prioritySelect).getByRole("option", { name: "Priority 1: Highest" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Handle the urgent request" } });
     fireEvent.change(prioritySelect, { target: { value: "1" } });

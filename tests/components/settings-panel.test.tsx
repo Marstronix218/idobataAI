@@ -52,7 +52,7 @@ describe("SettingsPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
 
-    expect(await screen.findByText("Thanks — your feedback was sent. Preview only.")).toBeVisible();
+    expect(await screen.findByText("Thanks. Your feedback was sent. Preview only.")).toBeVisible();
     expect(screen.getByLabelText("Your feedback")).toHaveValue("");
   });
 });

@@ -69,7 +69,7 @@ describe("SettingsPanel production loading", () => {
       method: "POST",
       body: JSON.stringify({ category: "idea", message: "Please add a compact task view." }),
     }));
-    expect(await screen.findByText("Thanks — your feedback was sent.")).toBeVisible();
+    expect(await screen.findByText("Thanks. Your feedback was sent.")).toBeVisible();
   });
 
   it("keeps feedback available for correction and retry after a failed submission", async () => {
@@ -88,7 +88,7 @@ describe("SettingsPanel production loading", () => {
     apiRequest.mockResolvedValueOnce({ id: "feedback-2" });
     fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
 
-    expect(await screen.findByText("Thanks — your feedback was sent.")).toBeVisible();
+    expect(await screen.findByText("Thanks. Your feedback was sent.")).toBeVisible();
     expect(screen.getByLabelText("Your feedback")).toHaveValue("");
   });
 });

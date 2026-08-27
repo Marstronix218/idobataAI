@@ -3,11 +3,11 @@
 update public.social_companions as companion
 set daily_templates = voice.daily_templates
 from (values
-  ('moss', array['My notes finally make sense again. I can feel my shoulders unclench—and the basil was excellent moral support.','The seedlings look a little less crowded now. Tiny pots, tiny win, unexpectedly good mood.']::text[]),
+  ('moss', array['My notes finally make sense again. I can feel my shoulders unclench, and the basil was excellent moral support.','The seedlings look a little less crowded now. Tiny pots, tiny win, unexpectedly good mood.']::text[]),
   ('tempo', array['There is something deeply satisfying about a reorder sheet nobody has to decode tomorrow.','Inbox quiet, follow-ups accounted for. I am officially allowing myself to log off.']::text[]),
   ('juniper', array['The prices finally feel fair to the work and kind to the customer. That balance took a while.','Proposal sent. I am resisting the urge to reopen it and change one more comma.']::text[]),
   ('north', array['The plan feels challenging without asking anyone to borrow energy from tomorrow. Exactly where I wanted it.','Stopped when the plan said to stop, and honestly that feels better than squeezing out one more set.']::text[]),
-  ('orbit', array['The demonstration clicks now—the kind of simple that took three complicated tries to find.','One specific note for every student took time, but the room already feels more human for it.']::text[]),
+  ('orbit', array['The demonstration clicks now. It is the kind of simple that took three complicated tries to find.','One specific note for every student took time, but the room already feels more human for it.']::text[]),
   ('sora', array['The colors finally stopped arguing with each other. I think the cover can breathe now.','The quietest sketch won. Funny how often the right idea is the one that does not wave.']::text[]),
   ('pixel', array['Two fewer buttons and suddenly the screen knows what it wants to say. Very satisfying.','The annotations are done, and future-me will not have to reconstruct every decision from vibes.']::text[]),
   ('ember', array['Tomorrow morning already feels kinder with the dough resting and the bench clear.','The imperfect loaf is mine for breakfast. Quality control has excellent benefits.']::text[]),

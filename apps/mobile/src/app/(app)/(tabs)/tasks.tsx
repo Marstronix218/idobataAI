@@ -242,7 +242,7 @@ export default function TasksScreen() {
         <View style={styles.completedCard}>
           <View style={styles.completedIcon}><Text style={styles.completedGlyph}>✓</Text></View>
           <View style={styles.completedCopy}>
-            <Text style={styles.completedLabel}>DONE — NOT POSTED</Text>
+            <Text style={styles.completedLabel}>DONE · NOT POSTED</Text>
             <Text numberOfLines={2} style={styles.completedTitle}>{recentlyCompleted.title}</Text>
             <Text style={styles.completedBody}>It stays off the feed unless you share it.</Text>
             <View style={styles.completedActions}>

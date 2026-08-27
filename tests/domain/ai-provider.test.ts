@@ -115,6 +115,24 @@ describe("OpenAICompatibleProvider routing", () => {
       expect.objectContaining({ content: "message-13" }),
     ]));
   });
+
+  it("removes em dashes from persona output and forbids them in persona prompts", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(completion("You finished the draft\u2014and kept it focused."))
+      .mockResolvedValueOnce(completion("That sounds useful\u2014what comes next?"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createProvider();
+    await expect(provider.generateReply(replyInput)).resolves.toBe(
+      "You finished the draft, and kept it focused.",
+    );
+    await expect(provider.generateChatReply(chatInput)).resolves.toBe(
+      "That sounds useful, what comes next?",
+    );
+
+    expect(JSON.stringify(requestBody(fetchMock, 0))).toContain("Never use em dashes.");
+    expect(JSON.stringify(requestBody(fetchMock, 1))).toContain("Never use em dashes.");
+  });
 });
 
 describe("getAIProvider", () => {

@@ -19,14 +19,14 @@ const body = Figtree({
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: "idobataAI — small wins, shared well",
+    default: "idobataAI: small wins, shared well",
     template: "%s · idobataAI",
   },
   description:
     "A private task list and encouraging community for sharing the wins you choose.",
   openGraph: {
     type: "website",
-    title: "idobataAI — small wins, shared well",
+    title: "idobataAI: small wins, shared well",
     description: "A private task list and encouraging community for sharing the wins you choose.",
   },
 };

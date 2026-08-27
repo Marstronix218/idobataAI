@@ -9,7 +9,7 @@ type StatusMessageProps = {
 
 /**
  * Success and failure used to share one muted grey line with `aria-live`,
- * so a failed save read exactly like "Settings saved." — quiet, grey, and easy
+ * so a failed save read exactly like "Settings saved.": quiet, grey, and easy
  * to miss. Failures now announce as an alert and carry error styling, with an
  * optional retry where retrying is meaningful.
  *

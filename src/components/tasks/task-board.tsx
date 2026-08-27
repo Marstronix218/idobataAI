@@ -34,10 +34,10 @@ type TaskGroup = { key: string; title: string; tasks: Task[] };
 
 const EDIT_CATEGORIES_VALUE = "__edit_categories__";
 const priorityOptions: Array<{ value: TaskPriority; label: string }> = [
-  { value: 1, label: "Priority 1 — Highest" },
-  { value: 2, label: "Priority 2 — High" },
-  { value: 3, label: "Priority 3 — Medium" },
-  { value: 4, label: "Priority 4 — Low" },
+  { value: 1, label: "Priority 1: Highest" },
+  { value: 2, label: "Priority 2: High" },
+  { value: 3, label: "Priority 3: Medium" },
+  { value: 4, label: "Priority 4: Low" },
 ];
 
 function localDateInputValue(value: Date | string = new Date()) {

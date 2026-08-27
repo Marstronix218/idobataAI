@@ -183,7 +183,7 @@ export function SettingsPanel() {
         });
       }
       form.reset();
-      setFeedbackStatus(`Thanks — your feedback was sent.${isPreviewMode ? " Preview only." : ""}`);
+      setFeedbackStatus(`Thanks. Your feedback was sent.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
       setFeedbackStatus(errorMessage(error));
     } finally {

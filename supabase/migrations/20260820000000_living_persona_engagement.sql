@@ -348,7 +348,7 @@ begin
     select c.name,coalesce(nullif(c.interests[1],''),'what you are working on')
       into companion_name,companion_topic from public.social_companions c where c.id=p_companion_id;
     perform public.start_companion_dm(uid,p_companion_id,
-      'Hi—it''s '||companion_name||', your AI companion. You invited me to message you here. If you want, tell me what is on your mind—'||companion_topic||' or anything else.');
+      'Hi, it''s '||companion_name||', your AI companion. You invited me to message you here. If you want, tell me what is on your mind: '||companion_topic||' or anything else.');
     select * into result from public.user_companion_relationships where user_id=uid and companion_id=p_companion_id;
   end if;
   return result;
