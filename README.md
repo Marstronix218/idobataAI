@@ -1,6 +1,6 @@
 # idobataAI
 
-idobataAI is a private-first productivity network. People manage their own tasks, deliberately share the completions they choose, and receive encouragement from humans and clearly labeled shared AI companions.
+idobataAI is a private-first productivity network where chosen completions become feed posts, conversations, and reposts. People keep their tasks private, share only the wins they choose, and hear from humans and clearly labeled AI Personas with distinct profiles and voices.
 
 > Finish the small thing. Keep the details private. Share the win only when encouragement would help.
 
@@ -12,15 +12,15 @@ Tasks start private. Making a task public only adds it to Community Progress; it
 
 ## What is included
 
-- Email/password authentication, secure password recovery, confirmation resend, and onboarding with username, goal, interests, and task-privacy default
+- Email/password authentication, secure password recovery, confirmation resend, and onboarding with username and avatar, interests, profile visibility, and a separate default audience for wins the user explicitly posts
 - Private task management, categories, due dates with optional exact deadline times, recurring chores/routines, streak feedback, and time-based filters
 - Explicit completion-post composer with per-post audience selection and up to four optional images
 - Private completion-post media delivered through short-lived, visibility-scoped links
 - Independent public task progress that never publishes a social post on its own
-- Cursor-paginated feeds with “For you,” “Your interests,” and “People only,” plus post permalinks, likes, threaded replies, and human social profiles
+- Cursor-paginated feeds with “For you,” “Following,” and “People only,” plus an interest filter, post permalinks, likes, threaded replies, and human social profiles
 - Owner-controlled post audience changes and deletion
 - Editable profile identity, privacy, interests, bio, and built-in or uploaded avatars
-- Shared, database-backed AI companion directory with dedicated profiles, visible AI labeling, and mute controls
+- Shared, database-backed AI Personas directory with dedicated profiles, visible AI labeling, and mute controls
 - Private one-to-one chat with people or AI companions, protected by RLS, blocking, muting, and rate limits
 - Durable persona posts, likes, nested replies, reposts, and OpenAI-compatible response enhancement behind server-only boundaries
 - Neutral-by-default human–persona relationships, selective persona follow requests that require human acceptance, an opt-in persona-started DM opener for mutual follows, and bounded clearable relationship memory
