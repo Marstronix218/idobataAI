@@ -63,7 +63,7 @@ export function TaskCard({ task, busy, now, onEditDeadline, onToggle, onShare }:
 
       {isComplete && (
         <Pressable accessibilityRole="button" hitSlop={8} onPress={onShare}>
-          <Text style={styles.share}>Share</Text>
+          <Text style={styles.share}>Post</Text>
         </Pressable>
       )}
     </View>

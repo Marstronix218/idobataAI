@@ -125,7 +125,7 @@ describe("TaskBoard", () => {
     expect(screen.getByText("Draft the project kickoff outline moved back to open tasks.")).toBeVisible();
   });
 
-  it("keeps posting available from the completed list after the success prompt is dismissed", () => {
+  it("labels the completed-list action as Post after the success prompt is dismissed", () => {
     render(<TaskBoard />);
 
     fireEvent.click(screen.getByRole("button", { name: "Complete: Draft the project kickoff outline" }));
@@ -133,7 +133,7 @@ describe("TaskBoard", () => {
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
     fireEvent.click(screen.getByRole("button", { name: /Completed/ }));
 
-    expect(screen.getAllByRole("link", { name: "Share" }).some(
+    expect(screen.getAllByRole("link", { name: "Post" }).some(
       (link) => link.getAttribute("href") === "/tasks/kickoff-outline/share",
     )).toBe(true);
   });
@@ -189,7 +189,9 @@ describe("TaskBoard", () => {
     const editDeadlineTime = within(editDialog).getByLabelText("Deadline time (optional)");
     expect(editDueDate).toHaveValue(originalDueDate);
     expect(editDeadlineTime).toHaveValue("13:45");
-    fireEvent.change(editDeadlineTime, { target: { value: "" } });
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Clear deadline time" }));
+    expect(editDueDate).toHaveValue(originalDueDate);
+    expect(editDeadlineTime).toHaveValue("");
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save changes" }));
 
     const updatedTask = screen.getByRole("heading", { name: "Outline the proposal" }).closest("article");
@@ -208,6 +210,21 @@ describe("TaskBoard", () => {
 
     expect(deadlineTime).toBeDisabled();
     expect(deadlineTime).toHaveValue("");
+  });
+
+  it("lets users explicitly unselect a quick deadline time without clearing the due date", () => {
+    render(<TaskBoard />);
+
+    const dueDate = screen.getByLabelText("Due date");
+    const deadlineTime = screen.getByLabelText("Deadline time (optional)");
+    const originalDueDate = (dueDate as HTMLInputElement).value;
+
+    fireEvent.change(deadlineTime, { target: { value: "09:30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear deadline time for new task" }));
+
+    expect(dueDate).toHaveValue(originalDueDate);
+    expect(deadlineTime).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear deadline time for new task" })).not.toBeInTheDocument();
   });
 
   it("treats a past timed task as overdue while a date-only task stays due today", () => {
@@ -253,7 +270,6 @@ describe("TaskBoard", () => {
     expect(screen.getByLabelText("Repeat schedule")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Priority (optional)")).toHaveClass("field-prefixed", "field-suffixed");
     expect(screen.getByLabelText("Deadline time (optional)")).toHaveClass("field-prefixed");
-    expect(screen.getByLabelText("Deadline time (optional)")).not.toHaveClass("field-suffixed");
     expect(screen.getByLabelText("Filter by category")).toHaveClass("field-prefixed", "field-suffixed");
   });
 

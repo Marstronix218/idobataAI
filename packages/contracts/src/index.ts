@@ -3,6 +3,7 @@ import { z } from "zod";
 export type TaskVisibility = "private" | "public";
 export type TaskStatus = "pending" | "completed";
 export type TaskPriority = 1 | 2 | 3 | 4;
+export const COMPLETION_COMMENT_MAX_CHARACTERS = 300;
 const taskPrioritySchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 
 function isValidTimeZone(value: string) {

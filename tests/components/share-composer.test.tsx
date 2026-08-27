@@ -51,6 +51,21 @@ describe("ShareComposer", () => {
     expect(screen.queryByText("Post preview")).not.toBeInTheDocument();
   });
 
+  it("starts the comment at one line, grows with its content, and limits it to 300 characters", () => {
+    render(<ShareComposer taskId="preview-task" />);
+    const comment = screen.getByLabelText("Comment on your completed task");
+
+    expect(comment).toHaveAttribute("rows", "1");
+    expect(comment).toHaveAttribute("maxlength", "300");
+    expect(screen.getByText("0/300")).toBeVisible();
+
+    Object.defineProperty(comment, "scrollHeight", { configurable: true, value: 96 });
+    fireEvent.change(comment, { target: { value: "First sentence.\nSecond sentence." } });
+
+    expect(comment).toHaveStyle({ height: "96px" });
+    expect(screen.getByText("32/300")).toBeVisible();
+  });
+
   it("lets the user explicitly choose the community audience for this post", () => {
     render(<ShareComposer taskId="preview-task" />);
 

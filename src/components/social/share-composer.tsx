@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { COMPLETION_COMMENT_MAX_CHARACTERS } from "@idobata/contracts";
 import { Check, Globe2, ImagePlus, LockKeyhole, ShieldCheck, X } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -194,7 +195,20 @@ export function ShareComposer({ taskId }: { taskId: string }) {
             </fieldset>
 
             <label className="sr-only" htmlFor="post-message">Comment on your completed task</label>
-            <textarea id="post-message" className="min-h-28 w-full resize-none bg-transparent py-2 text-[1.08rem] leading-7 text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus" maxLength={500} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Add a comment about this win" disabled={busy} />
+            <textarea
+              id="post-message"
+              className="min-h-11 w-full resize-none overflow-hidden bg-transparent py-2 text-[1.08rem] leading-7 text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus"
+              rows={1}
+              maxLength={COMPLETION_COMMENT_MAX_CHARACTERS}
+              value={message}
+              onChange={(event) => {
+                setMessage(event.target.value);
+                event.currentTarget.style.height = "auto";
+                event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
+              }}
+              placeholder="Add a comment about this win"
+              disabled={busy}
+            />
 
             {attachments.length > 0 && <div className="mt-4 grid grid-cols-2 gap-2" aria-label="Selected photos">{attachments.map((item, index) => <div key={item.id} className="relative min-h-36 overflow-hidden rounded-2xl border border-line bg-canvas">
               {/* Local object URLs are intentionally rendered without the remote image optimizer. */}
@@ -225,7 +239,7 @@ export function ShareComposer({ taskId }: { taskId: string }) {
           </label>
           <input id="post-images" type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" multiple onChange={chooseImages} disabled={attachments.length >= POST_MEDIA_MAX_FILES || busy} />
           <span className="text-xs text-muted">{attachments.length}/{POST_MEDIA_MAX_FILES} photos</span>
-          <span className="ml-auto text-xs font-bold text-muted">{message.length}/500</span>
+          <span className="ml-auto text-xs font-bold text-muted">{message.length}/{COMPLETION_COMMENT_MAX_CHARACTERS}</span>
         </div>
         {attachments.length > 0 && <div className="flex items-start gap-2 border-t border-line px-4 py-3 text-xs leading-5 text-community sm:px-5"><ShieldCheck size={16} className="mt-0.5 shrink-0" /><p>Photos use private storage and short-lived links after visibility is checked.</p></div>}
       </form>}

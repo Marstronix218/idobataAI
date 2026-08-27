@@ -1,5 +1,5 @@
 import { ApiClientError } from "@idobata/api-client";
-import type { TaskVisibility } from "@idobata/contracts";
+import { COMPLETION_COMMENT_MAX_CHARACTERS, type TaskVisibility } from "@idobata/contracts";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -33,6 +33,7 @@ export default function ShareTaskScreen() {
   const [recurrenceInstanceId, setRecurrenceInstanceId] = useState<string | null>(null);
   const [audience, setAudience] = useState<TaskVisibility>("private");
   const [message, setMessage] = useState("");
+  const [messageHeight, setMessageHeight] = useState(25);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState(false);
@@ -140,16 +141,18 @@ export default function ShareTaskScreen() {
               <TextInput
                 accessibilityLabel="Optional comment about this win"
                 editable={!posting}
-                maxLength={500}
+                maxLength={COMPLETION_COMMENT_MAX_CHARACTERS}
                 multiline
+                onContentSizeChange={(event) => setMessageHeight(Math.max(25, Math.ceil(event.nativeEvent.contentSize.height)))}
                 onChangeText={setMessage}
                 placeholder="Add a comment about this win…"
                 placeholderTextColor={colors.textMuted}
-                style={styles.messageInput}
+                scrollEnabled={false}
+                style={[styles.messageInput, { height: messageHeight }]}
                 textAlignVertical="top"
                 value={message}
               />
-              <Text style={styles.counter}>{message.length}/500</Text>
+              <Text style={styles.counter}>{message.length}/{COMPLETION_COMMENT_MAX_CHARACTERS}</Text>
 
               <View style={styles.quotedTask}>
                 <View style={styles.quotedHeader}>
@@ -198,7 +201,7 @@ const styles = StyleSheet.create({
   segmentTitleActive: { color: colors.text },
   segmentHint: { color: colors.textMuted, fontFamily: typography.body, fontSize: 11 },
   composerCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden", padding: spacing.lg },
-  messageInput: { color: colors.text, fontFamily: typography.body, fontSize: 17, lineHeight: 25, minHeight: 132 },
+  messageInput: { color: colors.text, fontFamily: typography.body, fontSize: 17, lineHeight: 25, minHeight: 25 },
   counter: { color: colors.textMuted, fontFamily: typography.mono, fontSize: 11, textAlign: "right" },
   quotedTask: { backgroundColor: colors.canvas, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, gap: spacing.md, marginTop: spacing.lg, padding: spacing.lg },
   quotedHeader: { alignItems: "center", flexDirection: "row", gap: spacing.sm },

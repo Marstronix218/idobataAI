@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { taskCreateSchema, taskUpdateSchema } from "@idobata/contracts";
+import { COMPLETION_COMMENT_MAX_CHARACTERS, taskCreateSchema, taskUpdateSchema } from "@idobata/contracts";
 
 export { taskCreateSchema, taskUpdateSchema };
 
@@ -42,7 +42,7 @@ export const taskCategorySchema = z.object({
 }).strict();
 
 export const publishSchema = z.object({
-  message: optionalClean(500),
+  message: optionalClean(COMPLETION_COMMENT_MAX_CHARACTERS),
   visibility: z.enum(["private", "public"]),
   recurrenceInstanceId: optionalClean(100),
   imagePaths: z.array(z.string().min(1).max(300)).max(4).optional(),
