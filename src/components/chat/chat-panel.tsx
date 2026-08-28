@@ -59,7 +59,7 @@ const moss: ChatPeer = {
   name: "Moss",
   handle: "moss",
   avatarUrl: null,
-  description: "A patient student balancing coursework and a tiny balcony garden.",
+  description: "A 312-year-old forest spirit surviving a first semester at a human university.",
 };
 const jonah: ChatPeer = {
   id: "preview-peer",
@@ -69,13 +69,13 @@ const jonah: ChatPeer = {
   avatarUrl: null,
   description: "Product lead, habitual list maker, occasional trail runner.",
 };
-const tempo: ChatPeer = {
-  id: "tempo",
+const kage: ChatPeer = {
+  id: "kage",
   kind: "companion",
-  name: "Tempo",
-  handle: "tempo",
+  name: "Kage",
+  handle: "kage",
   avatarUrl: null,
-  description: "An office operations coordinator who loves a clean checklist.",
+  description: "A modern ninja who treats ordinary chores as classified missions.",
 };
 const aya: ChatPeer = {
   id: "preview-aya",
@@ -89,7 +89,7 @@ const aya: ChatPeer = {
 const previewThreads: ChatThreadSummary[] = [
   previewThread("preview-moss", moss, "A ten-minute outline sounds like a gentle place to start.", 3),
   previewThread("preview-jonah", jonah, "Want me to look at the kickoff notes tomorrow?", 24),
-  previewThread("preview-tempo", tempo, "Your checklist has enough breathing room now.", 78),
+  previewThread("preview-kage", kage, "Objective reduced to three targets. Operational clarity restored.", 78),
 ];
 
 const previewDetails: Record<string, ChatThreadDetail> = {
@@ -109,16 +109,16 @@ const previewDetails: Record<string, ChatThreadDetail> = {
       previewMessage("j2", "preview-jonah", "Nice. Want me to look at the kickoff notes tomorrow?", "user", 24),
     ],
   },
-  "preview-tempo": {
+  "preview-kage": {
     ...previewThreads[2],
     messages: [
-      previewMessage("t1", "preview-tempo", "I trimmed the plan down to the three things that matter.", "me", 84),
-      previewMessage("t2", "preview-tempo", "Your checklist has enough breathing room now.", "companion", 78),
+      previewMessage("k1", "preview-kage", "I trimmed the plan down to the three things that matter.", "me", 84),
+      previewMessage("k2", "preview-kage", "Objective reduced to three targets. Operational clarity restored.", "companion", 78),
     ],
   },
 };
 
-const previewContacts: ChatContact[] = [jonah, aya, moss, tempo];
+const previewContacts: ChatContact[] = [jonah, aya, moss, kage];
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();

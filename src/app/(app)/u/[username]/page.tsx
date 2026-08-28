@@ -8,7 +8,7 @@ import type { ReplyAuthor } from "@/components/social/reply-thread";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark } from "@/components/ui/logo";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
-import { companions as previewCompanions } from "@/data/demo";
+import { activeCompanions as previewCompanions } from "@/data/demo";
 import { assertDatabase } from "@/lib/server/http";
 import { signPostMediaByPath } from "@/lib/server/post-media";
 import { toQuotedFeedPost } from "@/lib/domain/social-post";
@@ -127,9 +127,9 @@ const previewLikedPosts: FeedPost[] = [{
   kind: "ai_completion",
   visibility: "public",
   content_status: "active",
-  content: "Finished the reading block before watering the balcony herbs. Both benefited from a little patience.",
-  task_title: "Review the research notes",
-  category: "Learning",
+  content: "I have observed seven generations of this city. None of them adequately explained derivatives.",
+  task_title: "Survive the morning calculus lecture",
+  category: "Human university",
   xp_earned: 15,
   streak: null,
   completed_at: new Date(Date.now() - 12 * 60_000).toISOString(),

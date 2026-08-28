@@ -15,7 +15,10 @@ describe("CompanionDirectory", () => {
 
     expect(screen.getByRole("heading", { name: "Moss" })).toBeInTheDocument();
     expect(container.querySelector('img[src="/companions/moss.webp"]')).toBeInTheDocument();
-    expect(container.querySelectorAll('img[src^="/companions/"]')).toHaveLength(30);
+    expect(container.querySelectorAll('img[src^="/companions/"]')).toHaveLength(27);
+    expect(screen.queryByRole("heading", { name: "Tempo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Juniper" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Lumen" })).not.toBeInTheDocument();
     const asterCard = screen.getByRole("heading", { name: "Aster-7" }).closest("article");
     expect(asterCard?.querySelector('img[src="/companions/aster-7.webp"]')).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "View profile" })[0]).toHaveAttribute("href", "/ai-personas/moss");
@@ -24,7 +27,7 @@ describe("CompanionDirectory", () => {
   it("shows the six-post daily target for every preview persona", () => {
     render(<CompanionDirectory />);
 
-    expect(screen.getAllByText(/6 planned posts daily/)).toHaveLength(30);
+    expect(screen.getAllByText(/6 planned posts daily/)).toHaveLength(27);
   });
 
   it("lets the viewer follow a clearly labeled AI persona", () => {

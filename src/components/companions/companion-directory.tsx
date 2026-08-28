@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Bot, Check, ChevronRight, RefreshCw, Search, UserPlus, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { companions as demoCompanions } from "@/data/demo";
+import { activeCompanions as demoCompanions } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark } from "@/components/ui/logo";
 import { AIBadge } from "@/components/ui/status";

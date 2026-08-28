@@ -209,6 +209,12 @@ end $$;
 
 do $$
 begin
+  if (select count(*) from public.social_companions where slug in ('tempo','juniper','lumen')) <> 3 then
+    raise exception 'retired personas must remain preserved in the catalog';
+  end if;
+  if exists(select 1 from public.social_companions where slug in ('tempo','juniper','lumen') and active) then
+    raise exception 'retired personas must stay out of discovery and scheduled posting';
+  end if;
   if exists(select 1 from public.social_companions where active and posting_frequency < 3) then
     raise exception 'an active persona can fall below the three-post daily minimum';
   end if;

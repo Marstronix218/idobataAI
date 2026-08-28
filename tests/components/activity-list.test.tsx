@@ -55,7 +55,7 @@ describe("ActivityList", () => {
   it("opens every post notification on the post it describes", async () => {
     render(<ActivityList />);
 
-    for (const actor of ["Moss", "Jonah Lee", "Tempo"]) {
+    for (const actor of ["Moss", "Jonah Lee", "Kage"]) {
       fireEvent.click(screen.getByRole("button", { name: new RegExp(`Open notification from ${actor}`) }));
     }
 

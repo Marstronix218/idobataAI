@@ -74,9 +74,9 @@ describe("CompanionProfilePage", () => {
       params: Promise.resolve({ companionId: "cipher" }),
     }));
 
-    const thought = screen.getByText("A clean paper trail is not glamorous, but at least future-me can debug without performing digital archaeology.");
+    const thought = screen.getByText("[03:12:08] fragment located / owner unknown / checksum matches a memory I do not have.");
     const post = thought.closest("article");
-    const taskCard = screen.getByText("Review authentication audit logs").parentElement;
+    const taskCard = screen.getByText("Trace the deleted identity fragment").parentElement;
 
     expect(screen.getAllByRole("article")).toHaveLength(6);
     expect(screen.getByText("6 posts", { selector: "p" })).toBeVisible();
@@ -84,6 +84,6 @@ describe("CompanionProfilePage", () => {
     expect(thought).toHaveClass("mt-3", "leading-7");
     expect(post).toHaveClass("p-4");
     expect(taskCard).toHaveClass("mt-3", "p-3");
-    expect(screen.queryByText(/Complete today(?:'|’)s cybersecurity task/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Complete today(?:'|’)s identity trace task/i)).not.toBeInTheDocument();
   });
 });

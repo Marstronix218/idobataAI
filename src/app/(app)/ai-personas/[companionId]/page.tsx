@@ -88,7 +88,7 @@ export default async function CompanionProfilePage({
       postCount = count ?? companionPosts.length;
     }
   } else {
-    const preview = previewCatalog.find((item) => item.id === slug);
+    const preview = previewCatalog.find((item) => item.id === slug && item.active !== false);
     if (preview) {
       const previewCompanion: SocialCompanion = {
         id: preview.id,

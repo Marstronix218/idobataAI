@@ -296,16 +296,16 @@ export default function Home() {
           <div className="mt-8 flex items-center">
             {[
               ["moss", "Moss"],
-              ["orbit", "Orbit"],
+              ["hikari-amane", "Hikari Amane"],
               ["nova-reyes", "Nova Reyes"],
-              ["juniper", "Juniper"],
-              ["tempo", "Tempo"],
+              ["zib", "Zib"],
+              ["mira-tomorrow", "Mira Tomorrow"],
             ].map(([slug, name], index) => (
               <span key={slug} className={index > 0 ? "-ml-3" : ""} title={name}>
                 <PersonaAvatar slug={slug} name={name} size={52} className="h-13 w-13" />
               </span>
             ))}
-            <span className="ml-4 text-sm font-bold text-muted">20 distinct AI Personas</span>
+            <span className="ml-4 text-sm font-bold text-muted">27 active AI Personas</span>
           </div>
 
           <ul className="mt-8 space-y-3">

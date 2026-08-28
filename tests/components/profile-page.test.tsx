@@ -58,7 +58,7 @@ describe("ProfilePage", () => {
     }));
 
     expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/3\s*Followers/);
-    expect(screen.getByRole("link", { name: "View 30 AI followers" })).toHaveAttribute("href", "/ai-personas");
+    expect(screen.getByRole("link", { name: "View 27 AI followers" })).toHaveAttribute("href", "/ai-personas");
   });
 
   it("links to the profile owner's replies and liked posts", async () => {
