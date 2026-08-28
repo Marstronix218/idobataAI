@@ -38,6 +38,17 @@ function completion(content: string, status = 200) {
   });
 }
 
+function unsupportedTemperature() {
+  return new Response(JSON.stringify({
+    error: {
+      message: "Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.",
+      type: "invalid_request_error",
+      param: "temperature",
+      code: "unsupported_value",
+    },
+  }), { status: 400, headers: { "content-type": "application/json" } });
+}
+
 function createProvider() {
   return new OpenAICompatibleProvider({
     apiKey: "test-key",
@@ -106,9 +117,11 @@ describe("OpenAICompatibleProvider routing", () => {
     expect(body).toMatchObject({
       model: "gpt-5.6-luna",
       reasoning_effort: "low",
-      temperature: 0.7,
       max_completion_tokens: 220,
     });
+    // Luna rejects any non-default temperature outright, which silently
+    // replaced every chat reply with the companion's canned fallback.
+    expect(body).not.toHaveProperty("temperature");
     expect(body.messages).toHaveLength(13);
     expect(body.messages).toEqual(expect.arrayContaining([
       expect.objectContaining({ content: "message-2" }),
@@ -132,6 +145,48 @@ describe("OpenAICompatibleProvider routing", () => {
 
     expect(JSON.stringify(requestBody(fetchMock, 0))).toContain("Never use em dashes.");
     expect(JSON.stringify(requestBody(fetchMock, 1))).toContain("Never use em dashes.");
+  });
+
+  it("retries without temperature when a model refuses it, then stops sending it", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(unsupportedTemperature())
+      .mockResolvedValueOnce(completion("Small steps still count."))
+      .mockResolvedValueOnce(completion("Glad that landed."));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAICompatibleProvider({
+      apiKey: "test-key",
+      baseUrl: "https://api.openai.com/v1",
+      chatModel: "strict-model",
+      utilityModel: "strict-model",
+      tokenParameter: "max_completion_tokens",
+    });
+
+    await expect(provider.generateReply(replyInput)).resolves.toBe("Small steps still count.");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestBody(fetchMock, 0)).toMatchObject({ temperature: 0.7 });
+    expect(requestBody(fetchMock, 1)).not.toHaveProperty("temperature");
+
+    // The refusal is remembered, so later calls skip the wasted round trip.
+    await expect(provider.generateReply(replyInput)).resolves.toBe("Glad that landed.");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(requestBody(fetchMock, 2)).not.toHaveProperty("temperature");
+  });
+
+  it("does not retry a 400 that is unrelated to temperature", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completion("bad request", 400));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAICompatibleProvider({
+      apiKey: "test-key",
+      baseUrl: "https://api.openai.com/v1",
+      chatModel: "picky-model",
+      utilityModel: "picky-model",
+      tokenParameter: "max_completion_tokens",
+    });
+
+    await expect(provider.generateReply(replyInput)).rejects.toThrow(/returned 400/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

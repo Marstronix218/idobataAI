@@ -88,8 +88,33 @@ export class DisabledAIProvider implements AIProvider {
   async generateChatReply(): Promise<string> { throw new Error("AI provider is not configured."); }
 }
 
+// Reasoning models accept only their default temperature and reject the whole
+// request rather than ignoring the field, so the unconditional `temperature`
+// this used to send turned every private chat reply into the canned fallback.
+// Support is remembered per model id instead of hardcoded as a family list, so
+// a new model or a different OpenAI-compatible provider needs no code change.
+const modelsRejectingTemperature = new Set<string>();
+
+function rejectsTemperature(detail: string) {
+  return /temperature/i.test(detail) && /unsupported|not support|unrecognized/i.test(detail);
+}
+
 export class OpenAICompatibleProvider implements AIProvider {
   constructor(private options: OpenAICompatibleProviderOptions) {}
+
+  private postCompletion(body: Record<string, unknown>) {
+    return fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.options.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      // Must stay below the calling route's maxDuration so the in-code
+      // fallback always wins rather than the platform killing the function.
+      signal: AbortSignal.timeout(8_000),
+    });
+  }
 
   private async generateText({
     model,
@@ -99,23 +124,24 @@ export class OpenAICompatibleProvider implements AIProvider {
     maxCharacters,
     invalidContentMessage,
   }: CompletionRequest) {
-    const response = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${this.options.apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.7,
-        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
-        [this.options.tokenParameter]: maxTokens,
-        messages,
-      }),
-      // Must stay below the calling route's maxDuration so the in-code
-      // fallback always wins rather than the platform killing the function.
-      signal: AbortSignal.timeout(8_000),
-    });
+    const request: Record<string, unknown> = {
+      model,
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+      [this.options.tokenParameter]: maxTokens,
+      messages,
+    };
+    // A model given a reasoning effort is a reasoning model, so skip the
+    // temperature it is known to refuse rather than spending a round trip
+    // learning that on every cold start.
+    const sendTemperature = !reasoningEffort && !modelsRejectingTemperature.has(model);
+
+    let response = await this.postCompletion(sendTemperature ? { ...request, temperature: 0.7 } : request);
+    if (sendTemperature && response.status === 400) {
+      const detail = await response.text();
+      if (!rejectsTemperature(detail)) throw new Error(`AI provider returned ${response.status}.`);
+      modelsRejectingTemperature.add(model);
+      response = await this.postCompletion(request);
+    }
     if (!response.ok) throw new Error(`AI provider returned ${response.status}.`);
 
     const json = await response.json() as { choices?: Array<{ message?: { content?: string } }> };

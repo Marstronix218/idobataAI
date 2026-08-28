@@ -44,7 +44,11 @@ export async function POST(request: Request, { params }: Context) {
           .select("id, sender_companion_id, content, created_at")
           .eq("thread_id", id)
           .eq("content_status", "active")
+          // Matches the thread read and the covering index. Without the id
+          // tiebreaker a user message and its reply that share a timestamp can
+          // reach the model in the wrong order.
           .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
           .limit(12),
         supabase.from("companion_user_memory")
           .select("summary, expires_at, reset_at, version")
