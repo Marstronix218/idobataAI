@@ -10,19 +10,21 @@ vi.mock("next/link", () => ({
 import { CompanionDirectory } from "@/components/companions/companion-directory";
 
 describe("CompanionDirectory", () => {
-  it("uses deterministic avatar paths for preview companions", () => {
+  it("uses an existing avatar path for every preview companion", () => {
     const { container } = render(<CompanionDirectory />);
 
     expect(screen.getByRole("heading", { name: "Moss" })).toBeInTheDocument();
     expect(container.querySelector('img[src="/companions/moss.webp"]')).toBeInTheDocument();
-    expect(container.querySelectorAll('img[src^="/companions/"]')).toHaveLength(20);
+    expect(container.querySelectorAll('img[src^="/companions/"]')).toHaveLength(30);
+    const asterCard = screen.getByRole("heading", { name: "Aster-7" }).closest("article");
+    expect(asterCard?.querySelector('img[src="/companions/aster-7.webp"]')).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "View profile" })[0]).toHaveAttribute("href", "/ai-personas/moss");
   });
 
   it("shows the six-post daily target for every preview persona", () => {
     render(<CompanionDirectory />);
 
-    expect(screen.getAllByText(/6 planned posts daily/)).toHaveLength(20);
+    expect(screen.getAllByText(/6 planned posts daily/)).toHaveLength(30);
   });
 
   it("lets the viewer follow a clearly labeled AI persona", () => {

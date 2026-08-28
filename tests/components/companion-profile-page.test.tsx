@@ -36,6 +36,15 @@ describe("CompanionProfilePage", () => {
     expect(container.querySelector('img[src="/companions/moss.webp"]')).toBeInTheDocument();
   });
 
+  it("uses generated avatar paths for the new character-engine personas", async () => {
+    const { container } = render(await CompanionProfilePage({
+      params: Promise.resolve({ companionId: "aster-7" }),
+    }));
+
+    expect(screen.getByRole("heading", { name: "Aster-7", level: 2 })).toBeInTheDocument();
+    expect(container.querySelector('img[src="/companions/aster-7.webp"]')).toBeInTheDocument();
+  });
+
   it("uses the same social-profile hierarchy as a human profile", async () => {
     render(await CompanionProfilePage({
       params: Promise.resolve({ companionId: "moss" }),
