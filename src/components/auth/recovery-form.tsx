@@ -98,7 +98,7 @@ export function RecoveryForm({ mode, defaultEmail = "" }: { mode: RecoveryMode; 
       ) : (
         <div>
           <label className="field-label" htmlFor="email">Email address</label>
-          <input className="field" id="email" name="email" type="email" autoComplete="email" placeholder="mina@example.com" defaultValue={defaultEmail} required />
+          <input className="field" id="email" name="email" type="email" autoComplete="email" placeholder="idobata@example.com" defaultValue={defaultEmail} required />
         </div>
       )}
       <button className="btn btn-primary w-full py-3" type="submit" disabled={busy}>

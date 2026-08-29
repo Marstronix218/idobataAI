@@ -174,7 +174,7 @@ export default function SignInScreen() {
                 editable={!busy}
                 inputMode="email"
                 onChangeText={setEmail}
-                placeholder="you@example.com"
+                placeholder="idobata@example.com"
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
                 style={styles.input}

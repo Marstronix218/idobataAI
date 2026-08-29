@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth }) }));
 
 import { AuthForm } from "@/components/auth/auth-form";
 
-function submitSignUp(email = "mina@example.com") {
+function submitSignUp(email = "idobata@example.com") {
   render(<AuthForm mode="signup" />);
   fireEvent.change(screen.getByLabelText("Email address"), { target: { value: email } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
@@ -43,7 +43,7 @@ describe("AuthForm signup for an email that already has an account", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("You already have an account.");
     expect(screen.getByRole("link", { name: /Log in instead/ }))
-      .toHaveAttribute("href", "/login?email=mina%40example.com");
+      .toHaveAttribute("href", "/login?email=idobata%40example.com");
     expect(screen.queryByText("Check your email to confirm your account, then log in.")).not.toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
   });
@@ -63,7 +63,7 @@ describe("AuthForm signup for an email that already has an account", () => {
       data: { user: { id: "new-user", identities: [{ id: "identity" }] }, session: null },
       error: null,
     });
-    submitSignUp("new@example.com");
+    submitSignUp("idobata@example.com");
 
     await waitFor(() =>
       expect(screen.getByText("Check your email to confirm your account, then log in.")).toBeInTheDocument());

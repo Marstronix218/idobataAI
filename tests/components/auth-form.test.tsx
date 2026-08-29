@@ -27,7 +27,7 @@ describe("AuthForm", () => {
   it("opens the Feed after a returning user signs in", () => {
     render(<AuthForm mode="login" />);
 
-    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "mina@example.com" } });
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "idobata@example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: /Open my feed/ }));
 

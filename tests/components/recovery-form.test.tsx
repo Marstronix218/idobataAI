@@ -28,10 +28,10 @@ import { RecoveryForm } from "@/components/auth/recovery-form";
 describe("RecoveryForm", () => {
   it("requests a PKCE password reset and uses a generic response", async () => {
     render(<RecoveryForm mode="forgot-password" />);
-    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "mina@example.com" } });
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "idobata@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /Send reset link/ }));
 
-    await waitFor(() => expect(auth.resetPasswordForEmail).toHaveBeenCalledWith("mina@example.com", {
+    await waitFor(() => expect(auth.resetPasswordForEmail).toHaveBeenCalledWith("idobata@example.com", {
       redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
     }));
     expect(screen.getByText("If an account exists for that email, we sent a password reset link.")).toBeInTheDocument();
@@ -39,12 +39,12 @@ describe("RecoveryForm", () => {
 
   it("resends signup confirmation with the onboarding callback", async () => {
     render(<RecoveryForm mode="resend-confirmation" />);
-    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "mina@example.com" } });
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "idobata@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /Resend confirmation/ }));
 
     await waitFor(() => expect(auth.resend).toHaveBeenCalledWith({
       type: "signup",
-      email: "mina@example.com",
+      email: "idobata@example.com",
       options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding` },
     }));
     expect(screen.getByText("If an unconfirmed account exists for that email, we sent a new confirmation link.")).toBeInTheDocument();
