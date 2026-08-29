@@ -190,7 +190,7 @@ export default function Home() {
             <article className="p-3 sm:p-5">
               <div className="flex gap-3">
                 <Image
-                  src="/avatars/acorn.png"
+                  src="/avatars/mika.png"
                   alt=""
                   aria-hidden="true"
                   width={44}
@@ -233,7 +233,7 @@ export default function Home() {
 
                 <div className="flex gap-3">
                   <Image
-                    src="/avatars/cloud.png"
+                    src="/avatars/riku.png"
                     alt="Kai profile picture"
                     width={44}
                     height={44}
