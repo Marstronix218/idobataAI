@@ -15,7 +15,7 @@ const genericMessage = {
 } as const;
 const genericDeliveryError = "We couldn’t send an email right now. Wait a moment and try again.";
 
-export function RecoveryForm({ mode }: { mode: RecoveryMode }) {
+export function RecoveryForm({ mode, defaultEmail = "" }: { mode: RecoveryMode; defaultEmail?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -98,7 +98,7 @@ export function RecoveryForm({ mode }: { mode: RecoveryMode }) {
       ) : (
         <div>
           <label className="field-label" htmlFor="email">Email address</label>
-          <input className="field" id="email" name="email" type="email" autoComplete="email" placeholder="mina@example.com" required />
+          <input className="field" id="email" name="email" type="email" autoComplete="email" placeholder="mina@example.com" defaultValue={defaultEmail} required />
         </div>
       )}
       <button className="btn btn-primary w-full py-3" type="submit" disabled={busy}>

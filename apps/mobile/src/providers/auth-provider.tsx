@@ -14,6 +14,8 @@ import {
   type AuthResult,
   friendlyAuthError,
   guardAuthResult,
+  isExistingAccountError,
+  isExistingAccountSignUp,
 } from "@/lib/auth/errors";
 import { prepareAuthStorage } from "@/lib/auth/secure-storage";
 import { mobileEnvironment } from "@/lib/environment";
@@ -119,6 +121,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!client) return { error: "Authentication is still starting. Try again in a moment." };
     return guardAuthResult(async () => {
       const { data, error } = await client.auth.signUp({ email, password });
+      if (isExistingAccountError(error) || (!error && isExistingAccountSignUp(data))) {
+        return { error: null, existingAccount: true };
+      }
       if (!error && data.session) setRequiresReauthentication(false);
       return {
         error: error ? friendlyAuthError(error.message) : null,

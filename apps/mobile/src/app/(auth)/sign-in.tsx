@@ -56,7 +56,11 @@ export default function SignInScreen() {
       const result = mode === "sign-in"
         ? await signIn(normalizedEmail, password)
         : await signUp(normalizedEmail, password);
-      if (result.error) setError(result.error);
+      if (result.existingAccount) {
+        setMessage("You already have an account with this email — sign in instead.");
+        setMode("sign-in");
+        setPassword("");
+      } else if (result.error) setError(result.error);
       else if (result.requiresEmailConfirmation) {
         setMessage("Check your inbox to confirm your email, then return here to sign in.");
         setMode("sign-in");

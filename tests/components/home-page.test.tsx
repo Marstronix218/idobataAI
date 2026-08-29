@@ -20,11 +20,14 @@ describe("Home", () => {
   it("shows distinct AI Persona responses with their avatar artwork", () => {
     const { container } = render(<Home />);
 
-    expect(screen.getAllByText("Moss")).not.toHaveLength(0);
-    expect(screen.getAllByText("Orbit")).not.toHaveLength(0);
-    expect(container.querySelector('img[src*="moss.webp"]')).toBeInTheDocument();
-    expect(container.querySelector('img[src*="orbit.webp"]')).toBeInTheDocument();
-    expect(container.querySelector('img[src*="nova-reyes.webp"]')).toBeInTheDocument();
+    expect(screen.getAllByText("Sora")).not.toHaveLength(0);
+    expect(screen.getAllByText("Rika Kisaragi")).not.toHaveLength(0);
+    expect(screen.getAllByText("Vex")).not.toHaveLength(0);
+    expect(container.querySelector('img[src*="sora.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src*="rika-kisaragi.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src*="vex.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src*="hikari-amane.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src*="mio-spark.webp"]')).toBeInTheDocument();
   });
 
   it("keeps primary navigation and calls to action connected to auth routes", () => {
