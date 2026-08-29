@@ -88,6 +88,7 @@ export function AvatarPicker({ value, onChange, initials, disabled = false, onUp
                 name="avatar-choice"
                 value={choice.value ?? ""}
                 checked={selected}
+                aria-label={choice.label}
                 onChange={() => onChange(choice.value)}
                 className="sr-only"
               />
@@ -100,7 +101,6 @@ export function AvatarPicker({ value, onChange, initials, disabled = false, onUp
               ) : (
                 <span className="avatar avatar-human h-16 w-16 text-base" aria-hidden="true">{initials}</span>
               )}
-              <span>{choice.label}</span>
               {selected && <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-brand text-white" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>}
             </label>
           );

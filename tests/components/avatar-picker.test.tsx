@@ -4,6 +4,19 @@ import { describe, expect, it, vi } from "vitest";
 import { AvatarPicker } from "@/components/profile/avatar-picker";
 
 describe("AvatarPicker", () => {
+  it("shows character images without visible option names", () => {
+    render(<AvatarPicker value={null} onChange={vi.fn()} initials="MM" />);
+
+    for (const name of ["Kuro", "Mika", "Riku", "Suzu"]) {
+      const radio = screen.getByRole("radio", { name });
+      expect(radio.closest("label")?.querySelector("img")).toHaveAttribute(
+        "src",
+        expect.stringContaining(encodeURIComponent(`/avatars/${name.toLowerCase()}.png`)),
+      );
+      expect(screen.queryByText(name)).not.toBeInTheDocument();
+    }
+  });
+
   it("opens the file picker when the displayed profile photo is activated", () => {
     render(<AvatarPicker value={null} onChange={vi.fn()} initials="MM" onUpload={vi.fn()} />);
     const fileInput = screen.getByLabelText("Upload profile photo");

@@ -1,8 +1,8 @@
 export const AVATAR_OPTIONS = [
-  { value: "/avatars/acorn.png", label: "Acorn" },
-  { value: "/avatars/moon.png", label: "Moon" },
-  { value: "/avatars/sprout.png", label: "Sprout" },
-  { value: "/avatars/cloud.png", label: "Cloud" },
+  { value: "/avatars/kuro.png", label: "Kuro" },
+  { value: "/avatars/mika.png", label: "Mika" },
+  { value: "/avatars/riku.png", label: "Riku" },
+  { value: "/avatars/suzu.png", label: "Suzu" },
 ] as const;
 
 export type AvatarPath = (typeof AVATAR_OPTIONS)[number]["value"];
