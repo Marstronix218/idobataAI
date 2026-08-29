@@ -18,7 +18,7 @@ describe("ProfileFollowButton", () => {
   });
 
   it("optimistically follows a human profile and refreshes its follower count", async () => {
-    apiRequest.mockResolvedValue({ following: true });
+    apiRequest.mockResolvedValue({ state: "following" });
     render(<ProfileFollowButton userId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" profileName="Jonah" />);
 
     const follow = screen.getByRole("button", { name: "Follow Jonah" });
@@ -30,6 +30,29 @@ describe("ProfileFollowButton", () => {
       { method: "PUT" },
     ));
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("files a request rather than a follow against a protected profile", async () => {
+    apiRequest.mockResolvedValue({ state: "requested" });
+    render(<ProfileFollowButton userId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" profileName="Jonah" isPrivate />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Follow Jonah" }));
+
+    expect(await screen.findByRole("button", { name: "Cancel follow request to Jonah" })).toHaveTextContent("Requested");
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("withdraws a pending request with the same control", async () => {
+    apiRequest.mockResolvedValue(undefined);
+    render(<ProfileFollowButton userId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" profileName="Jonah" initialState="requested" isPrivate />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel follow request to Jonah" }));
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(
+      "/api/users/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/follow",
+      { method: "DELETE" },
+    ));
+    expect(screen.getByRole("button", { name: "Follow Jonah" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("reverts the optimistic state when following fails", async () => {

@@ -31,7 +31,7 @@ describe("human profile following route", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    rpc.mockResolvedValue({ data: true, error: null });
+    rpc.mockResolvedValue({ data: "following", error: null });
     authed.mockResolvedValue({
       user: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
       supabase: { rpc },
@@ -45,15 +45,26 @@ describe("human profile following route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { following: true } });
+    expect(await response.json()).toEqual({ data: { state: "following", following: true } });
     expect(rpc).toHaveBeenCalledWith("set_user_follow", {
       p_followed_id: followedId,
       p_following: true,
     });
   });
 
+  it("reports a protected profile as requested rather than followed", async () => {
+    rpc.mockResolvedValue({ data: "requested", error: null });
+    const response = await PUT(
+      new Request(`http://localhost/api/users/${followedId}/follow`, { method: "PUT" }),
+      { params: Promise.resolve({ userId: followedId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { state: "requested", following: false } });
+  });
+
   it("unfollows a profile idempotently", async () => {
-    rpc.mockResolvedValue({ data: false, error: null });
+    rpc.mockResolvedValue({ data: "none", error: null });
     const response = await DELETE(
       new Request(`http://localhost/api/users/${followedId}/follow`, { method: "DELETE" }),
       { params: Promise.resolve({ userId: followedId }) },

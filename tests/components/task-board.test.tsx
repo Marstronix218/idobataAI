@@ -114,9 +114,9 @@ describe("TaskBoard", () => {
     // confirmation; the list stays where it was.
     expect(screen.getByRole("region", { name: "Today tasks" })).toBeVisible();
     expect(screen.queryByRole("region", { name: "Completed tasks" })).not.toBeInTheDocument();
-    expect(screen.getByText("It stays off the feed unless you share it.")).toBeVisible();
+    expect(screen.getByText("It stays off the feed unless you post it.")).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("Draft the project kickoff outline completed and remains off the feed.");
-    expect(screen.getAllByRole("link", { name: "Share" }).some(
+    expect(screen.getAllByRole("link", { name: "Post" }).some(
       (link) => link.getAttribute("href") === "/tasks/kickoff-outline/share",
     )).toBe(true);
     expect(await axe(container)).toHaveNoViolations();

@@ -35,21 +35,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Encouragement a user never sees does not bring them back, so the unread
-  // count refreshes on an interval, whenever the tab regains focus, and after
-  // each navigation (which is how /activity clears the badge).
+  // count refreshes on an interval, whenever the tab regains focus, after
+  // navigation, and immediately when the notification screen marks items read.
   useEffect(() => {
     if (isPreviewMode) return;
     const controller = new AbortController();
     const refresh = () => apiRequest<{ unread: number }>("/api/notifications/unread-count", { signal: controller.signal })
       .then((result) => setUnread(result.unread))
       .catch(() => undefined);
+    const syncUnread = (event: Event) => {
+      const nextUnread = event instanceof CustomEvent ? event.detail?.unread : undefined;
+      if (typeof nextUnread === "number") setUnread(nextUnread);
+      else void refresh();
+    };
     void refresh();
     const timer = setInterval(refresh, UNREAD_POLL_MS);
     window.addEventListener("focus", refresh);
+    window.addEventListener("idobata:notifications-changed", syncUnread);
     return () => {
       controller.abort();
       clearInterval(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("idobata:notifications-changed", syncUnread);
     };
   }, [pathname]);
 
@@ -72,10 +79,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <Link href="/tasks" aria-label="Add task" className="btn btn-primary mx-auto mt-5 h-14 w-14 rounded-full p-0 shadow-sm xl:w-full xl:px-5"><Plus size={22} /><span className="hidden xl:inline">Add task</span></Link>
-        <div className="mt-auto flex items-center justify-center gap-3 border-t border-line pt-4 xl:justify-start xl:px-2">
+        <Link href={username ? `/u/${username}` : "/settings"} aria-label="Open your profile" className="mt-auto flex items-center justify-center gap-3 border-t border-line pt-4 transition-colors hover:bg-surface/55 xl:justify-start xl:px-2">
           <Avatar initials={initials} avatarUrl={isPreviewMode ? null : profile?.avatar_url} name={username ?? "Your profile"} />
           <div className="hidden min-w-0 xl:block"><p className="truncate text-sm font-bold">{username ? `@${username}` : "Your profile"}</p><p className="text-xs text-muted">{isPreviewMode ? 6 : profile?.current_streak ?? 0}-day streak</p></div>
-        </div>
+        </Link>
       </aside>
       <main id="main-content" className="min-w-0 lg:ml-[88px] xl:ml-[280px]">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-line bg-surface/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur lg:hidden" aria-label="Primary navigation">

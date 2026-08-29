@@ -9,6 +9,7 @@ export type ContentStatus = "active" | "hidden" | "removed";
 export type ReactionKind = "like";
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 export type CompanionFollowState = "none" | "pending" | "following";
+export type HumanFollowState = "none" | "requested" | "following";
 export type EngagementKind = "reply" | "reaction" | "repost";
 export type EngagementSource = "human_post_guarantee" | "human_reply_response" | "daily_quota" | "ambient";
 export type EngagementState = "planned" | "processing" | "completed" | "failed" | "cancelled";
@@ -30,6 +31,50 @@ export interface UserProfile {
   last_completion_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** One person in the follow directory, from `search_user_directory`. */
+export interface DirectoryUser {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  follower_count: number;
+  viewer_follows: boolean;
+}
+
+/** One pending inbound follow request, from `get_follow_requests`. */
+export interface FollowRequest {
+  requester_id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  created_at: string;
+}
+
+/** The identity card any signed-in reader may see, from `get_profile_card`. */
+export interface ProfileCard {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  interests: string[];
+  current_streak: number;
+  profile_visibility: PostVisibility;
+  created_at: string;
+}
+
+/** One AI persona in the follow directory, from `search_companion_directory`. */
+export interface DirectoryPersona {
+  id: string;
+  slug: string;
+  name: string;
+  avatar_url: string | null;
+  personality: string;
+  viewer_follows: boolean;
 }
 
 export interface Task {
@@ -226,7 +271,7 @@ export interface Notification {
   companion_id: string | null;
   post_id: string | null;
   reply_id: string | null;
-  kind: "reply" | "reaction" | "follow" | "system";
+  kind: "reply" | "reaction" | "follow" | "follow_request" | "follow_accepted" | "system";
   read_at: string | null;
   created_at: string;
 }
@@ -334,10 +379,42 @@ export interface Database {
         Args: { p_post_id: string; p_content: string; p_visibility: PostVisibility; p_idempotency_key: string };
         Returns: SocialPost;
       };
-      set_user_follow: { Args: { p_followed_id: string; p_following: boolean }; Returns: boolean };
+      set_user_follow: { Args: { p_followed_id: string; p_following: boolean }; Returns: HumanFollowState };
+      respond_follow_request: { Args: { p_requester_id: string; p_accept: boolean }; Returns: HumanFollowState };
+      get_follow_requests: { Args: { p_limit?: number }; Returns: FollowRequest[] };
+      get_profile_card: { Args: { p_username: string }; Returns: ProfileCard[] };
       get_profile_follow_summary: {
         Args: { p_user_id: string };
-        Returns: Array<{ follower_count: number; viewer_follows: boolean }>;
+        Returns: Array<{
+          follower_count: number;
+          following_count: number;
+          viewer_follows: boolean;
+          viewer_requested: boolean;
+          pending_request_count: number;
+        }>;
+      };
+      search_companion_directory: {
+        Args: { p_query?: string; p_limit?: number };
+        Returns: Array<{
+          id: string;
+          slug: string;
+          name: string;
+          avatar_url: string | null;
+          personality: string;
+          viewer_follows: boolean;
+        }>;
+      };
+      search_user_directory: {
+        Args: { p_query?: string; p_limit?: number };
+        Returns: Array<{
+          id: string;
+          username: string;
+          display_name: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          follower_count: number;
+          viewer_follows: boolean;
+        }>;
       };
       get_following_post_ids: {
         Args: { p_category?: string | null; p_before?: string | null; p_before_id?: string | null; p_limit?: number };

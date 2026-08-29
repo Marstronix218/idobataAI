@@ -8,6 +8,7 @@ import { posts as demoPosts } from "@/data/demo";
 import { Avatar } from "@/components/ui/avatar";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { AIBadge, PrivacyBadge } from "@/components/ui/status";
+import { DirectorySearch } from "@/components/social/directory-search";
 import { PostMediaGrid } from "@/components/social/post-media-grid";
 import { QuoteRepostDialog, type QuoteRepostInput } from "@/components/social/quote-repost-dialog";
 import { QuotedPostCard } from "@/components/social/quoted-post-card";
@@ -333,12 +334,12 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
 
 export function Feed() {
   const router = useRouter();
-  const [tab, setTab] = useState<FeedTab>("for-you"); const [category, setCategory] = useState(""); const [categories, setCategories] = useState<string[]>(isPreviewMode ? previewInterests : []); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [replyAuthor, setReplyAuthor] = useState<ReplyAuthor | null>(isPreviewMode ? previewReplyAuthor : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : ""); const [loadError, setLoadError] = useState("");
+  const [tab, setTab] = useState<FeedTab>("for-you"); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [replyAuthor, setReplyAuthor] = useState<ReplyAuthor | null>(isPreviewMode ? previewReplyAuthor : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : ""); const [loadError, setLoadError] = useState("");
   async function load({ append = false, signal }: { append?: boolean; signal?: AbortSignal } = {}) {
     if (isPreviewMode) { setStatus("Preview feed refreshed."); setCursor(null); return; }
     setLoading(true); setLoadError("");
     try {
-      const page = await apiRequest<FeedPage>(`/api/feed?${makeFeedParams(tab, category, append ? cursor : null)}`, { signal });
+      const page = await apiRequest<FeedPage>(`/api/feed?${makeFeedParams(tab, "", append ? cursor : null)}`, { signal });
       setItems((current) => append ? [...current, ...page.items] : page.items); setCursor(page.nextCursor); setStatus(append ? "More posts loaded." : "Feed refreshed.");
     } catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setLoadError(errorMessage(error)); }
     finally { if (!signal?.aborted) setLoading(false); }
@@ -348,7 +349,6 @@ export function Feed() {
     createClient().auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
     apiRequest<UserProfile>("/api/profile")
       .then((profile) => {
-        setCategories(Array.from(new Set(profile.interests)));
         setReplyAuthor({ name: profile.display_name?.trim() || profile.username, username: profile.username, avatarUrl: profile.avatar_url });
       })
       .catch((error) => setLoadError(errorMessage(error)));
@@ -356,15 +356,15 @@ export function Feed() {
   useEffect(() => {
     if (isPreviewMode) return;
     const controller = new AbortController();
-    apiRequest<FeedPage>(`/api/feed?${makeFeedParams(tab, category)}`, { signal: controller.signal })
+    apiRequest<FeedPage>(`/api/feed?${makeFeedParams(tab, "")}`, { signal: controller.signal })
       .then((page) => { setItems(page.items); setCursor(page.nextCursor); setLoadError(""); })
       .catch((error) => { if (!(error instanceof DOMException && error.name === "AbortError")) setLoadError(errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [tab, category]);
+  }, [tab]);
   function changePost(changed: FeedPost) { setItems((current) => current.map((post) => post.id === changed.id ? changed : post)); }
   function addQuote(post: FeedPost) {
-    if (tab === "following" || (category && post.category !== category)) return;
+    if (tab === "following") return;
     setItems((current) => [post, ...current]);
   }
   function changeTab(nextTab: FeedTab) {
@@ -387,34 +387,28 @@ export function Feed() {
     requestAnimationFrame(() => document.getElementById(`feed-${nextTab}-tab`)?.focus());
   }
   const displayedItems = isPreviewMode
-    ? items.filter((post) => (tab === "for-you" || (tab === "following" && previewInterests.includes(post.category ?? "")) || (tab === "people" && !post.companion_id)) && (!category || post.category === category))
+    ? items.filter((post) => tab === "for-you" || (tab === "following" && previewInterests.includes(post.category ?? "")) || (tab === "people" && !post.companion_id))
     : items;
   return <div className="min-w-0 border-x border-line bg-canvas">
       <header className="sticky top-0 z-20 border-b border-line bg-canvas/88 backdrop-blur-xl">
-        <div className="flex min-h-14 items-center justify-between px-4">
-          <h1 className="display text-xl font-bold">Community</h1>
-          <button className="icon-btn border-transparent bg-transparent" aria-label="Refresh feed" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button>
+        <div className="flex min-h-14 items-center gap-2 px-4 sm:gap-3">
+          <h1 className="display shrink-0 text-xl font-bold">Community</h1>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <DirectorySearch />
+            <button className="icon-btn shrink-0 border-transparent bg-transparent" aria-label="Refresh feed" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button>
+          </div>
         </div>
-        <div className="flex flex-col border-t border-line sm:flex-row">
+        <div className="flex border-t border-line">
           <div className="grid min-w-0 flex-1 grid-cols-3" role="tablist" aria-label="Feed view">
             <button id="feed-for-you-tab" type="button" role="tab" aria-selected={tab === "for-you"} aria-controls="feed-panel" tabIndex={tab === "for-you" ? 0 : -1} onClick={() => changeTab("for-you")} onKeyDown={(event) => handleTabKeyDown(event, "for-you")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "for-you" ? "text-ink" : "text-muted"}`}>For you{tab === "for-you" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
             <button id="feed-following-tab" type="button" role="tab" aria-selected={tab === "following"} aria-controls="feed-panel" tabIndex={tab === "following" ? 0 : -1} onClick={() => changeTab("following")} onKeyDown={(event) => handleTabKeyDown(event, "following")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "following" ? "text-ink" : "text-muted"}`}>Following{tab === "following" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
             <button id="feed-people-tab" type="button" role="tab" aria-selected={tab === "people"} aria-controls="feed-panel" tabIndex={tab === "people" ? 0 : -1} onClick={() => changeTab("people")} onKeyDown={(event) => handleTabKeyDown(event, "people")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "people" ? "text-ink" : "text-muted"}`}>People only{tab === "people" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
           </div>
-          <label className="relative flex w-full items-center border-t border-line hover:bg-surface/55 sm:min-w-36 sm:w-auto sm:border-l sm:border-t-0">
-            <select aria-label="Filter feed by category" value={category} onChange={(event) => { if (!isPreviewMode) setLoading(true); setLoadError(""); setCursor(null); setCategory(event.target.value); }} className="min-h-12 w-full appearance-none bg-transparent py-2 pl-4 pr-9 text-sm font-bold text-muted outline-none focus-visible:ring-3 focus-visible:ring-focus">
-              <option value="">All categories</option>
-              {categories.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-            <ChevronDown aria-hidden="true" size={15} className="pointer-events-none absolute right-3 text-muted" />
-          </label>
         </div>
       </header>
 
       <div id="feed-panel" role="tabpanel" aria-labelledby={`feed-${tab}-tab`}>
       {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> Feed interactions use demo data and reset on reload.</div>}
-
-      {category && <div className="flex items-center justify-between gap-3 border-b border-line bg-surface/45 px-4 py-2 text-sm"><span className="font-bold text-community">Category: {category}</span><button type="button" className="btn btn-ghost min-h-9 px-3 text-xs" onClick={() => setCategory("")} aria-label={`Clear ${category} category filter`}>Clear</button></div>}
 
       <p className="sr-only" aria-live="polite">{loading ? "Refreshing feed." : status}</p>
       {loadError && <p role="alert" className="border-b border-line bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{loadError}</p>}

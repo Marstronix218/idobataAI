@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowLeft, Bot, MailPlus, Search, Send, UserRound, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -377,15 +378,18 @@ export function ChatPanel() {
         <button type="button" className="icon-btn" aria-label="Start a new conversation" onClick={() => setNewChatOpen(true)}><MailPlus size={19} /></button>
       </header>
       {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-xs leading-5"><strong>Preview mode.</strong> Messages are interactive demo data and do not persist.</div>}
-      <div className="p-3">
+        <div className="p-3">
         <label htmlFor="conversation-search" className="sr-only">Search conversations</label>
-        <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 text-muted" size={18} /><input id="conversation-search" className="field min-h-11 rounded-full pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations" /></div>
+        <div className="relative"><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-muted"><Search size={18} /></span><input id="conversation-search" className="field field-prefixed min-h-11 rounded-full" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations" /></div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visibleThreads.map(({ thread, peer }) => {
           const active = thread.id === selectedId;
+          const profileHref = peer.kind === "companion" ? `/ai-personas/${peer.handle}` : `/u/${peer.handle}`;
           return <button type="button" key={thread.id} onClick={() => void selectThread(thread.id)} className={`flex w-full items-start gap-3 border-t border-line px-4 py-4 text-left transition-colors first:border-t-0 hover:bg-surface/45 ${active ? "bg-surface/70" : ""}`}>
-            <Avatar initials={initials(peer.name)} avatarUrl={peer.avatarUrl} name={peer.name} ai={peer.kind === "companion"} />
+            <Link href={profileHref} onClick={(event) => event.stopPropagation()} aria-label={`Open ${peer.name}'s profile`} className="shrink-0">
+              <Avatar initials={initials(peer.name)} avatarUrl={peer.avatarUrl} name={peer.name} ai={peer.kind === "companion"} />
+            </Link>
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-1.5"><strong className="truncate">{peer.name}</strong>{peer.kind === "companion" && <span className="shrink-0 text-xs font-extrabold text-community">AI</span>}<time className="ml-auto shrink-0 text-xs text-muted">{shortTime(thread.last_message_at)}</time></span>
               <span className="mt-1 block truncate text-sm text-muted">{thread.last_message_preview ?? "Start the conversation"}</span>
@@ -400,7 +404,9 @@ export function ChatPanel() {
       {selectedSummary ? <>
         <header className="flex min-h-16 items-center gap-3 border-b border-line px-3 sm:px-4">
           <button type="button" className="icon-btn border-transparent bg-transparent md:hidden" aria-label="Back to conversations" onClick={() => setMobileConversationOpen(false)}><ArrowLeft size={20} /></button>
-          <Avatar initials={initials(selectedSummary.peer.name)} avatarUrl={selectedSummary.peer.avatarUrl} name={selectedSummary.peer.name} ai={selectedSummary.peer.kind === "companion"} />
+          <Link href={selectedSummary.peer.kind === "companion" ? `/ai-personas/${selectedSummary.peer.handle}` : `/u/${selectedSummary.peer.handle}`} aria-label={`Open ${selectedSummary.peer.name}'s profile`} className="shrink-0">
+            <Avatar initials={initials(selectedSummary.peer.name)} avatarUrl={selectedSummary.peer.avatarUrl} name={selectedSummary.peer.name} ai={selectedSummary.peer.kind === "companion"} />
+          </Link>
           <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="truncate font-bold">{selectedSummary.peer.name}</h2>{selectedSummary.peer.kind === "companion" && <AIBadge />}</div><p className="truncate text-xs text-muted">@{selectedSummary.peer.handle}{selectedSummary.peer.kind === "companion" ? " · AI profile" : ""}</p></div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6" aria-live="polite">
@@ -431,7 +437,7 @@ export function ChatPanel() {
     {newChatOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-overlay/70 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target) setNewChatOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="new-chat-title" className="flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-[1.4rem] border border-line bg-canvas shadow-2xl">
         <header className="flex min-h-16 items-center gap-3 border-b border-line px-4"><button type="button" className="icon-btn border-transparent bg-transparent" aria-label="Close new conversation" onClick={() => setNewChatOpen(false)}><X size={20} /></button><h2 id="new-chat-title" className="display text-xl font-bold">New conversation</h2></header>
-        <div className="p-4"><label htmlFor="contact-search" className="sr-only">Search people and AI profiles</label><div className="relative"><Search className="pointer-events-none absolute left-3 top-3 text-muted" size={18} /><input autoFocus id="contact-search" className="field rounded-full pl-10" placeholder="Search people and AI profiles" value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} /></div></div>
+        <div className="p-4"><label htmlFor="contact-search" className="sr-only">Search people and AI profiles</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-muted"><Search size={18} /></span><input autoFocus id="contact-search" className="field field-prefixed rounded-full" placeholder="Search people and AI profiles" value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} /></div></div>
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
           {(["user", "companion"] as const).map((kind) => {
             const group = visibleContacts.filter((contact) => contact.kind === kind);

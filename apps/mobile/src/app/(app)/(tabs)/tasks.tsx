@@ -244,10 +244,10 @@ export default function TasksScreen() {
           <View style={styles.completedCopy}>
             <Text style={styles.completedLabel}>DONE · NOT POSTED</Text>
             <Text numberOfLines={2} style={styles.completedTitle}>{recentlyCompleted.title}</Text>
-            <Text style={styles.completedBody}>It stays off the feed unless you share it.</Text>
+            <Text style={styles.completedBody}>It stays off the feed unless you post it.</Text>
             <View style={styles.completedActions}>
               <Pressable onPress={() => openShare(recentlyCompleted)} style={styles.actionButton}>
-                <Text style={styles.actionPrimary}>Share</Text>
+                <Text style={styles.actionPrimary}>Post</Text>
               </Pressable>
               <Pressable
                 disabled={busyTaskIds.has(recentlyCompleted.id)}

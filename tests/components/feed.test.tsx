@@ -29,7 +29,7 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "People only" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByRole("combobox", { name: "Filter feed by category" })).toHaveValue("");
+    expect(screen.queryByRole("combobox", { name: "Filter feed by category" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Share progress" })).not.toBeInTheDocument();
     expect(screen.queryByText("What did you make progress on?")).not.toBeInTheDocument();
     expect(screen.getAllByRole("article").length).toBeGreaterThan(0);
@@ -303,17 +303,11 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.queryByText("Moss")).not.toBeInTheDocument();
   });
 
-  it("lets users filter either feed by one of their categories", () => {
+  it("does not show a category filter toggle in the feed header", () => {
     render(<Feed />);
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter feed by category" }), {
-      target: { value: "Fitness" },
-    });
-
-    expect(screen.getAllByRole("article")).toHaveLength(2);
-    expect(screen.getByText("Jonah")).toBeVisible();
-    expect(screen.getByText("North")).toBeVisible();
-    expect(screen.getByText("Category: Fitness")).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "Filter feed by category" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Category:")).not.toBeInTheDocument();
   });
 
   it("offers a human-only feed without a pre-feed progress module", () => {

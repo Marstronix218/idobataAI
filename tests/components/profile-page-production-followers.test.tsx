@@ -63,12 +63,13 @@ const target: UserProfile = {
 const viewer = { username: "mina", display_name: "Mina", avatar_url: null };
 
 function mockProfileClient(followSummaryResult: {
-  data: Array<{ follower_count: number; viewer_follows: boolean }> | null;
+  data: Array<{ follower_count: number; following_count: number; viewer_follows: boolean }> | null;
   error: { message: string; code?: string } | null;
-}, aiFollowerCount = 2) {
+}, aiFollowerCount = 2, config: { viewerId?: string; completionAwards?: number } = {}) {
   const from = vi.fn((table: string) => ({
     select: vi.fn((selection: string, options?: { count?: string }) => {
       if (table === "user_profiles") return query({ data: selection === "*" ? target : viewer, error: null });
+      if (table === "task_completion_awards") return query({ data: null, count: config.completionAwards ?? 0, error: null });
       if (table === "social_posts" && options?.count) return query({ data: null, count: 0, error: null });
       if (table === "social_posts") return query({ data: [], error: null });
       if (table === "social_reposts" && options?.count) return query({ data: null, count: 0, error: null });
@@ -77,7 +78,7 @@ function mockProfileClient(followSummaryResult: {
     }),
   }));
   createClient.mockResolvedValue({
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } } }) },
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: config.viewerId ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } } }) },
     from,
     rpc: vi.fn((name: string) => {
       if (name === "get_profile_follow_summary") return Promise.resolve(followSummaryResult);
@@ -134,7 +135,7 @@ function mockProfilePostsFailure(failure: ProfilePostsFailure) {
     from,
     rpc: vi.fn((name: string) => {
       if (name === "get_profile_follow_summary") {
-        return Promise.resolve({ data: [{ follower_count: 7, viewer_follows: true }], error: null });
+        return Promise.resolve({ data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null });
       }
       if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: 2, error: null });
       throw new Error(`Unexpected RPC: ${name}`);
@@ -143,9 +144,26 @@ function mockProfilePostsFailure(failure: ProfilePostsFailure) {
 }
 
 describe("ProfilePage production followers", () => {
+  it("counts the owner's completed task occurrences even when they were not posted", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
+    const { from } = mockProfileClient(
+      { data: [{ follower_count: 0, following_count: 0, viewer_follows: false }], error: null },
+      0,
+      { viewerId: target.id, completionAwards: 9 },
+    );
+
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "jonah" }),
+      searchParams: Promise.resolve({}),
+    }));
+
+    expect(screen.getByText("Completions").closest("div")).toHaveTextContent(/Completions\s*9/);
+    expect(from).toHaveBeenCalledWith("task_completion_awards");
+  });
+
   it("renders the human follower count and viewer relationship returned by the database", async () => {
     vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
-    const { from } = mockProfileClient({ data: [{ follower_count: 7, viewer_follows: true }], error: null });
+    const { from } = mockProfileClient({ data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null });
 
     render(await ProfilePage({
       params: Promise.resolve({ username: "jonah" }),
@@ -153,6 +171,7 @@ describe("ProfilePage production followers", () => {
     }));
 
     expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/7\s*Followers/);
+    expect(screen.getByText("People followed").closest("div")).toHaveTextContent(/4\s*Following/);
     expect(screen.getByRole("button", { name: "Unfollow Jonah" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("link", { name: "View 2 AI followers" })).toHaveAttribute("href", "/ai-personas");
     expect(from).toHaveBeenCalledWith("social_reposts");

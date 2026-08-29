@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, CheckCircle2, Globe2, Heart, LockKeyhole, MessageCircle, Pencil } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Globe2, Heart, LockKeyhole, MessageCircle, Pencil, UserCheck } from "lucide-react";
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
 import { ProfileFeedPost } from "@/components/profile/profile-feed-post";
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button";
@@ -80,7 +80,19 @@ const previewProfile: UserProfile = {
   updated_at: new Date().toISOString(),
 };
 
+// The columns `get_profile_card` deliberately withholds. None of them are read
+// on a restricted profile; they exist only so the card satisfies `UserProfile`.
+const restrictedProfileDefaults = {
+  daily_goal: 0,
+  default_task_visibility: "private",
+  completion_visibility: "private",
+  xp: 0,
+  last_completion_date: null,
+  updated_at: "",
+} satisfies Partial<UserProfile>;
+
 const previewHumanFollowerCount = 3;
+const previewHumanFollowingCount = 5;
 
 const previewPosts: FeedPost[] = [{
   id: "preview-win",
@@ -323,8 +335,11 @@ export default async function ProfilePage({
   let postCount = previewTimeline.length;
   let completionCount = previewPosts.filter((post) => post.kind === "human_completion").length;
   let humanFollowerCount = previewHumanFollowerCount;
+  let humanFollowingCount = previewHumanFollowingCount;
   let aiFollowerCount = previewCompanions.length;
   let viewerFollowsProfile = false;
+  let viewerRequestedFollow = false;
+  let pendingRequestCount = 0;
   let isOwner = true;
   let currentUserId: string | null = "preview-user";
   let replyAuthor: ReplyAuthor | null = {
@@ -340,8 +355,18 @@ export default async function ProfilePage({
       supabase.auth.getUser(),
       supabase.from("user_profiles").select("*").ilike("username", requestedUsername).maybeSingle(),
     ]);
-    if (!foundProfile) notFound();
-    profile = foundProfile;
+    let visibleProfile = foundProfile;
+    if (!visibleProfile) {
+      // `profiles_read` hides a private profile that has no public posts, but a
+      // protected account is still a real, addressable person. The definer card
+      // carries the identity without the columns privacy is actually about, so
+      // the page can render a restricted profile instead of a 404.
+      const cardResult = assertDatabase(await supabase.rpc("get_profile_card", { p_username: requestedUsername }));
+      const card = cardResult?.[0];
+      if (!card) notFound();
+      visibleProfile = { ...restrictedProfileDefaults, ...card };
+    }
+    profile = visibleProfile;
     currentUserId = viewer.user?.id ?? null;
     isOwner = currentUserId === profile.id;
     if (!currentUserId) {
@@ -363,13 +388,23 @@ export default async function ProfilePage({
     likedPosts = [];
     progress = [];
 
-    if (isOwner || profile.profile_visibility === "public") {
-      let countQuery = supabase
-        .from("social_posts")
-        .select("id", { count: "exact", head: true })
-        .eq("author_id", profile.id)
-        .eq("kind", "human_completion")
-        .eq("content_status", "active");
+    // The counts describe the account rather than its posts, so a protected
+    // profile reports them the same way Twitter does. Every query below is
+    // already narrowed to `visibility = 'public'` for a stranger, so nothing a
+    // private profile withholds is counted here.
+    {
+      const completionCountQuery = isOwner
+        ? supabase
+          .from("task_completion_awards")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_id", profile.id)
+        : supabase
+          .from("social_posts")
+          .select("id", { count: "exact", head: true })
+          .eq("author_id", profile.id)
+          .eq("kind", "human_completion")
+          .eq("content_status", "active")
+          .eq("visibility", "public");
       let postCountQuery = supabase
         .from("social_posts")
         .select("id", { count: "exact", head: true })
@@ -380,11 +415,10 @@ export default async function ProfilePage({
         .select("id", { count: "exact", head: true })
         .eq("actor_id", profile.id);
       if (!isOwner) {
-        countQuery = countQuery.eq("visibility", "public");
         postCountQuery = postCountQuery.eq("visibility", "public");
       }
       const [countResult, postCountResult, repostCountResult, aiFollowerCountResult, followSummaryResult] = await Promise.all([
-        countQuery,
+        completionCountQuery,
         postCountQuery,
         repostCountQuery,
         supabase.rpc("get_profile_ai_follower_count", { p_user_id: profile.id }),
@@ -396,11 +430,21 @@ export default async function ProfilePage({
       postCount = (postCountResult.count ?? 0) + (repostCountResult.count ?? 0);
       completionCount = countResult.count ?? 0;
       aiFollowerCount = assertDatabase(aiFollowerCountResult) ?? 0;
+      // Visibility no longer withholds this row, so a missing one means the two
+      // accounts have blocked each other. That should read as "no such profile"
+      // rather than as a server fault, the same way the directory omits it.
       const followSummary = assertDatabase(followSummaryResult)?.[0];
-      if (!followSummary) throw new Error("Profile follow summary unavailable.");
+      if (!followSummary) notFound();
       humanFollowerCount = followSummary.follower_count;
+      humanFollowingCount = followSummary.following_count;
       viewerFollowsProfile = followSummary.viewer_follows;
+      viewerRequestedFollow = followSummary.viewer_requested;
+      pendingRequestCount = followSummary.pending_request_count;
+    }
 
+    // An approved follower reads a private profile the way anyone reads a
+    // public one; everybody else gets the card above and nothing below it.
+    if (isOwner || profile.profile_visibility === "public" || viewerFollowsProfile) {
       if (selectedTab === "posts") {
         let postQuery = supabase
           .from("social_posts")
@@ -489,15 +533,12 @@ export default async function ProfilePage({
           .limit(20);
         progress = (assertDatabase(progressResult) ?? []) as PublicProgress[];
       }
-    } else {
-      postCount = 0;
-      completionCount = 0;
     }
   } else if (requestedUsername.toLowerCase() !== "mina") {
     notFound();
   }
 
-  const canViewProfile = isOwner || profile.profile_visibility === "public";
+  const canViewProfile = isOwner || profile.profile_visibility === "public" || viewerFollowsProfile;
   const displayName = profile.display_name?.trim() || profile.username;
   const profileInitials = initials(displayName);
   const tabs: Array<{ id: ProfileTab; label: string }> = [
@@ -511,7 +552,7 @@ export default async function ProfilePage({
     <div className="min-w-0 border-x border-line bg-canvas">
       <header className="sticky top-0 z-20 flex min-h-14 items-center gap-4 border-b border-line bg-canvas/88 px-4 backdrop-blur-xl">
         <Link href="/feed" className="icon-btn border-transparent bg-transparent" aria-label="Back to feed"><ArrowLeft size={19} /></Link>
-        <div className="min-w-0"><h1 className="truncate font-bold">{displayName}</h1><p className="text-xs text-muted">{canViewProfile ? `${postCount} ${postCount === 1 ? "post" : "posts"}` : "Private profile"}</p></div>
+        <div className="min-w-0"><h1 className="truncate font-bold">{displayName}</h1><p className="text-xs text-muted">{postCount} {postCount === 1 ? "post" : "posts"}</p></div>
       </header>
 
       {!useDatabase && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> This profile uses demo accomplishments.</div>}
@@ -523,32 +564,55 @@ export default async function ProfilePage({
           <div className="paper-grid absolute inset-0 opacity-50" />
         </div>
         <div className="px-4 pb-4">
-          <div className="-mt-14 flex items-end justify-between gap-4">
-            <span className="relative z-10 rounded-full bg-canvas p-1.5"><Avatar initials={profileInitials} avatarUrl={profile.avatar_url} name={`${displayName}'s profile photo`} size="xl" /></span>
-            {isOwner && <Link href={`/u/${profile.username}/edit`} className="btn btn-secondary mb-1"><Pencil size={16} /> Edit profile</Link>}
-            {!isOwner && currentUserId && profile.profile_visibility === "public" && <ProfileFollowButton userId={profile.id} profileName={displayName} initialFollowing={viewerFollowsProfile} />}
+          <div className="-mt-14 flex items-end justify-between gap-3 sm:gap-4">
+            <span className="relative z-10 shrink-0 rounded-full bg-canvas p-1.5"><Avatar initials={profileInitials} avatarUrl={profile.avatar_url} name={`${displayName}'s profile photo`} size="xl" /></span>
+            <div className="ml-auto shrink-0">
+              {isOwner && <Link href={`/u/${profile.username}/edit`} className="btn btn-secondary mb-1"><Pencil size={16} /> Edit profile</Link>}
+              {!isOwner && currentUserId && <ProfileFollowButton
+                userId={profile.id}
+                profileName={displayName}
+                initialState={viewerFollowsProfile ? "following" : viewerRequestedFollow ? "requested" : "none"}
+                isPrivate={profile.profile_visibility === "private"}
+              />}
+            </div>
           </div>
           <div className="mt-3">
             <div className="flex items-center gap-2"><h2 id="profile-name" className="display text-2xl font-bold">{displayName}</h2>{profile.profile_visibility === "private" && <LockKeyhole size={17} className="text-muted" aria-label="Private profile" />}</div>
             <p className="text-sm text-muted">@{profile.username}</p>
           </div>
 
-          {canViewProfile ? <>
-            {profile.bio && <p className="mt-4 max-w-xl leading-6">{profile.bio}</p>}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
-              <span className="flex items-center gap-1.5"><CalendarDays size={16} /> Joined {joinedDate(profile.created_at)}</span>
-              {isOwner && <PrivacyBadge isPublic={profile.profile_visibility === "public"} />}
-            </div>
-            {profile.interests.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{profile.interests.map((interest) => <span key={interest} className="badge badge-category">{interest}</span>)}</div>}
-            <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-              <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{completionCount}</dd></div>
-              <div className="flex gap-1.5"><dt className="text-muted">Momentum</dt><dd className="font-bold">{profile.current_streak} days</dd></div>
-              <div><dt className="sr-only">Human followers</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></dd></div>
-              <div><dt className="sr-only">AI followers</dt><dd><Link href="/ai-personas" aria-label={`View ${aiFollowerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{aiFollowerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
-            </dl>
-          </> : <div className="mt-5 rounded-2xl border border-line bg-surface p-5"><div className="flex items-center gap-2 font-bold"><LockKeyhole size={18} /> This profile is private</div><p className="mt-2 text-sm leading-6 text-muted">Only {displayName} can view this social timeline. Public tasks and private posts are not shown here.</p></div>}
+          {/* The card describes the person, not their posts, so it renders for
+              everyone. Protecting a profile withholds the timeline below, not
+              the fact that its owner exists. */}
+          {profile.bio && <p className="mt-4 max-w-xl leading-6">{profile.bio}</p>}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+            <span className="flex items-center gap-1.5"><CalendarDays size={16} /> Joined {joinedDate(profile.created_at)}</span>
+            {isOwner && <PrivacyBadge isPublic={profile.profile_visibility === "public"} />}
+          </div>
+          {profile.interests.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{profile.interests.map((interest) => <span key={interest} className="badge badge-category">{interest}</span>)}</div>}
+          <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{completionCount}</dd></div>
+            <div className="flex gap-1.5"><dt className="text-muted">Momentum</dt><dd className="font-bold">{profile.current_streak} days</dd></div>
+            <div><dt className="sr-only">Human followers</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></dd></div>
+            <div><dt className="sr-only">People followed</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowingCount}</span><span className="text-muted">Following</span></dd></div>
+            <div><dt className="sr-only">AI followers</dt><dd><Link href="/ai-personas" aria-label={`View ${aiFollowerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{aiFollowerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
+          </dl>
+
+          {isOwner && pendingRequestCount > 0 && <Link href="/follow-requests" className="mt-4 flex items-center gap-2 rounded-2xl border border-line bg-surface p-4 text-sm font-bold transition-colors hover:bg-surface/70">
+            <UserCheck size={18} className="text-community" />
+            {pendingRequestCount} {pendingRequestCount === 1 ? "person is" : "people are"} waiting to follow you
+          </Link>}
         </div>
       </section>
+
+      {!canViewProfile && <section aria-labelledby="protected-posts" className="border-t border-line px-6 py-14 text-center">
+        <LockKeyhole size={26} className="mx-auto text-muted" />
+        <h2 id="protected-posts" className="display mt-4 text-2xl font-bold">These posts are protected</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted">
+          Only approved followers can see @{profile.username}&rsquo;s posts, replies, likes, and progress.
+          {currentUserId && !isOwner && (viewerRequestedFollow ? " Your request is waiting for them." : " To ask for access, tap Follow.")}
+        </p>
+      </section>}
 
       {canViewProfile && <>
         <nav className="grid grid-cols-4 border-y border-line" aria-label="Profile views" role="tablist">

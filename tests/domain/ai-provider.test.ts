@@ -147,6 +147,41 @@ describe("OpenAICompatibleProvider routing", () => {
     expect(JSON.stringify(requestBody(fetchMock, 1))).toContain("Never use em dashes.");
   });
 
+  it("asks for natural in-character texting without profile headers or Markdown", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completion("hey. what’s up?"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createProvider().generateChatReply({
+      ...chatInput,
+      companionName: "Rika Kisaragi",
+      personality: "competitive, sarcastic, energetic, and secretly diligent",
+      writingStyle: "lowercase gamer slang, playful insults, and tsundere reversals",
+      history: [{ role: "user", content: "wassup" }],
+    });
+
+    const body = requestBody(fetchMock);
+    const messages = body.messages as Array<{ role: string; content: string }>;
+    const systemPrompt = messages[0]?.content ?? "";
+    expect(systemPrompt).toContain("The chat UI already shows your name and AI badge");
+    expect(systemPrompt).toContain("Output only the text-message body");
+    expect(systemPrompt).toContain("Match the scale and energy of the latest message");
+    expect(systemPrompt).toContain("Do not turn casual banter into coaching");
+    expect(systemPrompt).toContain("lowercase gamer slang, playful insults, and tsundere reversals");
+    expect(systemPrompt).not.toContain("a visibly labeled AI profile");
+  });
+
+  it("strips leaked profile wrappers and Markdown from generated chat text", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completion(
+      String.raw`\*\*Rika Kisaragi // AI profile\*\*  hey. **skill issue**, probably.`,
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createProvider().generateChatReply({
+      ...chatInput,
+      companionName: "Rika Kisaragi",
+    })).resolves.toBe("hey. skill issue, probably.");
+  });
+
   it("retries without temperature when a model refuses it, then stops sending it", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(unsupportedTemperature())

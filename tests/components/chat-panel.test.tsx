@@ -39,6 +39,18 @@ describe("ChatPanel", () => {
     expect(screen.getByLabelText("Message Aya Chen")).toBeVisible();
   });
 
+  it("keeps both search fields clear of their decorative icons", () => {
+    const { container } = render(<ChatPanel />);
+
+    expect(screen.getByPlaceholderText("Search conversations")).toHaveClass("field-prefixed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start a new conversation" }));
+    expect(screen.getByPlaceholderText("Search people and AI profiles")).toHaveClass("field-prefixed");
+
+    const searchIconWrappers = Array.from(container.querySelectorAll(".lucide-search")).map((icon) => icon.parentElement);
+    expect(searchIconWrappers.every((wrapper) => wrapper?.classList.contains("inset-y-0"))).toBe(true);
+  });
+
   it("has no automated accessibility violations", async () => {
     const { container } = render(<ChatPanel />);
     expect(await axe(container)).toHaveNoViolations();
