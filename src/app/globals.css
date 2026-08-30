@@ -216,6 +216,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: none;
   outline: none;
 }
+.field-bare { background: transparent; color: var(--ink); outline: none; }
+.field-bare::placeholder { color: var(--ink-muted); }
+.field-bare:focus,
+.field-bare:focus-visible { box-shadow: none; outline: none; }
 .badge {
   display: inline-flex; align-items: center; gap: .375rem; min-height: 24px;
   border: 1px solid var(--line); border-radius: 999px; padding: .2rem .6rem;

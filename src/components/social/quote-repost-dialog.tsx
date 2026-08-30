@@ -55,7 +55,7 @@ export function QuoteRepostDialog({
             <label htmlFor={`quote-repost-content-${post.id}`} className="sr-only">Add a comment</label>
             <textarea
               id={`quote-repost-content-${post.id}`}
-              className="min-h-28 w-full resize-y bg-transparent py-2 text-base leading-7 text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus"
+              className="field-bare min-h-28 w-full resize-y py-2 text-base leading-7 placeholder:text-muted"
               value={content}
               onChange={(event) => setContent(event.target.value)}
               maxLength={500}

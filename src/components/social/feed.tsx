@@ -56,7 +56,9 @@ export const previewFeed: FeedPost[] = demoPosts.map((post) => ({
   }] : [],
 }));
 
-function postType(kind: FeedPost["kind"]) { return kind === "human_quote" ? "Quote repost" : kind.includes("completion") ? "Completed a task" : kind.includes("daily_task") ? "Daily task" : "Progress update"; }
+function isQuote(kind: FeedPost["kind"]) { return kind === "human_quote" || kind === "ai_quote"; }
+
+function postType(kind: FeedPost["kind"]) { return isQuote(kind) ? "Quote repost" : kind.includes("completion") ? "Completed a task" : kind.includes("daily_task") ? "Daily task" : "Progress update"; }
 
 const postControlSelector = "a, button, input, textarea, select, form, label, [role='menu'], [role='menuitem']";
 
@@ -313,7 +315,7 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
       {post.content && <p className="mt-3 text-[.98rem] leading-7">{post.content}</p>}
       <PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />
       {post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
-      {post.kind === "human_quote" && (post.quoted_post ? <QuotedPostCard post={post.quoted_post} /> : <div className="mt-3 rounded-2xl border border-line bg-surface/55 p-4 text-sm text-muted">The quoted post is no longer available.</div>)}
+      {isQuote(post.kind) && (post.quoted_post ? <QuotedPostCard post={post.quoted_post} /> : <div className="mt-3 rounded-2xl border border-line bg-surface/55 p-4 text-sm text-muted">The quoted post is no longer available.</div>)}
       <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Post actions">
         <button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="hidden text-xs text-community sm:inline">{aiLikeCount} AI</span>}</button>
         <button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button>
@@ -326,7 +328,7 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
         </div>
       </div>
       {detail && <ReplyThread postId={post.id} replies={replies} currentUserId={currentUserId} replyAuthor={replyAuthor ?? null} onChange={changeReplies} onNotice={onNotice} />}
-      {replying && <form className="mt-3 flex items-center gap-3 border-t border-line pt-3" onSubmit={submitReply}><Avatar initials={initials(replyAuthor?.name ?? "You")} avatarUrl={replyAuthor?.avatarUrl} name={replyAuthor?.name ?? "You"} /><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-base text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} placeholder="Post your reply" autoFocus /><button type="submit" className="btn btn-community shrink-0 rounded-full px-4 text-sm" disabled={busy || !reply.trim()}>{busy ? "Replying…" : "Reply"}</button></form>}
+      {replying && <form className="mt-3 flex items-center gap-3 border-t border-line pt-3" onSubmit={submitReply}><Avatar initials={initials(replyAuthor?.name ?? "You")} avatarUrl={replyAuthor?.avatarUrl} name={replyAuthor?.name ?? "You"} /><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><input id={`reply-${post.id}`} className="field-bare min-h-11 min-w-0 flex-1 rounded-lg px-1 py-2 text-base placeholder:text-muted" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={500} placeholder="Post your reply" autoFocus /><button type="submit" className="btn btn-community shrink-0 rounded-full px-4 text-sm" disabled={busy || !reply.trim()}>{busy ? "Replying…" : "Reply"}</button></form>}
     </div>
     {quoteOpen && <QuoteRepostDialog post={toQuotedFeedPost(post)} author={replyAuthor ?? null} busy={busy} error={quoteError} returnFocusRef={repostTriggerRef} onClose={closeQuote} onSubmit={submitQuote} />}
   </article>;

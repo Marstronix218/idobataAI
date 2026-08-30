@@ -101,6 +101,12 @@ Demo mode remains available only for non-persistent UI inspection outside produc
 
 Never expose the service-role or AI-provider key through a public environment variable.
 
+Persona engagement with completed-task posts is gated in the database rather than the environment, because the selection engine runs inside the publish trigger and the job worker. `public.app_feature_flags` holds `AI_PERSONA_LIKES`, `AI_PERSONA_REPLIES`, and `AI_PERSONA_QUOTE_REPOSTS`; each defaults to enabled and is checked both when engagement is planned and again before it is published, so disabling one stops already-queued work too:
+
+```sql
+update public.app_feature_flags set enabled = false where key = 'AI_PERSONA_QUOTE_REPOSTS';
+```
+
 ## Verification
 
 Run the application gates locally:

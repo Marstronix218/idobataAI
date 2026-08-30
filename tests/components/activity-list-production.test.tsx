@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiRequest, push } = vi.hoisted(() => ({
@@ -36,9 +36,6 @@ describe("ActivityList production loading", () => {
     push.mockReset();
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/notifications?limit=30") {
-        return Promise.resolve({ items: [], nextCursor: null });
-      }
-      if (path === "/api/notifications?limit=30&unread=true") {
         return Promise.resolve({ items: [unreadNotification], nextCursor: null });
       }
       if (path === "/api/notifications/unread-count") {
@@ -48,16 +45,16 @@ describe("ActivityList production loading", () => {
     });
   });
 
-  it("loads unread notifications from the server instead of filtering only the first All page", async () => {
+  it("loads one notification list from the server alongside the unread count", async () => {
     render(<ActivityList />);
 
-    expect(await screen.findByText("Quiet for now")).toBeVisible();
-    fireEvent.click(screen.getByRole("tab", { name: /Unread/ }));
-
     expect(await screen.findByRole("button", { name: /Open notification from kai/ })).toBeVisible();
+    expect(screen.getByText("1 unread")).toBeVisible();
     await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(
-      "/api/notifications?limit=30&unread=true",
+      "/api/notifications?limit=30",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ));
+    // No second request: the dropped Unread view was the only reason to refetch.
+    expect(apiRequest).toHaveBeenCalledTimes(2);
   });
 });

@@ -82,7 +82,7 @@ describe("OpenAICompatibleProvider routing", () => {
     expect(requestBody(fetchMock)).toMatchObject({
       model: "gpt-4o-mini",
       temperature: 0.7,
-      max_completion_tokens: 100,
+      max_completion_tokens: 120,
     });
     expect(requestBody(fetchMock)).not.toHaveProperty("reasoning_effort");
   });

@@ -43,6 +43,16 @@ Human profile follows are one-way edges from a signed-in person to a public prof
 
 Provider calls occur only for an explicitly persisted engagement after commit. If the provider is unavailable, that engagement's companion-specific fallback remains valid and visible.
 
+## Selective persona engagement with completed tasks
+
+Every persona carries an engagement profile: a social activity level, per-channel affinities for likes, replies, and quote reposts, a table of task-category weights, and its own tone and avoid rules. A schema constraint keeps each persona's quote affinity at or below its reply affinity, so quote reposts stay the scarcest channel by construction.
+
+A completed-task post is classified into a small shared task taxonomy (`classify_task_category` in SQL, `src/lib/domain/task-affinity.ts` in TypeScript). The insert trigger uses that classification to pick the one persona whose interests match the task as the guaranteed responder, and queues a `plan_post_engagement` job for the rest of the cast. Progress posts keep the single guaranteed responder and draw no wider attention.
+
+The planner (`src/lib/domain/persona-engagement.ts`) ranks the remaining personas by affinity, social activity, and a deterministic per-post jitter, then walks the shortlist deciding at most one action each under caps of five likes, two replies, and one quote repost. Every roll is a pure function of the post and persona, so a replanned post reaches the same verdict rather than double-engaging. No model call is made to decide who engages; only the personas that chose to speak reach the provider.
+
+Replies and quote reposts use separate prompts. Generated text is screened against generic praise, against the other persona replies already on the post, and against that persona's own recent wording; a near-duplicate is regenerated once. A selective persona that still has nothing distinct to say is cancelled rather than published, while the one guaranteed reply falls back to its curated line. Quote reposts publish as `ai_quote` posts in the persona's own feed and notify the quoted author. `AI_PERSONA_LIKES`, `AI_PERSONA_REPLIES`, and `AI_PERSONA_QUOTE_REPOSTS` in `app_feature_flags` gate the three channels independently at both planning and finalization. Selection metadata is stored on the engagement ledger for debugging and never exposed to users.
+
 ## Job leases and provider cost control
 
 Workers claim due rows atomically with `FOR UPDATE SKIP LOCKED`, a fresh lease token, expiry, and attempt increment. Heartbeat/complete/fail operations require the current token so an expired worker cannot overwrite a newer result. Retries use bounded attempts and cooldowns; exhausted work becomes dead-letter state while fallback content remains.

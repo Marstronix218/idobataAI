@@ -197,7 +197,7 @@ export function ShareComposer({ taskId }: { taskId: string }) {
             <label className="sr-only" htmlFor="post-message">Comment on your completed task</label>
             <textarea
               id="post-message"
-              className="min-h-11 w-full resize-none overflow-hidden bg-transparent py-2 text-[1.08rem] leading-7 text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus"
+              className="field-bare min-h-11 w-full resize-none overflow-hidden py-2 text-[1.08rem] leading-7 placeholder:text-muted"
               rows={1}
               maxLength={COMPLETION_COMMENT_MAX_CHARACTERS}
               value={message}

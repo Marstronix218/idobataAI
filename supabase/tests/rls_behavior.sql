@@ -171,6 +171,94 @@ do $$ begin
   ) <> 1 then raise exception 'eligible human post did not plan exactly one ambient like'; end if;
 end $$;
 
+-- Task relevance decides who the guaranteed responder is, so the classifier the
+-- trigger depends on must agree with the persona affinity tables.
+do $$ begin
+  if public.classify_task_category('Finished economics essay', null, null) <> 'study'
+    then raise exception 'classifier did not read an essay as study'; end if;
+  if public.classify_task_category('Cleaned my room', null, null) <> 'cleaning'
+    then raise exception 'classifier did not read cleaning'; end if;
+  if public.classify_task_category('Finished a 5 km run', null, null) <> 'exercise'
+    then raise exception 'classifier did not read a run as exercise'; end if;
+  if public.classify_task_category('Fixed the authentication bug', null, null) <> 'coding'
+    then raise exception 'classifier did not read a bug fix as coding'; end if;
+  if public.classify_task_category('Session 4', null, 'Finally finished my tax paperwork.') <> 'admin'
+    then raise exception 'classifier did not fall back to the completion note'; end if;
+  if public.classify_task_category(null, null, null) <> 'other'
+    then raise exception 'classifier guessed instead of returning other'; end if;
+end $$;
+
+-- Only a completed task draws the wider cast. A progress post keeps the single
+-- guaranteed responder it has always had.
+insert into public.social_posts(id,author_id,task_id,kind,visibility,content,task_title,category,idempotency_key)
+values('aaaaaaaa-1000-4000-8000-0000000000e1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'aaaaaaaa-0000-4000-8000-000000000003','human_completion','public','Cleaned my entire apartment.',
+  'Clean the apartment','Home','completion-engagement-fixture');
+
+do $$ begin
+  if (
+    select count(*) from public.ai_jobs
+    where job_type='plan_post_engagement' and dedupe_key='plan-engagement:aaaaaaaa-1000-4000-8000-0000000000e1'
+  ) <> 1 then raise exception 'completed-task post did not queue exactly one selective engagement plan'; end if;
+  if exists(
+    select 1 from public.ai_jobs
+    where job_type='plan_post_engagement' and dedupe_key='plan-engagement:aaaaaaaa-1000-4000-8000-000000000002'
+  ) then raise exception 'a progress post queued selective persona engagement'; end if;
+  if (
+    select count(*) from public.social_ai_engagements
+    where post_id='aaaaaaaa-1000-4000-8000-0000000000e1' and source='human_post_guarantee'
+  ) <> 1 then raise exception 'completed-task post did not keep exactly one guaranteed reply'; end if;
+end $$;
+
+-- A persona quote repost is an authored post carrying the original, and it
+-- notifies the quoted human the same way a human quote does.
+insert into public.social_posts(id,companion_id,kind,visibility,content,quoted_post_id,source_key,is_ai_generated)
+values('aaaaaaaa-1000-4000-8000-0000000000e2','10000000-0000-4000-8000-000000000001','ai_quote','public',
+  'Full territory secured. I acknowledge this operation.','aaaaaaaa-1000-4000-8000-0000000000e1',
+  'quote:test-engagement',true);
+
+do $$ begin
+  if not exists(
+    select 1 from public.notifications
+    where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      and kind='quote' and companion_id='10000000-0000-4000-8000-000000000001'
+      and post_id='aaaaaaaa-1000-4000-8000-0000000000e2'
+  ) then raise exception 'a persona quote repost did not notify the quoted author'; end if;
+  if exists(
+    select 1 from public.social_ai_engagements where post_id='aaaaaaaa-1000-4000-8000-0000000000e2'
+  ) then raise exception 'a persona quote post recursively enqueued persona engagement'; end if;
+
+  begin
+    insert into public.social_posts(companion_id,kind,visibility,content,source_key,is_ai_generated)
+    values('10000000-0000-4000-8000-000000000002','ai_quote','public','Quote without an original.','quote:test-missing',true);
+    raise exception 'a persona quote post without an original was accepted';
+  exception when check_violation then
+    null;
+  end;
+
+  begin
+    insert into public.social_posts(author_id,kind,visibility,content,quoted_post_id,idempotency_key)
+    values('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','ai_quote','public','Human wearing a persona quote kind.',
+      'aaaaaaaa-1000-4000-8000-0000000000e1','quote-shape-fixture');
+    raise exception 'a human-authored post was accepted as a persona quote';
+  exception when check_violation then
+    null;
+  end;
+end $$;
+
+-- Quote scarcity is a product rule, so the schema refuses a persona configured
+-- to quote more readily than it replies.
+do $$ begin
+  begin
+    update public.social_companions
+      set reply_affinity=0.2, quote_affinity=0.9
+      where id='10000000-0000-4000-8000-000000000001';
+    raise exception 'a persona was allowed to quote more readily than it replies';
+  exception when check_violation then
+    null;
+  end;
+end $$;
+
 delete from public.user_companion_relationships
 where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   and companion_id in (

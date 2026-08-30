@@ -18,12 +18,12 @@ import { AppTabLayout } from "@/components/layout/app-tab-layout";
 describe("ActivityList", () => {
   beforeEach(() => push.mockReset());
 
-  it("renders the X-style notification views and shared momentum rail", () => {
+  it("renders one notification list, its unread count, and the shared momentum rail", () => {
     render(<AppTabLayout><ActivityList /></AppTabLayout>);
 
     expect(screen.getByRole("heading", { name: "Notifications" })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: /Unread/ })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByText("7 unread")).toBeVisible();
     expect(screen.getByRole("complementary", { name: "Today and performance" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Go to Your Tasks" })).toHaveAttribute("href", "/tasks");
     // Four likes and reposts on one post fold into two rows, leaving five in all.
@@ -63,38 +63,76 @@ describe("ActivityList", () => {
     expect(within(quoted).queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("filters to unread notifications, updates read state, and opens the related post", async () => {
+  it("gives a quote notification the same reply, repost, and like controls a post carries in a feed", () => {
     render(<ActivityList />);
 
-    fireEvent.click(screen.getByRole("tab", { name: /Unread/ }));
-    expect(screen.getByRole("tab", { name: /Unread/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByText("idobataAI")).not.toBeInTheDocument();
+    const summary = screen.getByRole("button", { name: /Open notification from Nova Reyes/ });
+    const row = summary.closest("article") as HTMLElement;
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Open notification from/ })[0]);
+    expect(within(row).getByRole("button", { name: /Reply/ })).toBeVisible();
+    expect(within(row).getByRole("button", { name: /Repost/ })).toBeVisible();
+    expect(within(row).getByRole("button", { name: /Like/ })).toBeVisible();
+    // The controls sit beside the summary, never inside it: a button nested in a
+    // button is invalid markup and swallows the inner click.
+    expect(within(summary).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("likes the quoting post in place without opening the notification", async () => {
+    render(<ActivityList />);
+
+    const row = screen.getByRole("button", { name: /Open notification from Nova Reyes/ }).closest("article") as HTMLElement;
+    const like = within(row).getByRole("button", { name: /Like/ });
+    expect(like).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(like);
+
+    await waitFor(() => expect(like).toHaveAttribute("aria-pressed", "true"));
+    expect(within(row).getByRole("button", { name: "Like 1" })).toBeVisible();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("reposts the quoting post in place and reports the result", async () => {
+    render(<ActivityList />);
+
+    const row = screen.getByRole("button", { name: /Open notification from Nova Reyes/ }).closest("article") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: /Repost/ }));
+
+    await waitFor(() => expect(screen.getByText("Reposted. Preview only.")).toBeVisible());
+    expect(within(row).getByRole("button", { name: "Repost 1" })).toHaveAttribute("aria-pressed", "true");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens the quoting post's thread from its reply control", () => {
+    render(<ActivityList />);
+
+    const row = screen.getByRole("button", { name: /Open notification from Nova Reyes/ }).closest("article") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: /Reply/ }));
+
+    expect(push).toHaveBeenCalledWith("/posts/nova-quote");
+  });
+
+  it("marks an opened notification read in place and opens the related post", async () => {
+    render(<ActivityList />);
+
+    const rows = screen.getAllByRole("button", { name: /Open notification from/ });
+    fireEvent.click(rows[0]);
+
     await waitFor(() => expect(screen.getByText("Notification marked as read. Preview only.")).toBeVisible());
-    expect(screen.getAllByRole("button", { name: /Open notification from/ })).toHaveLength(3);
+    // The row stays in the list, relabelled as read, rather than disappearing.
+    expect(screen.getAllByRole("button", { name: /Open notification from/ })).toHaveLength(5);
+    expect(screen.getByRole("button", { name: /Open notification from Moss.*\. Read/ })).toBeVisible();
     expect(push).toHaveBeenCalledWith("/posts/mina-agenda");
   });
 
   it("marks every notification in a group as read when the group is opened", async () => {
     render(<ActivityList />);
 
-    fireEvent.click(screen.getByRole("tab", { name: /Unread/ }));
     fireEvent.click(screen.getByRole("button", { name: /Open notification from Jonah Lee and 2 others/ }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/posts/mina-agenda"));
-    // All three likes leave the unread list together rather than reappearing.
-    expect(screen.queryByRole("button", { name: /liked your post/ })).not.toBeInTheDocument();
-  });
-
-  it("supports arrow-key navigation between notification tabs", () => {
-    render(<ActivityList />);
-    const allTab = screen.getByRole("tab", { name: "All" });
-
-    allTab.focus();
-    fireEvent.keyDown(allTab, { key: "ArrowRight" });
-
-    expect(screen.getByRole("tab", { name: /Unread/ })).toHaveAttribute("aria-selected", "true");
+    // All three likes are cleared together, so the group cannot come back unread.
+    expect(screen.getByRole("button", { name: /Jonah Lee and 2 others.*\. Read/ })).toBeVisible();
+    expect(screen.getByText("4 unread")).toBeVisible();
   });
 
   it("opens every post notification on the post it describes", async () => {

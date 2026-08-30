@@ -146,7 +146,7 @@ function ReplyComposer({ label, placeholder, author, submitLabel = "Reply", busy
     <label className="sr-only" htmlFor={id}>{label}</label>
     <input
       id={id}
-      className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-base text-ink outline-none placeholder:text-muted focus-visible:ring-3 focus-visible:ring-focus"
+      className="field-bare min-h-11 min-w-0 flex-1 rounded-lg px-1 py-2 text-base placeholder:text-muted"
       value={value}
       onChange={(event) => setValue(event.target.value)}
       onKeyDown={(event) => { if (event.key === "Escape" && onCancel) onCancel(); }}

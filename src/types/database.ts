@@ -4,16 +4,20 @@ export type TaskVisibility = "private" | "public";
 export type TaskStatus = "pending" | "completed";
 export type TaskPriority = 1 | 2 | 3 | 4;
 export type PostVisibility = "private" | "public";
-export type PostKind = "human_completion" | "human_progress" | "human_quote" | "ai_daily_task" | "ai_progress" | "ai_completion";
+export type PostKind = "human_completion" | "human_progress" | "human_quote" | "ai_daily_task" | "ai_progress" | "ai_completion" | "ai_quote";
 export type ContentStatus = "active" | "hidden" | "removed";
 export type ReactionKind = "like";
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 export type CompanionFollowState = "none" | "pending" | "following";
 export type HumanFollowState = "none" | "requested" | "following";
-export type EngagementKind = "reply" | "reaction" | "repost";
-export type EngagementSource = "human_post_guarantee" | "human_reply_response" | "daily_quota" | "ambient";
+export type EngagementKind = "reply" | "reaction" | "repost" | "quote";
+export type EngagementSource = "human_post_guarantee" | "human_post_engagement" | "human_reply_response" | "daily_quota" | "ambient";
 export type EngagementState = "planned" | "processing" | "completed" | "failed" | "cancelled";
 export type FeedbackType = "idea" | "issue" | "other";
+/** How readily a persona engages with other people's completed-task posts. */
+export type SocialActivity = "high" | "medium" | "selective";
+/** Task category to interest weight (0-1); `other` is the unlisted baseline. */
+export type CategoryAffinity = Record<string, number>;
 
 export interface UserProfile {
   id: string;
@@ -123,6 +127,17 @@ export interface SocialCompanion {
   }>;
   active: boolean;
   posting_frequency: number;
+  /** How readily this persona engages with other people's completed tasks. */
+  social_activity: SocialActivity;
+  like_affinity: number;
+  reply_affinity: number;
+  quote_affinity: number;
+  /** Task category to interest weight; `other` is the baseline for the rest. */
+  category_affinity: CategoryAffinity;
+  reply_style: string;
+  quote_style: string;
+  tone_rules: string[];
+  avoid_rules: string[];
   created_at: string;
   updated_at: string;
 }
@@ -236,6 +251,9 @@ export interface SocialAIEngagement {
   reply_id: string | null;
   reaction_id: string | null;
   repost_id: string | null;
+  quote_post_id: string | null;
+  /** Internal selection metadata. Never rendered to users. */
+  decision: Json | null;
   fallback_content: string | null;
   enhanced: boolean;
   dedupe_key: string;
@@ -247,9 +265,46 @@ export interface SocialAIEngagement {
   created_at: string;
 }
 
+/**
+ * Everything `get_post_engagement_context` returns for one completed-task post:
+ * the post, the feature flags, the persona replies already on it, and every
+ * eligible persona with the counters that suppress repetitive attention.
+ */
+export interface PostEngagementContext {
+  post: {
+    id: string;
+    authorId: string | null;
+    kind: PostKind;
+    visibility: PostVisibility;
+    contentStatus: ContentStatus;
+    content: string;
+    taskTitle: string | null;
+    category: string | null;
+    streak: number | null;
+    xpEarned: number | null;
+    focusMinutes: number | null;
+    createdAt: string;
+  };
+  flags: { likes: boolean; replies: boolean; quotes: boolean };
+  siblingReplies: string[];
+  companions: Array<{
+    id: string;
+    slug: string;
+    active: boolean;
+    socialActivity: SocialActivity;
+    likeAffinity: number;
+    replyAffinity: number;
+    quoteAffinity: number;
+    categoryAffinity: CategoryAffinity;
+    engagedThisPost: boolean;
+    repliesToAuthorRecently: number;
+    quotesRecently: number;
+  }>;
+}
+
 export interface AIJob {
   id: string;
-  job_type: "enhance_reply" | "schedule_companion_posts" | "perform_social_action";
+  job_type: "enhance_reply" | "schedule_companion_posts" | "perform_social_action" | "plan_post_engagement";
   dedupe_key: string;
   payload: Json;
   status: JobStatus;
@@ -445,9 +500,11 @@ export interface Database {
         Returns: boolean;
       };
       enqueue_social_action: {
-        Args: { p_dedupe_key: string; p_source: EngagementSource; p_kind: EngagementKind; p_post_id: string; p_companion_id: string; p_target_reply_id?: string | null; p_scheduled_for?: string };
+        Args: { p_dedupe_key: string; p_source: EngagementSource; p_kind: EngagementKind; p_post_id: string; p_companion_id: string; p_target_reply_id?: string | null; p_scheduled_for?: string; p_decision?: Json | null };
         Returns: string;
       };
+      get_post_engagement_context: { Args: { p_post_id: string }; Returns: PostEngagementContext | null };
+      cancel_social_action: { Args: { p_job_id: string; p_lease_token: string; p_reason: string }; Returns: boolean };
       reconcile_persona_engagements: { Args: { p_date?: string }; Returns: number };
       finalize_social_action: { Args: { p_job_id: string; p_lease_token: string; p_content?: string | null }; Returns: boolean };
       create_human_reply: { Args: { p_post_id: string; p_content: string; p_parent_reply_id?: string | null }; Returns: SocialReply };
@@ -501,11 +558,15 @@ export type QuotedFeedPost = SocialPost & {
 // `social_posts` is the quoting post, carrying the original in `quoted_post`, so
 // the row can render the same shape a feed does.
 export type ActivityPost = Pick<SocialPost,
-  "id" | "content" | "task_title" | "category" | "kind" | "content_status" | "image_paths" | "created_at" | "author_id" | "companion_id" | "visibility"
+  "id" | "content" | "task_title" | "category" | "kind" | "content_status" | "image_paths" | "created_at" | "author_id" | "companion_id" | "visibility" | "reply_count"
 > & {
   image_urls?: string[];
   user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
   social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
+  // Present so a quote notification can carry the same like/reply/repost
+  // controls the post shows in a feed. Narrowed to the post's own likes.
+  social_reactions?: Array<Pick<SocialReaction, "id" | "reaction" | "actor_id" | "companion_id" | "reply_id">>;
+  social_reposts?: FeedRepost[];
   quoted_post?: (Omit<ActivityPost, "quoted_post"> | null);
 };
 

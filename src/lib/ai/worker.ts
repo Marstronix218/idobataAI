@@ -1,16 +1,20 @@
 import "server-only";
 
 import { after } from "next/server";
-import type { AIJob, Json, SocialCompanion } from "@/types";
+import type { AIJob, Json, PostEngagementContext, SocialCompanion } from "@/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fallbackReply, resolveAIReply } from "@/lib/domain";
-import { getAIProvider, type AIProvider } from "./provider";
+import { checkReplyDiversity } from "@/lib/domain/reply-diversity";
+import { planPersonaEngagement, type EngagementAction } from "@/lib/domain/persona-engagement";
+import { classifyTask } from "@/lib/domain/task-affinity";
+import { getAIProvider, PERSONA_ENGAGEMENT_PROMPT_VERSION, type AIProvider } from "./provider";
 
 type JobPayload = {
   replyId?: string;
   postId?: string;
   companionId?: string;
   engagementId?: string;
+  excludeCompanionId?: string;
 };
 
 type PlannedSocialAction = {
@@ -18,8 +22,9 @@ type PlannedSocialAction = {
   post_id: string;
   companion_id: string;
   target_reply_id: string | null;
-  kind: "reply" | "reaction" | "repost";
+  kind: "reply" | "reaction" | "repost" | "quote";
   state: string;
+  source: string;
   fallback_content: string | null;
 };
 
@@ -30,6 +35,8 @@ type ActionPost = {
   content_status: string;
   task_title: string | null;
   category: string | null;
+  streak: number | null;
+  xp_earned: number | null;
 };
 
 type ActionReply = {
@@ -39,8 +46,33 @@ type ActionReply = {
   content_status: string;
 };
 
+/** The persona fields the engagement prompts read, beyond the base identity. */
+type EngagementCompanion = Pick<
+  SocialCompanion,
+  "id" | "name" | "personality" | "writing_style" | "safety_instructions" | "fallback_replies" | "active"
+  | "reply_style" | "quote_style" | "tone_rules" | "avoid_rules"
+>;
+
+const ENGAGEMENT_COMPANION_COLUMNS =
+  "id, name, personality, writing_style, safety_instructions, fallback_replies, active, reply_style, quote_style, tone_rules, avoid_rules";
+
+/** Kept in one place so the planner's vocabulary maps onto the ledger's. */
+const ACTION_KIND: Record<EngagementAction, "reply" | "reaction" | "quote"> = {
+  reply: "reply",
+  like: "reaction",
+  quote: "quote",
+};
+
 function payload(job: AIJob) {
   return job.payload as JobPayload;
+}
+
+/**
+ * Generation is invisible once it lands in a feed, so the reasoning behind each
+ * action is logged rather than shown. Nothing here reaches a user.
+ */
+function logEngagement(fields: Record<string, unknown>) {
+  console.info(JSON.stringify({ level: "info", scope: "persona_engagement", ...fields }));
 }
 
 async function failJob(job: AIJob, lease: string, error: unknown) {
@@ -92,19 +124,85 @@ async function enhanceLegacyReply(job: AIJob, lease: string, provider: AIProvide
   return { id: job.id, status: "enhanced" };
 }
 
+/**
+ * The context every reply and quote is written against: what other personas
+ * have already said here, and what this persona has said lately. Without both,
+ * two characters converge on the same sentence and one character develops a
+ * catchphrase, which is what makes generated engagement read as a single bot.
+ */
+async function loadGenerationContext(postId: string, companionId: string) {
+  const admin = createAdminClient();
+  const [siblings, recentReplies, recentQuotes] = await Promise.all([
+    admin.from("social_replies")
+      .select("content, companion_id, created_at")
+      .eq("post_id", postId)
+      .eq("content_status", "active")
+      .not("companion_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(6),
+    admin.from("social_replies")
+      .select("content, created_at")
+      .eq("companion_id", companionId)
+      .eq("content_status", "active")
+      .order("created_at", { ascending: false })
+      .limit(6),
+    admin.from("social_posts")
+      .select("content, created_at")
+      .eq("companion_id", companionId)
+      .eq("kind", "ai_quote")
+      .eq("content_status", "active")
+      .order("created_at", { ascending: false })
+      .limit(4),
+  ]);
+  return {
+    siblingReplies: (siblings.data ?? [])
+      .filter((row) => row.companion_id !== companionId)
+      .map((row) => row.content),
+    recentReplies: (recentReplies.data ?? []).map((row) => row.content),
+    recentQuotes: (recentQuotes.data ?? []).map((row) => row.content),
+  };
+}
+
+/**
+ * Generates, screens, and regenerates once. A near-duplicate of a sibling reply
+ * is worse than silence: it is visible proof that the characters are one voice.
+ */
+async function generateDistinctText({
+  generate,
+  siblingReplies,
+  personaRecentReplies,
+}: {
+  generate: (avoid: string[]) => Promise<string>;
+  siblingReplies: string[];
+  personaRecentReplies: string[];
+}) {
+  // The rejected draft is fed back as something to avoid, so the retry is a
+  // genuine second attempt rather than the same prompt rolled again.
+  const avoid = [...personaRecentReplies];
+  let rejectionReason: string | undefined;
+  for (let attempts = 1; attempts <= 2; attempts += 1) {
+    const content = (await generate(avoid)).trim();
+    const verdict = checkReplyDiversity({ content, siblingReplies, personaRecentReplies });
+    if (verdict.ok) return { content: content as string | null, attempts, rejectionReason: undefined as string | undefined };
+    rejectionReason = verdict.reason;
+    avoid.push(content);
+  }
+  return { content: null as string | null, attempts: 2, rejectionReason };
+}
+
 async function performSocialAction(job: AIJob, lease: string, provider: AIProvider) {
   const admin = createAdminClient();
   const engagementId = payload(job).engagementId;
   if (!engagementId) throw new Error("Malformed social action payload.");
 
   const { data: action, error: actionError } = await admin.from("social_ai_engagements")
-    .select("id, post_id, companion_id, target_reply_id, kind, state, fallback_content")
+    .select("id, post_id, companion_id, target_reply_id, kind, state, source, fallback_content")
     .eq("id", engagementId)
     .single();
   if (actionError) throw actionError;
   const planned = action as PlannedSocialAction;
 
-  if (planned.kind !== "reply") {
+  if (planned.kind === "reaction" || planned.kind === "repost") {
     const { data: finalized, error } = await admin.rpc("finalize_social_action", {
       p_job_id: job.id,
       p_lease_token: lease,
@@ -117,13 +215,10 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
 
   const [postResult, companionResult, targetReplyResult] = await Promise.all([
     admin.from("social_posts")
-      .select("id, author_id, content, content_status, task_title, category")
+      .select("id, author_id, content, content_status, task_title, category, streak, xp_earned")
       .eq("id", planned.post_id)
       .single(),
-    admin.from("social_companions")
-      .select("id, name, personality, writing_style, safety_instructions, fallback_replies, active")
-      .eq("id", planned.companion_id)
-      .single(),
+    admin.from("social_companions").select(ENGAGEMENT_COMPANION_COLUMNS).eq("id", planned.companion_id).single(),
     planned.target_reply_id
       ? admin.from("social_replies")
         .select("id, author_id, content, content_status")
@@ -135,35 +230,200 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
   if (companionResult.error) throw companionResult.error;
   if (targetReplyResult.error) throw targetReplyResult.error;
   const post = postResult.data as ActionPost;
-  const companion = companionResult.data as Pick<SocialCompanion, "id" | "name" | "personality" | "writing_style" | "safety_instructions" | "fallback_replies" | "active">;
+  const companion = companionResult.data as EngagementCompanion;
   const targetReply = targetReplyResult.data as ActionReply | null;
   if (!post || !companion?.active || post.content_status !== "active" || (targetReply && targetReply.content_status !== "active")) {
     throw new Error("Social action target is unavailable.");
   }
 
+  const taskCategory = classifyTask({ taskTitle: post.task_title, category: post.category, content: post.content });
+  const voice = {
+    companionName: companion.name,
+    personality: companion.personality,
+    writingStyle: companion.writing_style,
+    safetyInstructions: companion.safety_instructions,
+    toneRules: companion.tone_rules,
+    avoidRules: companion.avoid_rules,
+  };
+  const task = {
+    postContent: (targetReply?.content ?? post.content).slice(0, 1200),
+    taskTitle: post.task_title,
+    category: post.category,
+    taskCategory,
+    streak: post.streak,
+    xpEarned: post.xp_earned,
+  };
+  const context = await loadGenerationContext(planned.post_id, planned.companion_id);
+
+  if (planned.kind === "quote") {
+    const author = post.author_id
+      ? (await admin.from("user_profiles").select("username, display_name").eq("id", post.author_id).maybeSingle()).data
+      : null;
+    // A persona's own past quotes are screened at the stricter sibling bar: a
+    // recognisable quote format repeated weekly is what makes the channel feel
+    // automated, and quotes are rare enough to afford the higher standard.
+    const attempt = await generateDistinctText({
+      siblingReplies: context.recentQuotes,
+      personaRecentReplies: context.recentQuotes,
+      generate: (avoid) => provider.generateQuoteRepost({
+        ...voice,
+        ...task,
+        quoteStyle: companion.quote_style,
+        authorLabel: author?.display_name?.trim() || (author?.username ? `@${author.username}` : null),
+        recentQuotes: avoid,
+      }),
+    });
+    // A quote repost is standalone feed content, so there is no canned version
+    // worth publishing. Nothing at all is the better outcome.
+    if (!attempt.content) {
+      const reason = `quote rejected: ${attempt.rejectionReason ?? "no usable generation"}`;
+      logEngagement({
+        event: "quote_rejected", engagementId, postId: planned.post_id, companionId: planned.companion_id,
+        taskCategory, attempts: attempt.attempts, reason, promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION,
+      });
+      const { error } = await admin.rpc("cancel_social_action", { p_job_id: job.id, p_lease_token: lease, p_reason: reason });
+      if (error) throw error;
+      return { id: job.id, status: "quote_cancelled" };
+    }
+    const { data: finalized, error } = await admin.rpc("finalize_social_action", {
+      p_job_id: job.id,
+      p_lease_token: lease,
+      p_content: attempt.content,
+    });
+    if (error) throw error;
+    if (!finalized) throw new Error("The social action lease expired or its target became unavailable.");
+    logEngagement({
+      event: "quote_published", engagementId, postId: planned.post_id, companionId: planned.companion_id,
+      taskCategory, attempts: attempt.attempts, promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION,
+    });
+    return { id: job.id, status: "quoted" };
+  }
+
   const fallback = (planned.fallback_content?.trim()
     || companion.fallback_replies[0]?.trim()
     || fallbackReply(companion, { taskTitle: post.task_title, category: post.category })).slice(0, 500);
-  const generated = await resolveAIReply({
-    fallback,
-    generate: () => provider.generateReply({
-      companionName: companion.name,
-      personality: companion.personality,
-      writingStyle: companion.writing_style,
-      safetyInstructions: companion.safety_instructions,
-      postContent: (targetReply?.content ?? post.content).slice(0, 1200),
-      taskTitle: post.task_title,
-      category: post.category,
+  const attempt = await generateDistinctText({
+    siblingReplies: context.siblingReplies,
+    personaRecentReplies: context.recentReplies,
+    generate: (avoid) => provider.generateReply({
+      ...voice,
+      ...task,
+      replyStyle: companion.reply_style,
+      siblingReplies: context.siblingReplies,
+      recentReplies: avoid,
     }),
-  });
+  }).catch((error: unknown) => ({
+    content: null,
+    attempts: 1,
+    rejectionReason: error instanceof Error ? error.message : "provider_error",
+  }));
+
+  // The one guaranteed reply per human post keeps its curated fallback so the
+  // promise survives a provider outage. A selective persona that could not say
+  // anything distinct simply stays quiet.
+  if (!attempt.content && planned.source !== "human_post_guarantee") {
+    const reason = `reply rejected: ${attempt.rejectionReason ?? "no usable generation"}`;
+    logEngagement({
+      event: "reply_rejected", engagementId, postId: planned.post_id, companionId: planned.companion_id,
+      taskCategory, attempts: attempt.attempts, reason, promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION,
+    });
+    const { error } = await admin.rpc("cancel_social_action", { p_job_id: job.id, p_lease_token: lease, p_reason: reason });
+    if (error) throw error;
+    return { id: job.id, status: "reply_cancelled" };
+  }
+
+  const content = attempt.content ?? fallback;
   const { data: finalized, error } = await admin.rpc("finalize_social_action", {
     p_job_id: job.id,
     p_lease_token: lease,
-    p_content: generated.content,
+    p_content: content,
   });
   if (error) throw error;
   if (!finalized) throw new Error("The social action lease expired or its target became unavailable.");
-  return { id: job.id, status: generated.source === "provider" ? "replied" : "fallback" };
+  logEngagement({
+    event: "reply_published", engagementId, postId: planned.post_id, companionId: planned.companion_id,
+    taskCategory, source: planned.source, attempts: attempt.attempts,
+    generated: Boolean(attempt.content), promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION,
+  });
+  return { id: job.id, status: attempt.content ? "replied" : "fallback" };
+}
+
+/**
+ * Decides which of the remaining personas notice a completed task. Ranking is
+ * deterministic and runs entirely without the provider, so a post costs model
+ * calls only for the few characters that actually chose to say something.
+ */
+async function planPostEngagement(job: AIJob, lease: string) {
+  const admin = createAdminClient();
+  const { postId, excludeCompanionId } = payload(job);
+  if (!postId) throw new Error("Malformed engagement planning payload.");
+
+  const { data, error } = await admin.rpc("get_post_engagement_context", { p_post_id: postId });
+  if (error) throw error;
+  const context = data as PostEngagementContext | null;
+
+  const complete = async (status: string, planned = 0) => {
+    const { error: completeError } = await admin.rpc("complete_ai_job", { p_job_id: job.id, p_lease_token: lease });
+    if (completeError) throw completeError;
+    return { id: job.id, status, planned };
+  };
+
+  if (!context || context.post.contentStatus !== "active" || context.post.visibility !== "public") {
+    return complete("engagement_skipped");
+  }
+
+  const plan = planPersonaEngagement({
+    post: {
+      id: context.post.id,
+      authorId: context.post.authorId,
+      taskTitle: context.post.taskTitle,
+      category: context.post.category,
+      content: context.post.content,
+      streak: context.post.streak,
+      xpEarned: context.post.xpEarned,
+      focusMinutes: context.post.focusMinutes,
+    },
+    companions: context.companions.map((companion) => ({
+      id: companion.id,
+      slug: companion.slug,
+      active: companion.active,
+      socialActivity: companion.socialActivity,
+      likeAffinity: Number(companion.likeAffinity),
+      replyAffinity: Number(companion.replyAffinity),
+      quoteAffinity: Number(companion.quoteAffinity),
+      categoryAffinity: companion.categoryAffinity,
+    })),
+    activity: Object.fromEntries(context.companions.map((companion) => [companion.id, {
+      engagedThisPost: companion.engagedThisPost,
+      repliesToAuthorRecently: Number(companion.repliesToAuthorRecently),
+      quotesRecently: Number(companion.quotesRecently),
+    }])),
+    flags: context.flags,
+    excludeCompanionIds: excludeCompanionId ? [excludeCompanionId] : [],
+  });
+
+  for (const engagement of plan) {
+    const kind = ACTION_KIND[engagement.action];
+    const { error: enqueueError } = await admin.rpc("enqueue_social_action", {
+      p_dedupe_key: `human-post:engage:${engagement.action}:${engagement.postId}:${engagement.companionId}`,
+      p_source: "human_post_engagement",
+      p_kind: kind,
+      p_post_id: engagement.postId,
+      p_companion_id: engagement.companionId,
+      p_target_reply_id: null,
+      p_scheduled_for: new Date(Date.now() + engagement.delaySeconds * 1000).toISOString(),
+      p_decision: { ...engagement.reason, action: engagement.action, promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION },
+    });
+    if (enqueueError) throw enqueueError;
+  }
+
+  logEngagement({
+    event: "engagement_planned",
+    postId,
+    considered: context.companions.length,
+    planned: plan.map((engagement) => ({ companionId: engagement.companionId, action: engagement.action, ...engagement.reason })),
+  });
+  return complete("engagement_planned", plan.length);
 }
 
 export async function drainAIJobs(limit = 5) {
@@ -177,6 +437,7 @@ export async function drainAIJobs(limit = 5) {
     try {
       if (job.job_type === "enhance_reply") return await enhanceLegacyReply(job, lease, provider);
       if (job.job_type === "perform_social_action") return await performSocialAction(job, lease, provider);
+      if (job.job_type === "plan_post_engagement") return await planPostEngagement(job, lease);
       throw new Error(`Unsupported job type: ${job.job_type}`);
     } catch (error) {
       return failJob(job, lease, error);

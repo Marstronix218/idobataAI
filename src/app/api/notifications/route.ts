@@ -13,9 +13,11 @@ const notificationSelect = `
   social_companions(name, slug, avatar_url),
   social_posts(
     id, content, task_title, category, kind, content_status, image_paths, created_at,
-    author_id, companion_id, visibility,
+    author_id, companion_id, visibility, reply_count,
     user_profiles(username, display_name, avatar_url),
     social_companions(name, slug, avatar_url),
+    social_reactions(id, reaction, actor_id, companion_id, reply_id),
+    social_reposts(id, user_id:actor_id, companion_id, created_at),
     quoted_post(
       id, content, task_title, category, kind, content_status, image_paths, created_at,
       author_id, companion_id, visibility,
@@ -54,12 +56,14 @@ export async function GET(request: Request) {
     const { user, supabase } = await authed(request);
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 30) || 30));
-    const unreadOnly = url.searchParams.get("unread") === "true";
     const cursor = parseCursor(url.searchParams.get("cursor"));
     let query = supabase.from("notifications")
       .select(notificationSelect)
-      .eq("user_id", user.id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
-    if (unreadOnly) query = query.is("read_at", null);
+      .eq("user_id", user.id)
+      // Reply likes share this table, so the embedded reactions must be narrowed
+      // to the post's own or a busy thread inflates the quote's like count.
+      .is("social_posts.social_reactions.reply_id", null)
+      .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
     if (cursor) query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
     const rows = assertDatabase(await query) as unknown as ActivityItem[];
     const hasMore = rows.length > limit;

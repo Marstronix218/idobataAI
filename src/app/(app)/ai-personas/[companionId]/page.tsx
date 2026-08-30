@@ -6,15 +6,18 @@ import { CompanionRelationshipControls, type CompanionRelationshipState } from "
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark } from "@/components/ui/logo";
 import { AIBadge } from "@/components/ui/status";
+import { QuotedPostCard } from "@/components/social/quoted-post-card";
 import { AI_DAILY_POST_GOAL, companionCompletionPosts } from "@/data/companion-posts";
 import { companions as previewCatalog } from "@/data/demo";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import type { SocialCompanion, SocialPost } from "@/types";
+import type { QuotedFeedPost, SocialCompanion, SocialPost } from "@/types";
 
-type CompanionPost = Pick<SocialPost, "id" | "content" | "task_title" | "category" | "created_at"> & {
+type CompanionPost = Pick<SocialPost, "id" | "content" | "task_title" | "category" | "created_at" | "kind"> & {
   reaction_count: number;
   reply_count: number;
+  /** Present only on a quote repost, where the original renders inside the card. */
+  quoted_post?: QuotedFeedPost | null;
 };
 
 function initials(name: string) {
@@ -63,13 +66,25 @@ export default async function CompanionProfilePage({
           .maybeSingle();
         relationship = ownRelationship;
       }
+      // Quote reposts are part of a persona's public presence, so the profile
+      // lists them beside the daily completions rather than hiding them in feeds.
       const { data: posts, count } = await supabase.from("social_posts")
-        .select("id, content, task_title, category, created_at", { count: "exact" })
-        .eq("companion_id", companion.id).eq("kind", "ai_completion")
+        .select(`
+          id, content, task_title, category, created_at, kind,
+          quoted_post(
+            id, content, task_title, category, kind, content_status, image_paths, created_at,
+            author_id, companion_id, visibility,
+            user_profiles(username, display_name, avatar_url),
+            social_companions(name, slug, avatar_url)
+          )
+        `, { count: "exact" })
+        .eq("companion_id", companion.id).in("kind", ["ai_completion", "ai_quote"])
         .eq("visibility", "public").eq("content_status", "active")
         .lte("created_at", new Date().toISOString())
         .order("created_at", { ascending: false }).limit(12);
-      const basePosts = posts ?? [];
+      // The recursive `quoted_post` embed has no generated row type, so the
+      // shape this page needs is asserted once here.
+      const basePosts = (posts ?? []) as unknown as CompanionPost[];
       const postIds = basePosts.map((post) => post.id);
       const [reactionResult, replyResult] = postIds.length ? await Promise.all([
         // Reply likes share this table; only the post's own count belongs here.
@@ -108,12 +123,22 @@ export default async function CompanionProfilePage({
         })),
         active: true,
         posting_frequency: AI_DAILY_POST_GOAL,
+        social_activity: "medium",
+        like_affinity: 0.75,
+        reply_affinity: 0.45,
+        quote_affinity: 0.3,
+        category_affinity: {},
+        reply_style: preview.rhythm,
+        quote_style: preview.rhythm,
+        tone_rules: [],
+        avoid_rules: [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       companion = previewCompanion;
       companionPosts = previewCompanion.daily_posts.map((post, index) => ({
         id: `${preview.id}-completion-${index}`,
+        kind: "ai_completion",
         content: post.content,
         task_title: post.task_title,
         category: post.category,
@@ -178,11 +203,12 @@ export default async function CompanionProfilePage({
             <Avatar initials={profileInitials} avatarUrl={companion.avatar_url} name={companion.name} ai />
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"><span className="truncate font-bold">{companion.name}</span><AIBadge /><span className="truncate text-sm text-muted">@{companion.slug}</span><time dateTime={post.created_at} className="text-sm text-muted">· {relativeTime(post.created_at)}</time></div>
-              <p className="mt-0.5 text-xs text-muted">Completed a task</p>
+              <p className="mt-0.5 text-xs text-muted">{post.kind === "ai_quote" ? "Quote repost" : "Completed a task"}</p>
             </div>
           </header>
           <p className="mt-3 leading-7">{post.content}</p>
           {post.task_title && <div className="mt-3 rounded-2xl border border-line bg-surface/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">Completed</p><h3 className="mt-0.5 font-bold">{post.task_title}</h3><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}</div></div>}
+          {post.kind === "ai_quote" && (post.quoted_post ? <QuotedPostCard post={{ ...post.quoted_post, image_urls: post.quoted_post.image_urls ?? [] }} /> : <div className="mt-3 rounded-2xl border border-line bg-surface/55 p-4 text-sm text-muted">The quoted post is no longer available.</div>)}
           <div className="mt-3 flex items-center gap-8 text-sm text-muted" aria-label="Post engagement"><span className="flex items-center gap-2"><MessageCircle size={17} /> {post.reply_count}</span><span className="flex items-center gap-2"><Heart size={17} /> {post.reaction_count}</span></div>
         </article>)}
         {!companionPosts.length && <div className="border-b border-line p-10 text-center"><LogoMark size={40} className="mx-auto" /><h3 className="display mt-4 text-xl font-bold">No visible posts yet</h3><p className="mt-2 text-sm text-muted">The next daily completion will appear here after its scheduled time.</p></div>}
