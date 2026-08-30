@@ -274,17 +274,41 @@ export function ActivityList() {
   useEffect(() => {
     if (isPreviewMode) return;
     const controller = new AbortController();
-    Promise.all([
-      apiRequest<ActivityPage>("/api/notifications?limit=30", { signal: controller.signal }),
-      apiRequest<{ unread: number }>("/api/notifications/unread-count", { signal: controller.signal }).catch(() => null),
-    ])
-      .then(([page, count]) => {
-        setItems(page.items); setCursor(page.nextCursor);
-        if (count) setUnreadCount(count.unread);
+    async function openNotifications() {
+      try {
+        const [page, count] = await Promise.all([
+          apiRequest<ActivityPage>("/api/notifications?limit=30", { signal: controller.signal }),
+          apiRequest<{ unread: number }>("/api/notifications/unread-count", { signal: controller.signal }).catch(() => null),
+        ]);
+        if (controller.signal.aborted) return;
+
+        const unreadOnPage = page.items.filter((item) => !item.read_at).length;
+        const unread = Math.max(count?.unread ?? 0, unreadOnPage);
+        setItems(page.items);
+        setCursor(page.nextCursor);
+        setUnreadCount(unread);
         setStatus(page.items.length ? "Notifications are up to date." : "No notifications yet.");
-      })
-      .catch((error) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+
+        if (unread === 0) return;
+        await apiRequest<{ updated: number }>("/api/notifications", {
+          method: "PATCH",
+          body: JSON.stringify({ all: true }),
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+
+        const readAt = new Date().toISOString();
+        setItems((current) => current.map((item) => item.read_at ? item : { ...item, read_at: readAt }));
+        setUnreadCount(0);
+        window.dispatchEvent(new CustomEvent("idobata:notifications-changed", { detail: { unread: 0 } }));
+        setStatus("All notifications marked as read.");
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error));
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+    void openNotifications();
     return () => controller.abort();
   }, []);
 

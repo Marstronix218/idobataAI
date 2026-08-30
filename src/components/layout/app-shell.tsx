@@ -19,7 +19,10 @@ const nav = [
   { href: "/chat", label: "Chat", shortLabel: "Chat", icon: MessageCircle },
   { href: "/ai-personas", label: "AI Personas", shortLabel: "AI", icon: Bot },
   { href: "/activity", label: "Notifications", shortLabel: "Alerts", icon: Bell },
-  { href: "/settings", label: "Profile", shortLabel: "Profile", icon: UserRound },
+  // `/profile` resolves the signed-in username on the server and redirects to
+  // `/u/{username}`; the rewrite below only skips that hop once the shell has
+  // the username in hand.
+  { href: "/profile", label: "Profile", shortLabel: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", shortLabel: "Settings", icon: Settings },
 ];
 
@@ -79,13 +82,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="mt-7 space-y-1" aria-label="Primary navigation">
           {nav.map(({ href, label, icon: Icon }) => {
             const destination = label === "Profile" && username ? `/u/${username}` : href;
-            const active = label === "Profile" ? pathname.startsWith("/u/") : pathname === href || (href !== "/tasks" && pathname.startsWith(`${href}/`));
+            const active = label === "Profile" ? pathname.startsWith("/u/") || pathname === "/profile" : pathname === href || (href !== "/tasks" && pathname.startsWith(`${href}/`));
             const badged = label === "Notifications" && unread > 0;
             return <Link key={label} href={destination} aria-current={active ? "page" : undefined} aria-label={badged ? `${label}, ${unreadLabel} unread` : label} className={`mx-auto flex min-h-14 w-14 items-center justify-center gap-4 rounded-full px-4 text-xl leading-6 font-semibold transition-colors xl:mx-0 xl:w-full xl:justify-start ${active ? "bg-brand-soft text-brand" : "text-muted hover:bg-canvas hover:text-ink"}`}><span className="relative shrink-0"><Icon size={24} strokeWidth={active ? 2.5 : 2} />{badged && <span aria-hidden="true" className="absolute -right-2 -top-1.5 min-w-[1.15rem] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-[1.15rem] text-white">{unreadLabel}</span>}</span><span className="hidden xl:inline">{label}</span></Link>;
           })}
         </nav>
         <Link href="/tasks" aria-label="Add task" className="btn btn-primary mx-auto mt-5 h-14 w-14 rounded-full p-0 shadow-sm xl:w-full xl:px-5"><Plus size={22} /><span className="hidden xl:inline">Add task</span></Link>
-        <Link href={username ? `/u/${username}` : "/settings"} aria-label="Open your profile" className="mt-auto flex items-center justify-center gap-3 border-t border-line pt-4 transition-colors hover:bg-surface/55 xl:justify-start xl:px-2">
+        <Link href={username ? `/u/${username}` : "/profile"} aria-label="Open your profile" className="mt-auto flex items-center justify-center gap-3 border-t border-line pt-4 transition-colors hover:bg-surface/55 xl:justify-start xl:px-2">
           <Avatar initials={initials} avatarUrl={isPreviewMode ? null : profile?.avatar_url} name={username ?? "Your profile"} />
           <div className="hidden min-w-0 xl:block"><p className="truncate text-sm font-bold">{username ? `@${username}` : "Your profile"}</p><p className="text-xs text-muted">{isPreviewMode ? 6 : profile?.current_streak ?? 0}-day streak</p></div>
         </Link>
@@ -94,7 +97,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-line bg-surface/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur lg:hidden" aria-label="Primary navigation">
         {nav.map(({ href, label, shortLabel, icon: Icon }) => {
           const destination = label === "Profile" && username ? `/u/${username}` : href;
-          const active = label === "Profile" ? pathname.startsWith("/u/") : pathname === href || (href !== "/tasks" && pathname.startsWith(`${href}/`));
+          const active = label === "Profile" ? pathname.startsWith("/u/") || pathname === "/profile" : pathname === href || (href !== "/tasks" && pathname.startsWith(`${href}/`));
           const badged = label === "Notifications" && unread > 0;
           return <Link key={label} href={destination} aria-current={active ? "page" : undefined} aria-label={badged ? `${label}, ${unreadLabel} unread` : label} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-[10px] font-bold sm:text-xs ${active ? "text-brand" : "text-muted"}`}><span className="relative shrink-0"><Icon size={20} strokeWidth={active ? 2.6 : 2} />{badged && <span aria-hidden="true" className="absolute -right-2 -top-1 min-w-[1.05rem] rounded-full bg-danger px-1 text-center text-[9px] font-bold leading-[1.05rem] text-white">{unreadLabel}</span>}</span><span className="w-full truncate text-center">{shortLabel}</span></Link>;
         })}

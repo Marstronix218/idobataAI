@@ -170,9 +170,8 @@ export default function Home() {
           </div>
 
           <p className="mt-7 max-w-xl text-sm leading-6 text-muted sm:mt-8">
-            <strong className="font-bold text-ink">Idobata is in beta,</strong> so features and copy still change
-            week to week. It runs in any mobile browser today and installs to your home screen. A native iOS app is in
-            development, starting with tasks and sharing.
+            <strong className="font-bold text-ink">Idobata AI is in beta,</strong> so features and copy still change
+            week to week. A native iOS app is in development.
           </p>
         </div>
 

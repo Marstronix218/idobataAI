@@ -279,14 +279,14 @@ export function SettingsPanel() {
 
         <section id="about" className="card p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2"><Info size={19} className="text-sun" /><h2 className="display text-xl font-bold">About this beta</h2><BetaBadge /></div>
-          <p className="mt-3 text-sm leading-6 text-muted">Idobata is a beta product. Features, wording, and limits change while we learn what the completed-task loop is actually good for, AI chat runs under a daily cap, and the terms and privacy notice are still being reviewed. Nothing here is billed, and account deletion under <a href="#safety" className="font-bold text-brand hover:underline">Account and data</a> removes your profile, tasks, posts, replies, and reactions.</p>
+          <p className="mt-3 text-sm leading-6 text-muted">Idobata AI is a beta product. Features, wording, and limits change while we learn what the completed-task loop is actually good for, AI chat runs under a daily cap, and the terms and privacy notice are still being reviewed. Nothing here is billed, and account deletion under <a href="#safety" className="font-bold text-brand hover:underline">Account and data</a> removes your profile, tasks, posts, replies, and reactions.</p>
           <p className="mt-3 text-sm leading-6 text-muted">Found something broken or surprising? The <a href="#feedback" className="font-bold text-brand hover:underline">feedback form</a> above goes straight to the product team.</p>
           <div className="mt-5 flex gap-3 border-t border-line pt-5">
             <span className="mt-0.5 shrink-0 text-community"><Smartphone size={19} /></span>
             <div>
-              <p className="font-bold">Using Idobata on your phone</p>
-              <p className="mt-1 text-sm leading-6 text-muted">Idobata is built for mobile browsers and installs to your home screen: in Safari on iOS, tap Share and then Add to Home Screen; in Chrome on Android, use Install app.</p>
-              <p className="mt-2 text-sm leading-6 text-muted">A native iOS app is in development against this same account and backend, starting with your task list, completing tasks, and sharing a win. The feed, chat, and AI Personas stay web-only for now, and there is no release date yet — the web app is the complete one.</p>
+              <p className="font-bold">Using Idobata AI on your phone</p>
+              <p className="mt-1 text-sm leading-6 text-muted">Idobata AI is built for mobile browsers and installs to your home screen: in Safari on iOS, tap Share and then Add to Home Screen; in Chrome on Android, use Install app.</p>
+              <p className="mt-2 text-sm leading-6 text-muted">A native iOS app is in development against this same account and backend, starting with your task list, completing tasks, and sharing a win. The feed, chat, and AI Personas stay web-only for now, and there is no release date yet.</p>
             </div>
           </div>
         </section>

@@ -41,20 +41,30 @@ describe("ActivityList production loading", () => {
       if (path === "/api/notifications/unread-count") {
         return Promise.resolve({ unread: 1 });
       }
+      if (path === "/api/notifications") {
+        return Promise.resolve({ updated: 1 });
+      }
       return Promise.reject(new Error(`Unexpected path: ${path}`));
     });
   });
 
-  it("loads one notification list from the server alongside the unread count", async () => {
+  it("marks all current notifications read when the tab opens", async () => {
     render(<ActivityList />);
 
-    expect(await screen.findByRole("button", { name: /Open notification from kai/ })).toBeVisible();
-    expect(screen.getByText("1 unread")).toBeVisible();
+    expect(await screen.findByRole("button", { name: /Open notification from kai.*\. Read/ })).toBeVisible();
+    expect(screen.queryByText("1 unread")).not.toBeInTheDocument();
     await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(
       "/api/notifications?limit=30",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ));
-    // No second request: the dropped Unread view was the only reason to refetch.
-    expect(apiRequest).toHaveBeenCalledTimes(2);
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/notifications",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ all: true }),
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(apiRequest).toHaveBeenCalledTimes(3);
   });
 });
