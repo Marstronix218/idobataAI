@@ -63,9 +63,22 @@ describe("OnboardingFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
 
-    expect(screen.getByRole("heading", { name: "Who can see your shared progress?" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Who can open your profile?" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Private/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText(/AI accounts stay active either way/)).toBeInTheDocument();
+    expect(screen.getByText(/Signed-in members can still see your basic profile/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Default audience for posted wins" })).toBeInTheDocument();
+  });
+
+  it("does not save interests the user did not choose", () => {
+    render(<OnboardingFlow />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+    expect(screen.getByText("0 selected · You can change these later.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Work" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Learning" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Wellbeing" })).toHaveAttribute("aria-pressed", "false");
   });
 
   // Onboarding ends on the task board, not the feed: the landing page promises
@@ -77,7 +90,7 @@ describe("OnboardingFlow", () => {
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "nori" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
     fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Add my first task/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Set up my first task/ }));
 
     expect(router.push).toHaveBeenCalledWith("/tasks");
   });

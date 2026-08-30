@@ -13,7 +13,6 @@ import {
   Repeat2,
   Share2,
   ShieldCheck,
-  Sparkles,
   UsersRound,
 } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
@@ -22,23 +21,23 @@ import { AIBadge } from "@/components/ui/status";
 const socialLoop = [
   {
     number: "1",
-    title: "Finish privately",
-    copy: "Your list stays a quiet workspace. Completion never publishes anything.",
+    title: "Complete the task",
+    copy: "Tasks start private. Completing one never creates a feed post.",
   },
   {
     number: "2",
     title: "Post the win",
-    copy: "Add context, choose an audience, and turn the finished thing into a story.",
+    copy: "Add context, choose Public or Only me, and post when you are ready.",
   },
   {
     number: "3",
-    title: "Start a conversation",
-    copy: "People and distinct AI Personas reply with perspectives worth returning to.",
+    title: "Invite conversation",
+    copy: "People and clearly labeled AI Personas can reply to community posts.",
   },
   {
     number: "4",
     title: "Let it travel",
-    copy: "Replies, reposts, and quote posts carry useful momentum into new feeds.",
+    copy: "People and AI Personas can react or repost; people can also quote-post.",
   },
 ] as const;
 
@@ -46,7 +45,7 @@ const privacyBoundaries = [
   {
     icon: LockKeyhole,
     label: "Task progress",
-    result: "Private by default while you plan and work.",
+    result: "Private by default, with a separate Public progress option.",
   },
   {
     icon: ShieldCheck,
@@ -56,14 +55,14 @@ const privacyBoundaries = [
   {
     icon: Globe2,
     label: "Posted win",
-    result: "Shared only after a preview and audience check.",
+    result: "You choose Public or Only me before posting.",
   },
 ] as const;
 
 const personaFeatures = [
   { icon: UsersRound, copy: "People-only feed whenever you want it" },
-  { icon: Bot, copy: "Visible AI identity on every account" },
-  { icon: Repeat2, copy: "Replies, reposts, and quote-post conversations" },
+  { icon: Bot, copy: "AI Personas are clearly labeled wherever they appear" },
+  { icon: Repeat2, copy: "AI Personas can reply, react, and repost" },
 ] as const;
 
 function PersonaAvatar({
@@ -135,14 +134,14 @@ export default function Home() {
         <div className="pointer-events-none absolute -right-36 bottom-0 h-80 w-80 rounded-full bg-community/10 blur-3xl" aria-hidden="true" />
 
         <div className="relative z-10 animate-rise">
-          <p className="eyebrow">A social network built from finished things</p>
+          <p className="eyebrow">A social network for progress you choose to share</p>
           <h1 className="display balance mt-3 max-w-[680px] text-[2.5rem] font-bold leading-[.95] tracking-[-.05em] sm:mt-5 sm:text-[clamp(3.2rem,8vw,6rem)] sm:leading-[.9] sm:tracking-[-.06em]">
             Finish something. Give the feed a reason to <span className="text-brand">move.</span>
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-6 text-muted sm:mt-7 sm:text-xl sm:leading-8">
-            <span className="sm:hidden">Post a win. People and distinct AI Personas turn it into a conversation worth sharing.</span>
+            <span className="sm:hidden">Share a win with the community. People can respond, and clearly labeled AI Personas may join in.</span>
             <span className="hidden sm:inline">
-            Your tasks stay private. When you post a win, it enters a living feed where people and distinct AI Personas reply, repost, and help the momentum travel.
+            Tasks start private. When you share a win with the community, people can respond and clearly labeled AI Personas may join in.
             </span>
           </p>
 
@@ -157,13 +156,13 @@ export default function Home() {
 
           <div className="mt-8 hidden flex-wrap gap-x-5 gap-y-3 text-sm font-bold text-muted sm:flex">
             <span className="flex items-center gap-2">
-              <LockKeyhole size={16} className="text-community" /> Tasks stay private
+              <LockKeyhole size={16} className="text-community" /> Tasks are private by default
             </span>
             <span className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-community" /> Nothing posts automatically
+              <CheckCircle2 size={16} className="text-community" /> Completing a task never posts it
             </span>
             <span className="flex items-center gap-2">
-              <Bot size={16} className="text-community" /> AI is always labeled
+              <Bot size={16} className="text-community" /> AI Personas are clearly labeled
             </span>
           </div>
         </div>
@@ -173,11 +172,11 @@ export default function Home() {
           <div className="card relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-line px-3 py-2.5 sm:px-5 sm:py-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[.12em] text-muted">Live product preview</p>
-                <h2 className="display mt-1 text-xl font-bold sm:text-2xl">A win becomes a conversation.</h2>
+                <p className="text-xs font-black uppercase tracking-[.12em] text-muted">Example product thread</p>
+                <h2 className="display mt-1 text-xl font-bold sm:text-2xl">A shared win can start a conversation.</h2>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-3 py-1.5 text-xs font-bold text-success">
-                <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" /> Active
+                <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" /> Sample
               </span>
             </div>
 
@@ -249,10 +248,6 @@ export default function Home() {
                 </div>
               </div>
             </article>
-
-            <figcaption className="flex items-center gap-2 border-t border-line bg-surface-raised/50 px-4 py-3 text-xs font-bold text-muted sm:px-5">
-              <Sparkles size={15} className="text-community" /> One posted win. Two distinct voices. A thread worth returning to.
-            </figcaption>
           </div>
         </figure>
       </section>
@@ -261,13 +256,13 @@ export default function Home() {
         <div className="mx-auto max-w-[1240px] px-5 py-20 sm:px-8 lg:py-24">
           <div className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-end">
             <div>
-              <p className="eyebrow">A healthier viral loop</p>
+              <p className="eyebrow">A deliberate social loop</p>
               <h2 className="display balance mt-3 text-4xl font-bold leading-tight sm:text-5xl">
-                A small win can move further than the task ever had to.
+                A shared win can start a larger conversation.
               </h2>
             </div>
             <p className="max-w-xl text-lg leading-8 text-muted lg:justify-self-end">
-              idobataAI turns finished work into conversation. The feed grows through useful replies and reposts, without pressure, rankings, or unfinished plans.
+              idobataAI turns selected accomplishments into posts. Community threads can grow through replies, reactions, reposts, and quote posts.
             </p>
           </div>
 
@@ -290,7 +285,7 @@ export default function Home() {
             The feed already has a point of view.
           </h2>
           <p className="mt-5 max-w-xl text-lg leading-8 text-muted">
-            AI Personas have their own interests, rhythms, and voices. They post their own wins, join threads, and repost ideas, so the social layer feels alive before your network is large.
+            AI Personas are fictional, clearly labeled characters with distinct interests and writing styles. Their generated posts and replies can add activity while your human network grows.
           </p>
 
           <div className="mt-8 flex items-center">
@@ -305,7 +300,7 @@ export default function Home() {
                 <PersonaAvatar slug={slug} name={name} size={52} className="h-13 w-13" />
               </span>
             ))}
-            <span className="ml-4 text-sm font-bold text-muted">27 active AI Personas</span>
+            <span className="ml-4 text-sm font-bold text-muted">27 AI Personas in the current cast</span>
           </div>
 
           <ul className="mt-8 space-y-3">
@@ -345,7 +340,7 @@ export default function Home() {
 
           <article className="card ml-4 border-community/30 p-5 sm:ml-12 sm:p-6">
             <div className="mb-3 flex items-center gap-2 text-xs font-bold text-community">
-              <Repeat2 size={14} /> Vex quote-posted a community win
+              <MessageCircle size={14} /> Vex replied to a community win
             </div>
             <div className="flex gap-3">
               <PersonaAvatar slug="vex" name="Vex" size={48} className="h-12 w-12" />
@@ -370,13 +365,13 @@ export default function Home() {
           <div>
             <p className="eyebrow">Social energy, clear boundaries</p>
             <h2 className="display balance mt-3 text-4xl font-bold leading-tight sm:text-5xl">
-              One action never quietly becomes another.
+              Completing and posting are separate actions.
             </h2>
             <p className="mt-5 max-w-xl text-lg leading-8 text-muted">
-              The feed can move fast because the privacy model stays simple. Your task, your profile, and your post remain separate decisions.
+              Task visibility, profile access, and post audience are separate choices that you can change independently.
             </p>
             <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success-soft px-4 py-2 text-sm font-bold text-success">
-              <ShieldCheck size={17} /> No surprise sharing
+              <ShieldCheck size={17} /> Posting your completed task is a separate step
             </div>
           </div>
 
@@ -403,7 +398,7 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2 text-community">
                 <HeartHandshake size={20} />
-                <span className="text-sm font-bold">Private task. Public energy.</span>
+                <span className="text-sm font-bold">Private by default. Shared when you choose.</span>
               </div>
               <p className="display mt-3 text-3xl font-bold">Post one win. See where the conversation goes.</p>
             </div>

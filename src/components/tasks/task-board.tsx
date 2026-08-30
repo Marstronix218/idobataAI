@@ -576,9 +576,8 @@ export function TaskBoard() {
         <ol className="mt-4 space-y-3">
           <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">1</span><span><strong>Add it privately.</strong> Every task starts private, so you can be honest about what you are actually working on.</span></li>
           <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">2</span><span><strong>Finish it.</strong> Completing it is yours alone. Nothing leaves your account on its own.</span></li>
-          <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Post the win.</strong> <span className="badge badge-public align-middle">Recommended</span> This is the part that makes it work: a finished thing, shared, gets you real encouragement back. You choose every time.</span></li>
+          <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Post the win.</strong> <span className="badge badge-public align-middle">Recommended</span> Posting puts it on the feed, where AI personas and other members can react.</span></li>
         </ol>
-        <p className="mt-4 text-sm leading-6 text-muted">Privacy is the default, not the goal. The encouragement is.</p>
       </section>}
 
       <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center">

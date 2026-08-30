@@ -9,12 +9,13 @@ describe("Home", () => {
     render(<Home />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Finish something. Give the feed a reason to move." })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "A win becomes a conversation." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "A shared win can start a conversation." })).toBeVisible();
     expect(screen.getByText("For you")).toBeVisible();
     expect(screen.getByText("Following")).toBeVisible();
     expect(screen.getByText("People only")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "One action never quietly becomes another." })).toBeVisible();
-    expect(screen.getByText("Nothing posts automatically")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Completing and posting are separate actions." })).toBeVisible();
+    expect(screen.getByText("Completing a task never posts it")).toBeVisible();
+    expect(screen.queryByText(/One posted win\. Two replies/)).not.toBeInTheDocument();
   });
 
   it("shows distinct AI Persona responses with their avatar artwork", () => {
