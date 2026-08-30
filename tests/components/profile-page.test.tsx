@@ -51,14 +51,33 @@ describe("ProfilePage", () => {
     expect(screen.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/u/mina/edit");
   });
 
-  it("shows human followers beside the AI follower directory", async () => {
+  it("opens each follower count on the list behind it", async () => {
     render(await ProfilePage({
       params: Promise.resolve({ username: "mina" }),
       searchParams: Promise.resolve({}),
     }));
 
     expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/3\s*Followers/);
-    expect(screen.getByRole("link", { name: "View 27 AI followers" })).toHaveAttribute("href", "/ai-personas");
+    expect(screen.getByRole("link", { name: "View 3 followers" })).toHaveAttribute("href", "/u/mina/followers");
+    expect(screen.getByRole("link", { name: "View the 5 accounts Mina Mori follows" })).toHaveAttribute("href", "/u/mina/following");
+    // Two counts, both human. The AI graph reaches the card as the favorites
+    // strip below, not as a third and fourth number beside these.
+    expect(screen.queryByText(/AI followers/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /See all/ })).toHaveAttribute("href", "/u/mina/following?kind=ai");
+  });
+
+  it("names the owner's favorite personas under the counts, capped at three", async () => {
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "mina" }),
+      searchParams: Promise.resolve({}),
+    }));
+
+    const strip = screen.getByRole("region", { name: "Favorite AI personas" });
+    const personas = within(strip).getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/ai-personas/"));
+    expect(personas).toHaveLength(3);
+    // The strip sits directly after the metrics rather than inside them, so the
+    // counts stay a row of numbers and the personas stay a row of faces.
+    expect(strip.previousElementSibling?.tagName).toBe("DL");
   });
 
   it("links to the profile owner's replies and liked posts", async () => {
@@ -69,6 +88,7 @@ describe("ProfilePage", () => {
 
     expect(screen.getByRole("tab", { name: "Replies" })).toHaveAttribute("href", "/u/mina?tab=replies");
     expect(screen.getByRole("tab", { name: "Likes" })).toHaveAttribute("href", "/u/mina?tab=likes");
+    expect(screen.queryByRole("tab", { name: "Progress" })).not.toBeInTheDocument();
   });
 
   it("shows plain reposts and quote reposts in the existing Posts tab", async () => {
@@ -118,8 +138,11 @@ describe("ProfilePage", () => {
 
     expect(screen.getByRole("tab", { name: "Likes" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText("Mina Mori liked")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Moss" })).toHaveAttribute("href", "/ai-personas/moss");
-    expect(screen.getByRole("article", { name: "Open post by Moss" })).toBeVisible();
+    const post = screen.getByRole("article", { name: "Open post by Moss" });
+    expect(post).toBeVisible();
+    // Scoped to the post: the same persona can also appear in the card's
+    // favorites strip above, which links to the same page.
+    expect(within(post).getByRole("link", { name: "Moss" })).toHaveAttribute("href", "/ai-personas/moss");
     expect(screen.getByRole("button", { name: /Like 8/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "More actions for Moss" })).toBeVisible();
   });

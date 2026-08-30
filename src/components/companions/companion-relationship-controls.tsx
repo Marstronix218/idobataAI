@@ -9,12 +9,16 @@ export type CompanionRelationshipState = {
   user_followed_at: string | null;
   companion_follow_state: string | null;
   dm_opt_in: boolean;
+  is_favorite?: boolean;
+  favorited_at?: string | null;
 };
 
 const emptyRelationship: CompanionRelationshipState = {
   user_followed_at: null,
   companion_follow_state: null,
   dm_opt_in: false,
+  is_favorite: false,
+  favorited_at: null,
 };
 
 function isMutualRelationship(relationship: CompanionRelationshipState) {
@@ -25,14 +29,17 @@ export function CompanionRelationshipControls({
   companionId,
   companionName,
   initialRelationship,
+  initialFavoriteCount = 0,
 }: {
   companionId: string;
   companionName: string;
   initialRelationship?: CompanionRelationshipState | null;
+  initialFavoriteCount?: number;
 }) {
   const router = useRouter();
   const [relationship, setRelationship] = useState(initialRelationship ?? emptyRelationship);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [favoriteCount, setFavoriteCount] = useState(initialFavoriteCount);
   const [status, setStatus] = useState("");
   const isFollowing = Boolean(relationship.user_followed_at);
   const inboundPending = relationship.companion_follow_state === "pending";
@@ -43,13 +50,14 @@ export function CompanionRelationshipControls({
     const optimistic: CompanionRelationshipState = action === "follow"
       ? { ...prior, user_followed_at: new Date().toISOString() }
       : action === "unfollow"
-        ? { ...prior, user_followed_at: null, dm_opt_in: false }
+        ? { ...prior, user_followed_at: null, dm_opt_in: false, is_favorite: false, favorited_at: null }
         : action === "accept"
           ? { ...prior, companion_follow_state: "following" }
           : { ...prior, companion_follow_state: "none", dm_opt_in: false };
     setBusyAction(action);
     setStatus("");
     setRelationship(optimistic);
+    if (action === "unfollow" && prior.is_favorite) setFavoriteCount((count) => Math.max(0, count - 1));
     try {
       if (!isPreviewMode) {
         if (action === "unfollow") {
@@ -68,6 +76,37 @@ export function CompanionRelationshipControls({
       setStatus(`${action === "follow" ? "Now following" : action === "unfollow" ? "No longer following" : action === "accept" ? "Follow request accepted" : "Follow request declined"}.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
       setRelationship(prior);
+      if (action === "unfollow" && prior.is_favorite) setFavoriteCount((count) => count + 1);
+      setStatus(errorMessage(error));
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function toggleFavorite() {
+    if (!isFollowing) return;
+    const prior = relationship;
+    const favorite = !Boolean(relationship.is_favorite);
+    if (favorite && favoriteCount >= 3) {
+      setStatus("You can favorite up to 3 AI personas.");
+      return;
+    }
+    setBusyAction("favorite");
+    setStatus("");
+    setRelationship({ ...relationship, is_favorite: favorite, favorited_at: favorite ? new Date().toISOString() : null });
+    setFavoriteCount((count) => count + (favorite ? 1 : -1));
+    try {
+      if (!isPreviewMode) {
+        const saved = await apiRequest<{ relationship: CompanionRelationshipState }>(`/api/companions/${companionId}/relationship`, {
+          method: "PUT",
+          body: JSON.stringify({ action: "favorite", favorite }),
+        });
+        setRelationship(saved.relationship);
+      }
+      setStatus(`${favorite ? `${companionName} added to Favorites` : `${companionName} removed from Favorites`}.${isPreviewMode ? " Preview only." : ""}`);
+    } catch (error) {
+      setRelationship(prior);
+      setFavoriteCount((count) => count + (favorite ? -1 : 1));
       setStatus(errorMessage(error));
     } finally {
       setBusyAction(null);
@@ -136,8 +175,13 @@ export function CompanionRelationshipControls({
         {busyAction === "message" ? <RefreshCw size={16} className="animate-spin" /> : <MessageCircle size={16} />}
         Message
       </button>
+      <button type="button" aria-pressed={Boolean(relationship.is_favorite)} className={`btn min-h-11 ${relationship.is_favorite ? "border-sun bg-sun-soft text-ink" : "btn-secondary"}`} disabled={Boolean(busyAction) || !isFollowing || (!relationship.is_favorite && favoriteCount >= 3)} onClick={() => void toggleFavorite()}>
+        {relationship.is_favorite ? "★ Favorited" : "☆ Favorite"}
+      </button>
       <span className={`badge ${isMutual ? "badge-public" : "badge-category"}`}>{isMutual ? "Mutual connection" : inboundPending ? "Follow request pending" : isFollowing ? "You follow this persona" : "Not connected"}</span>
     </div>
+    <p className="mt-3 text-xs font-extrabold text-brand">{favoriteCount} / 3 Favorites</p>
+    {!isFollowing && <p className="mt-1 text-xs text-muted">Follow this persona to add them to Favorites.</p>}
 
     {inboundPending && <div className="mt-4 rounded-xl border border-community/30 bg-community-soft p-3">
       <p className="text-sm font-bold">{companionName} wants to follow you.</p>

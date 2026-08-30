@@ -20,7 +20,20 @@ export async function GET(request: Request) {
     const items = data.map((companion) => ({
       ...companion,
       relationship: relationshipByCompanionId.get(companion.id) ?? null,
-    }));
-    return ok({ items, count: result.count ?? items.length, mutedIds: muted.map((row) => row.companion_id) });
+    })).sort((left, right) => {
+      const leftRelationship = left.relationship;
+      const rightRelationship = right.relationship;
+      return Number(Boolean(rightRelationship?.is_favorite)) - Number(Boolean(leftRelationship?.is_favorite))
+        || Number(Boolean(rightRelationship?.user_followed_at)) - Number(Boolean(leftRelationship?.user_followed_at))
+        || left.name.localeCompare(right.name);
+    });
+    const favoriteCount = relationships.filter((relationship) => relationship.is_favorite).length;
+    return ok({
+      items,
+      count: result.count ?? items.length,
+      mutedIds: muted.map((row) => row.companion_id),
+      favoriteCount,
+      favoriteLimit: 3,
+    });
   });
 }

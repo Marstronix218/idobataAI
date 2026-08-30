@@ -81,6 +81,43 @@ export interface DirectoryPersona {
   viewer_follows: boolean;
 }
 
+/**
+ * One person in a profile's follower or following list, from
+ * `list_profile_followers` / `list_profile_following`. `viewer_follows` and
+ * `viewer_requested` describe the *reader's* relationship with the row, not the
+ * profile owner's, so each row can render its own Follow / Requested control.
+ */
+export interface ProfileFollowPerson {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  profile_visibility: PostVisibility;
+  followed_at: string;
+  viewer_follows: boolean;
+  viewer_requested: boolean;
+  is_viewer: boolean;
+}
+
+/**
+ * One AI persona in a profile's AI follower or AI following list, from
+ * `list_profile_ai_followers` / `list_profile_ai_following` /
+ * `list_profile_favorite_personas`. `viewer_follows` is the *reader's* own
+ * relationship with the persona, while `is_favorite` is the profile owner's --
+ * one drives the row's Follow button, the other its star.
+ */
+export interface ProfileFollowPersona {
+  id: string;
+  slug: string;
+  name: string;
+  avatar_url: string | null;
+  personality: string;
+  followed_at: string | null;
+  viewer_follows: boolean;
+  is_favorite: boolean;
+}
+
 export interface Task {
   id: string;
   owner_id: string;
@@ -205,6 +242,8 @@ export interface UserCompanionRelationship {
   companion_follow_requested_at: string | null;
   companion_followed_at: string | null;
   dm_opt_in: boolean;
+  is_favorite: boolean;
+  favorited_at: string | null;
   companion_dm_started_at: string | null;
   created_at: string;
   updated_at: string;
@@ -296,6 +335,7 @@ export interface PostEngagementContext {
     replyAffinity: number;
     quoteAffinity: number;
     categoryAffinity: CategoryAffinity;
+    isFavorite: boolean;
     engagedThisPost: boolean;
     repliesToAuthorRecently: number;
     quotesRecently: number;
@@ -363,6 +403,8 @@ export interface ChatMessage {
   thread_id: string;
   sender_user_id: string | null;
   sender_companion_id: string | null;
+  client_request_id: string | null;
+  reply_to_message_id: string | null;
   content: string;
   content_status: ContentStatus;
   is_ai_generated: boolean;
@@ -480,8 +522,30 @@ export interface Database {
         Returns: Array<{ post_id: string; created_at: string }>;
       };
       set_user_companion_follow: { Args: { p_companion_id: string; p_following: boolean }; Returns: UserCompanionRelationship };
+      set_user_companion_favorite: { Args: { p_companion_id: string; p_favorite: boolean }; Returns: UserCompanionRelationship };
       request_companion_follow: { Args: { p_user_id: string; p_companion_id: string }; Returns: UserCompanionRelationship };
       get_profile_ai_follower_count: { Args: { p_user_id: string }; Returns: number };
+      get_profile_ai_following_count: { Args: { p_user_id: string }; Returns: number };
+      list_profile_followers: {
+        Args: { p_user_id: string; p_limit?: number; p_offset?: number };
+        Returns: ProfileFollowPerson[];
+      };
+      list_profile_following: {
+        Args: { p_user_id: string; p_limit?: number; p_offset?: number };
+        Returns: ProfileFollowPerson[];
+      };
+      list_profile_ai_followers: {
+        Args: { p_user_id: string; p_limit?: number; p_offset?: number };
+        Returns: ProfileFollowPersona[];
+      };
+      list_profile_ai_following: {
+        Args: { p_user_id: string; p_limit?: number; p_offset?: number };
+        Returns: ProfileFollowPersona[];
+      };
+      list_profile_favorite_personas: {
+        Args: { p_user_id: string };
+        Returns: ProfileFollowPersona[];
+      };
       respond_companion_follow: { Args: { p_companion_id: string; p_accept: boolean }; Returns: UserCompanionRelationship };
       set_companion_dm_opt_in: { Args: { p_companion_id: string; p_opt_in: boolean }; Returns: UserCompanionRelationship };
       start_companion_dm: { Args: { p_user_id: string; p_companion_id: string; p_content: string }; Returns: ChatMessage | null };
@@ -521,6 +585,14 @@ export interface Database {
       get_or_create_chat_thread: { Args: { p_user_id?: string | null; p_companion_id?: string | null }; Returns: ChatThread };
       create_chat_message: { Args: { p_thread_id: string; p_content: string }; Returns: ChatMessage };
       create_companion_chat_message: { Args: { p_thread_id: string; p_companion_id: string; p_content: string }; Returns: ChatMessage };
+      create_beta_chat_message: {
+        Args: { p_user_id: string; p_thread_id: string; p_content: string; p_client_request_id: string; p_daily_limit: number };
+        Returns: ChatMessage;
+      };
+      create_companion_chat_reply: {
+        Args: { p_thread_id: string; p_companion_id: string; p_user_message_id: string; p_content: string };
+        Returns: ChatMessage;
+      };
       submit_feedback: { Args: { p_category: FeedbackType; p_message: string }; Returns: string };
     };
     Enums: {

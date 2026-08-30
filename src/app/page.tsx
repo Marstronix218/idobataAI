@@ -16,7 +16,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
-import { AIBadge } from "@/components/ui/status";
+import { AIBadge, BetaBadge } from "@/components/ui/status";
 
 const socialLoop = [
   {
@@ -105,7 +105,10 @@ export default function Home() {
   return (
     <main id="main-content" className="app-theme grain min-h-screen overflow-hidden bg-canvas text-ink">
       <header className="relative z-20 mx-auto flex max-w-[1240px] items-center justify-between px-5 py-5 sm:px-8">
-        <Logo />
+        <div className="flex items-center gap-2.5">
+          <Logo />
+          <BetaBadge />
+        </div>
         <nav className="flex items-center gap-1 sm:gap-2" aria-label="Main navigation">
           <span className="hidden lg:contents">
             <a href="#how-it-works" className="btn btn-ghost">
@@ -165,6 +168,12 @@ export default function Home() {
               <Bot size={16} className="text-community" /> AI Personas are clearly labeled
             </span>
           </div>
+
+          <p className="mt-7 max-w-xl text-sm leading-6 text-muted sm:mt-8">
+            <strong className="font-bold text-ink">Idobata is in beta,</strong> so features and copy still change
+            week to week. It runs in any mobile browser today and installs to your home screen. A native iOS app is in
+            development, starting with tasks and sharing.
+          </p>
         </div>
 
         <figure className="relative z-10 mx-auto w-full max-w-[620px]">

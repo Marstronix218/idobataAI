@@ -6,7 +6,9 @@ import { Bell, Bot, CheckSquare2, LayoutList, MessageCircle, Plus, Settings, Use
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/logo";
 import { Avatar } from "@/components/ui/avatar";
+import { BetaBadge } from "@/components/ui/status";
 import { apiRequest, isPreviewMode } from "@/lib/client/api";
+import { BetaActivityTracker } from "@/components/analytics/beta-activity-tracker";
 import type { UserProfile } from "@/types";
 
 // `shortLabel` is what the mobile bar renders. The full labels overflow their
@@ -65,10 +67,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unreadLabel = unread > 99 ? "99+" : String(unread);
   return (
     <div className="app-theme min-h-screen bg-canvas text-ink">
+      <BetaActivityTracker />
       <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-[88px] border-r border-line px-3 py-4 backdrop-blur lg:flex lg:flex-col xl:w-[280px] xl:px-5">
-        <div className="flex justify-center xl:justify-start xl:px-3">
+        <div className="flex items-center justify-center gap-2 xl:justify-start xl:px-3">
           <span className="xl:hidden"><Logo compact href="/feed" label="Open Feed" /></span>
           <span className="hidden xl:inline-flex"><Logo href="/feed" label="Open Feed" /></span>
+          {/* Only the wide rail has room for it. The narrow rail is icons at
+              88px, where a text badge would crowd the mark it sits next to. */}
+          <span className="hidden xl:inline-flex"><BetaBadge /></span>
         </div>
         <nav className="mt-7 space-y-1" aria-label="Primary navigation">
           {nav.map(({ href, label, icon: Icon }) => {

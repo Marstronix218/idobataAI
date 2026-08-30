@@ -73,6 +73,22 @@ export async function GET(request: Request) {
         image_urls: (post.quoted_post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
       } : null,
     }));
-    return ok({ items: signedItems, nextCursor: hasMore && items.length ? makeCursor(items[items.length - 1]) : null });
+    const companionIds = [...new Set(signedItems.map((post) => post.companion_id).filter((id): id is string => Boolean(id)))];
+    const favoriteIds = new Set<string>();
+    if (companionIds.length) {
+      const favoriteRows = assertDatabase(await supabase.from("user_companion_relationships")
+        .select("companion_id")
+        .eq("user_id", user.id)
+        .eq("is_favorite", true)
+        .in("companion_id", companionIds)) ?? [];
+      for (const row of favoriteRows) favoriteIds.add(row.companion_id);
+    }
+    // Keep cursor pagination chronological and boost Favorites only within the
+    // fetched window. This makes preferred personas easier to find without a
+    // favorite post permanently pinning or skipping later pages.
+    const rankedItems = signedItems.map((post, index) => ({ post, index }))
+      .sort((left, right) => Number(favoriteIds.has(right.post.companion_id ?? "")) - Number(favoriteIds.has(left.post.companion_id ?? "")) || left.index - right.index)
+      .map(({ post }) => post);
+    return ok({ items: rankedItems, nextCursor: hasMore && items.length ? makeCursor(items[items.length - 1]) : null });
   });
 }

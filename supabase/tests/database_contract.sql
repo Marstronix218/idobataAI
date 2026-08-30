@@ -66,10 +66,28 @@ begin
   if has_table_privilege('authenticated','public.ai_jobs','SELECT') then raise exception 'authenticated can read privileged jobs'; end if;
   if has_table_privilege('authenticated','public.social_ai_engagements','SELECT') then raise exception 'authenticated can read internal AI fallback rows'; end if;
   if has_table_privilege('authenticated','public.user_companion_relationships','INSERT') then raise exception 'authenticated can bypass relationship RPCs'; end if;
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='user_companion_relationships'
+      and column_name='is_favorite' and data_type='boolean'
+  ) then raise exception 'persona favorite state is missing'; end if;
+  if not has_function_privilege('authenticated','public.set_user_companion_favorite(uuid,boolean)','EXECUTE') then raise exception 'authenticated cannot manage persona favorites'; end if;
+  if has_function_privilege('anon','public.set_user_companion_favorite(uuid,boolean)','EXECUTE') then raise exception 'anonymous users can manage persona favorites'; end if;
   if has_table_privilege('authenticated','public.user_follows','INSERT') then raise exception 'authenticated can forge human follow identity'; end if;
   if not has_table_privilege('authenticated','public.user_follows','SELECT') then raise exception 'authenticated cannot read their own human follow edges through RLS'; end if;
   if not has_function_privilege('authenticated','public.set_user_follow(uuid,boolean)','EXECUTE') then raise exception 'authenticated cannot follow public profiles'; end if;
   if not has_function_privilege('authenticated','public.get_profile_follow_summary(uuid)','EXECUTE') then raise exception 'authenticated cannot read profile follow summaries'; end if;
+  if not has_function_privilege('authenticated','public.list_profile_followers(uuid,integer,integer)','EXECUTE') then raise exception 'authenticated cannot open a profile follower list'; end if;
+  if not has_function_privilege('authenticated','public.list_profile_following(uuid,integer,integer)','EXECUTE') then raise exception 'authenticated cannot open a profile following list'; end if;
+  if not has_function_privilege('authenticated','public.list_profile_ai_followers(uuid,integer,integer)','EXECUTE') then raise exception 'authenticated cannot open a profile AI follower list'; end if;
+  if not has_function_privilege('authenticated','public.list_profile_ai_following(uuid,integer,integer)','EXECUTE') then raise exception 'authenticated cannot open the personas a profile follows'; end if;
+  if not has_function_privilege('authenticated','public.get_profile_ai_following_count(uuid)','EXECUTE') then raise exception 'authenticated cannot read a profile AI following count'; end if;
+  if not has_function_privilege('authenticated','public.list_profile_favorite_personas(uuid)','EXECUTE') then raise exception 'authenticated cannot read a profile favorite persona strip'; end if;
+  if has_function_privilege('anon','public.list_profile_favorite_personas(uuid)','EXECUTE') then raise exception 'anonymous users can read favorite personas'; end if;
+  -- The follow-list gate is called only from the definer functions above, which
+  -- run as its owner. Granting it would let a caller probe visibility directly.
+  if has_function_privilege('authenticated','public.assert_profile_follow_list_access(uuid,uuid)','EXECUTE') then raise exception 'authenticated can call the follow-list gate directly'; end if;
+  if has_function_privilege('anon','public.list_profile_followers(uuid,integer,integer)','EXECUTE') then raise exception 'anonymous users can enumerate a social graph'; end if;
   if not has_function_privilege('authenticated','public.get_following_post_ids(text,timestamp with time zone,uuid,integer)','EXECUTE') then raise exception 'authenticated cannot resolve their Following feed'; end if;
   if has_function_privilege('anon','public.set_user_follow(uuid,boolean)','EXECUTE') then raise exception 'anonymous users can mutate human follows'; end if;
   if has_function_privilege('anon','public.get_following_post_ids(text,timestamp with time zone,uuid,integer)','EXECUTE') then raise exception 'anonymous users can query relationship feeds'; end if;

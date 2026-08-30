@@ -60,8 +60,40 @@ describe("CompanionRelationshipControls", () => {
       body: JSON.stringify({ action: "follow", following: true }),
     }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Clear memory" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Clear memory" }));
     await waitFor(() => expect(apiRequest).toHaveBeenCalledWith("/api/companions/companion-1/memory", { method: "DELETE" }));
     confirm.mockRestore();
+  });
+
+  it("favorites only a followed persona and removes it independently", async () => {
+    apiRequest.mockImplementation(() => Promise.resolve({
+      relationship: {
+        user_followed_at: "2026-08-20T00:00:00.000Z",
+        companion_follow_state: "none",
+        dm_opt_in: false,
+        is_favorite: true,
+        favorited_at: "2026-08-30T00:00:00.000Z",
+      },
+    }));
+    render(<CompanionRelationshipControls
+      companionId="companion-1"
+      companionName="Moss"
+      initialFavoriteCount={2}
+      initialRelationship={{
+        user_followed_at: "2026-08-20T00:00:00.000Z",
+        companion_follow_state: "none",
+        dm_opt_in: false,
+        is_favorite: false,
+        favorited_at: null,
+      }}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "☆ Favorite" }));
+    await waitFor(() => expect(apiRequest).toHaveBeenCalledWith("/api/companions/companion-1/relationship", {
+      method: "PUT",
+      body: JSON.stringify({ action: "favorite", favorite: true }),
+    }));
+    expect(screen.getByText("3 / 3 Favorites")).toBeVisible();
   });
 });

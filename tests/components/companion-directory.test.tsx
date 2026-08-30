@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -39,6 +39,22 @@ describe("CompanionDirectory", () => {
     fireEvent.click(follow);
 
     expect(screen.getAllByRole("button", { name: "Following" })[0]).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps Favorites free, separate from Following, and capped in the UI", async () => {
+    render(<CompanionDirectory />);
+
+    expect(screen.getByText("0 / 3 Favorites")).toBeVisible();
+    const favorite = screen.getByRole("button", { name: "Favorite Moss" });
+    expect(favorite).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Follow" })[0]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Favorite Moss" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Favorite Moss" }));
+
+    expect(screen.getByRole("button", { name: "Unfavorite Moss" })).toHaveTextContent("★ Favorited");
+    expect(screen.getByText("1 / 3 Favorites")).toBeVisible();
+    expect(screen.queryByText(/upgrade plan|paid plan|premium plan/i)).not.toBeInTheDocument();
   });
 
   it("keeps the search text clear of its decorative icon", () => {

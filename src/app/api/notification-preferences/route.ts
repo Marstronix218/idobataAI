@@ -16,7 +16,6 @@ export async function PATCH(request: Request) {
       ...(input.reactions !== undefined && { reactions: input.reactions }),
       ...(input.replies !== undefined && { replies: input.replies }),
       ...(input.companionActivity !== undefined && { companion_activity: input.companionActivity }),
-      ...(input.emailDigest !== undefined && { email_digest: input.emailDigest }),
     }).eq("user_id", user.id).select("*").single();
     return ok(assertDatabase(result, true));
   });

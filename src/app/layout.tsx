@@ -24,6 +24,10 @@ export const metadata: Metadata = {
   },
   description:
     "A private task list and encouraging community for sharing the wins you choose.",
+  applicationName: "idobataAI",
+  // iOS ignores the web manifest's `display` and `name`, so an installed
+  // home-screen icon only opens fullscreen with its own title through these.
+  appleWebApp: { capable: true, title: "idobataAI", statusBarStyle: "default" },
   openGraph: {
     type: "website",
     title: "idobataAI: small wins, shared well",
@@ -38,6 +42,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Matches `--canvas` in both themes so an installed app's status bar and
+  // browser chrome do not band against the page behind them.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f2e9" },
+    { media: "(prefers-color-scheme: dark)", color: "#070b16" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

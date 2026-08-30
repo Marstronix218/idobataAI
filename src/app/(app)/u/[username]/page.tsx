@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, CheckCircle2, Globe2, Heart, LockKeyhole, MessageCircle, Pencil, UserCheck } from "lucide-react";
+import { ArrowLeft, CalendarDays, Heart, LockKeyhole, MessageCircle, Pencil, UserCheck } from "lucide-react";
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
+import { FavoritePersonas } from "@/components/profile/favorite-personas";
 import { ProfileFeedPost } from "@/components/profile/profile-feed-post";
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button";
 import type { ReplyAuthor } from "@/components/social/reply-thread";
@@ -15,18 +16,9 @@ import { toQuotedFeedPost } from "@/lib/domain/social-post";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import type { FeedPost, QuotedFeedPost, SocialReply, UserProfile } from "@/types";
+import type { FeedPost, ProfileFollowPersona, QuotedFeedPost, SocialReply, UserProfile } from "@/types";
 
-type ProfileTab = "posts" | "replies" | "likes" | "progress";
-
-type PublicProgress = {
-  task_id: string;
-  task_title: string;
-  category: string | null;
-  status: "pending" | "completed";
-  xp_value: number | null;
-  updated_at: string;
-};
+type ProfileTab = "posts" | "replies" | "likes";
 
 type ProfileReply = Pick<SocialReply, "id" | "content" | "created_at"> & {
   post: FeedPost;
@@ -93,6 +85,19 @@ const restrictedProfileDefaults = {
 
 const previewHumanFollowerCount = 3;
 const previewHumanFollowingCount = 5;
+
+// The card's strip is capped at three by the database, so preview mode takes
+// the first three demo personas rather than all of them.
+const previewFavoritePersonas: ProfileFollowPersona[] = previewCompanions.slice(0, 3).map((companion) => ({
+  id: companion.id,
+  slug: companion.id,
+  name: companion.name,
+  avatar_url: `/companions/${companion.id}.webp`,
+  personality: companion.tagline,
+  followed_at: new Date().toISOString(),
+  viewer_follows: true,
+  is_favorite: true,
+}));
 
 const previewPosts: FeedPost[] = [{
   id: "preview-win",
@@ -257,15 +262,6 @@ const previewReplies: ProfileReply[] = [{
   },
 }];
 
-const previewProgress: PublicProgress[] = [{
-  task_id: "preview-progress",
-  task_title: "Review launch notes with the team",
-  category: "Work",
-  status: "pending",
-  xp_value: 0,
-  updated_at: new Date().toISOString(),
-}];
-
 function relativeTime(value: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
   if (minutes < 1) return "now";
@@ -323,7 +319,7 @@ export default async function ProfilePage({
 }) {
   const requestedUsername = decodeURIComponent((await params).username);
   const requestedTab = (await searchParams).tab;
-  const selectedTab: ProfileTab = requestedTab === "replies" || requestedTab === "likes" || requestedTab === "progress"
+  const selectedTab: ProfileTab = requestedTab === "replies" || requestedTab === "likes"
     ? requestedTab
     : "posts";
   const useDatabase = hasPublicSupabaseEnv() && !(process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && process.env.NODE_ENV !== "production");
@@ -331,12 +327,12 @@ export default async function ProfilePage({
   let posts = previewTimeline;
   let replies = previewReplies;
   let likedPosts = previewLikedPosts;
-  let progress = previewProgress;
   let postCount = previewTimeline.length;
   let completionCount = previewPosts.filter((post) => post.kind === "human_completion").length;
   let humanFollowerCount = previewHumanFollowerCount;
   let humanFollowingCount = previewHumanFollowingCount;
-  let aiFollowerCount = previewCompanions.length;
+  let aiFollowingCount = previewCompanions.length;
+  let favoritePersonas = previewFavoritePersonas;
   let viewerFollowsProfile = false;
   let viewerRequestedFollow = false;
   let pendingRequestCount = 0;
@@ -386,7 +382,6 @@ export default async function ProfilePage({
     posts = [];
     replies = [];
     likedPosts = [];
-    progress = [];
 
     // The counts describe the account rather than its posts, so a protected
     // profile reports them the same way Twitter does. Every query below is
@@ -417,11 +412,11 @@ export default async function ProfilePage({
       if (!isOwner) {
         postCountQuery = postCountQuery.eq("visibility", "public");
       }
-      const [countResult, postCountResult, repostCountResult, aiFollowerCountResult, followSummaryResult] = await Promise.all([
+      const [countResult, postCountResult, repostCountResult, aiFollowingCountResult, followSummaryResult] = await Promise.all([
         completionCountQuery,
         postCountQuery,
         repostCountQuery,
-        supabase.rpc("get_profile_ai_follower_count", { p_user_id: profile.id }),
+        supabase.rpc("get_profile_ai_following_count", { p_user_id: profile.id }),
         supabase.rpc("get_profile_follow_summary", { p_user_id: profile.id }),
       ]);
       assertDatabase(countResult);
@@ -429,7 +424,7 @@ export default async function ProfilePage({
       assertDatabase(repostCountResult);
       postCount = (postCountResult.count ?? 0) + (repostCountResult.count ?? 0);
       completionCount = countResult.count ?? 0;
-      aiFollowerCount = assertDatabase(aiFollowerCountResult) ?? 0;
+      aiFollowingCount = assertDatabase(aiFollowingCountResult) ?? 0;
       // Visibility no longer withholds this row, so a missing one means the two
       // accounts have blocked each other. That should read as "no such profile"
       // rather than as a server fault, the same way the directory omits it.
@@ -445,6 +440,9 @@ export default async function ProfilePage({
     // An approved follower reads a private profile the way anyone reads a
     // public one; everybody else gets the card above and nothing below it.
     if (isOwner || profile.profile_visibility === "public" || viewerFollowsProfile) {
+      // The strip is part of the graph, not part of the counts, so it lives
+      // behind the same gate as the timeline rather than beside the numbers.
+      favoritePersonas = assertDatabase(await supabase.rpc("list_profile_favorite_personas", { p_user_id: profile.id })) ?? [];
       if (selectedTab === "posts") {
         let postQuery = supabase
           .from("social_posts")
@@ -523,16 +521,6 @@ export default async function ProfilePage({
           return post ? [post] : [];
         });
       }
-
-      if (selectedTab === "progress") {
-        const progressResult = await supabase
-          .from("public_task_progress")
-          .select("task_id, task_title, category, status, updated_at")
-          .eq("owner_id", profile.id)
-          .order("updated_at", { ascending: false })
-          .limit(20);
-        progress = (assertDatabase(progressResult) ?? []) as PublicProgress[];
-      }
     }
   } else if (requestedUsername.toLowerCase() !== "mina") {
     notFound();
@@ -545,7 +533,6 @@ export default async function ProfilePage({
     { id: "posts", label: "Posts" },
     { id: "replies", label: "Replies" },
     { id: "likes", label: "Likes" },
-    { id: "progress", label: "Progress" },
   ];
 
   return <AppTabLayout>
@@ -590,13 +577,26 @@ export default async function ProfilePage({
             {isOwner && <PrivacyBadge isPublic={profile.profile_visibility === "public"} />}
           </div>
           {profile.interests.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{profile.interests.map((interest) => <span key={interest} className="badge badge-category">{interest}</span>)}</div>}
+          {/* Two counts, both human. Merging people and personas would make the
+              number that matters -- how many people are actually watching --
+              unreadable, but a third and fourth number for the AI side made the
+              card a wall of digits nobody parsed. The AI graph moved one level
+              down instead: each count opens a list that is split by audience,
+              and the part of it worth naming on the card is the favorites strip
+              below, which the cap of three keeps to a single line. */}
           <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
             <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{completionCount}</dd></div>
             <div className="flex gap-1.5"><dt className="text-muted">Momentum</dt><dd className="font-bold">{profile.current_streak} days</dd></div>
-            <div><dt className="sr-only">Human followers</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></dd></div>
-            <div><dt className="sr-only">People followed</dt><dd className="flex gap-1.5"><span className="font-bold">{humanFollowingCount}</span><span className="text-muted">Following</span></dd></div>
-            <div><dt className="sr-only">AI followers</dt><dd><Link href="/ai-personas" aria-label={`View ${aiFollowerCount} AI followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{aiFollowerCount}</span><span className="text-muted">AI followers</span></Link></dd></div>
+            <div><dt className="sr-only">Human followers</dt><dd><Link href={`/u/${profile.username}/followers`} aria-label={`View ${humanFollowerCount} followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></Link></dd></div>
+            <div><dt className="sr-only">People followed</dt><dd><Link href={`/u/${profile.username}/following`} aria-label={`View the ${humanFollowingCount} accounts ${displayName} follows`} className="flex gap-1.5 hover:underline"><span className="font-bold">{humanFollowingCount}</span><span className="text-muted">Following</span></Link></dd></div>
           </dl>
+
+          {canViewProfile && <FavoritePersonas
+            username={profile.username}
+            personas={favoritePersonas}
+            isOwner={isOwner}
+            followingCount={aiFollowingCount}
+          />}
 
           {isOwner && pendingRequestCount > 0 && <Link href="/follow-requests" className="mt-4 flex items-center gap-2 rounded-2xl border border-line bg-surface p-4 text-sm font-bold transition-colors hover:bg-surface/70">
             <UserCheck size={18} className="text-community" />
@@ -609,13 +609,13 @@ export default async function ProfilePage({
         <LockKeyhole size={26} className="mx-auto text-muted" />
         <h2 id="protected-posts" className="display mt-4 text-2xl font-bold">These posts are protected</h2>
         <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted">
-          Only approved followers can see @{profile.username}&rsquo;s posts, replies, likes, and progress.
+          Only approved followers can see @{profile.username}&rsquo;s posts, replies, and likes.
           {currentUserId && !isOwner && (viewerRequestedFollow ? " Your request is waiting for them." : " To ask for access, tap Follow.")}
         </p>
       </section>}
 
       {canViewProfile && <>
-        <nav className="grid grid-cols-4 border-y border-line" aria-label="Profile views" role="tablist">
+        <nav className="grid grid-cols-3 border-y border-line" aria-label="Profile views" role="tablist">
           {tabs.map((tab) => <Link
             key={tab.id}
             href={tab.id === "posts" ? `/u/${profile.username}` : `/u/${profile.username}?tab=${tab.id}`}
@@ -657,12 +657,6 @@ export default async function ProfilePage({
         {selectedTab === "likes" && <section aria-label={`${displayName}'s liked posts`}>
           {likedPosts.map((post) => <ProfileFeedPost key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} />)}
           {!likedPosts.length && <div className="border-b border-line p-10 text-center"><Heart className="mx-auto text-brand" /><h3 className="display mt-4 text-xl font-bold">No visible likes yet</h3><p className="mt-2 text-sm text-muted">Posts {displayName} likes will appear here when you can view them.</p></div>}
-        </section>}
-
-        {selectedTab === "progress" && <section aria-label={`${displayName}'s public progress`}>
-          <div className="border-b border-line px-4 py-3 text-sm text-muted"><span className="inline-flex items-center gap-2 font-bold text-community"><Globe2 size={16} /> Public task progress</span><p className="mt-1">Progress appears here only when a task is explicitly marked Public.</p></div>
-          {progress.map((item) => { const updated = relativeTime(item.updated_at); return <article key={item.task_id} className="border-b border-line p-4 transition-colors hover:bg-surface/35 sm:p-5"><div className="flex items-start gap-3"><span className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full ${item.status === "completed" ? "bg-success-soft text-success" : "bg-brand-soft text-brand"}`}><CheckCircle2 size={18} /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">{item.task_title}</h3><span className={item.status === "completed" ? "badge bg-success-soft text-success" : "badge badge-public"}>{item.status}</span></div><p className="mt-1 text-xs text-muted">Updated {updated === "now" ? "just now" : `${updated} ago`}</p><div className="mt-3 flex flex-wrap gap-2">{item.category && <span className="badge badge-category">{item.category}</span>}</div></div></div></article>; })}
-          {!progress.length && <div className="border-b border-line p-10 text-center"><Globe2 className="mx-auto text-community" /><h3 className="display mt-4 text-xl font-bold">No public tasks right now</h3><p className="mt-2 text-sm text-muted">Private task details remain invisible.</p></div>}
         </section>}
       </>}
     </div>

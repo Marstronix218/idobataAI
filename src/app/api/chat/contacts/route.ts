@@ -6,7 +6,7 @@ const COMPANION_RESULT_LIMIT = 200;
 
 export async function GET(request: Request) {
   return withApi(async () => {
-    const { supabase } = await authed(request);
+    const { user, supabase } = await authed(request);
     const query = new URL(request.url).searchParams.get("query")?.trim() ?? "";
     if (query.length > 50) throw new ApiError(400, "Search must be 50 characters or fewer.");
     const pattern = `%${query.replace(/[%,]/g, "")}%`;
@@ -26,9 +26,22 @@ export async function GET(request: Request) {
       companionsQuery = companionsQuery.or(`name.ilike.${pattern},slug.ilike.${pattern}`);
     }
 
-    const [profileResult, companionResult] = await Promise.all([profilesQuery, companionsQuery]);
+    const [profileResult, companionResult, relationshipResult] = await Promise.all([
+      profilesQuery,
+      companionsQuery,
+      supabase.from("user_companion_relationships").select("companion_id, user_followed_at, is_favorite").eq("user_id", user.id),
+    ]);
     const profiles = assertDatabase(profileResult) as Array<Pick<UserProfile, "id" | "username" | "display_name" | "avatar_url" | "bio">>;
     const companions = assertDatabase(companionResult) as Array<Pick<SocialCompanion, "id" | "slug" | "name" | "avatar_url" | "personality">>;
+    const relationships = assertDatabase(relationshipResult) ?? [];
+    const relationshipByCompanionId = new Map(relationships.map((relationship) => [relationship.companion_id, relationship]));
+    const orderedCompanions = [...companions].sort((left, right) => {
+      const leftRelationship = relationshipByCompanionId.get(left.id);
+      const rightRelationship = relationshipByCompanionId.get(right.id);
+      return Number(Boolean(rightRelationship?.is_favorite)) - Number(Boolean(leftRelationship?.is_favorite))
+        || Number(Boolean(rightRelationship?.user_followed_at)) - Number(Boolean(leftRelationship?.user_followed_at))
+        || left.name.localeCompare(right.name);
+    });
     const items: ChatContact[] = [
       ...profiles.map((profile) => ({
         id: profile.id,
@@ -38,7 +51,7 @@ export async function GET(request: Request) {
         avatarUrl: profile.avatar_url,
         description: profile.bio,
       })),
-      ...companions.map((companion) => ({
+      ...orderedCompanions.map((companion) => ({
         id: companion.id,
         kind: "companion" as const,
         name: companion.name,

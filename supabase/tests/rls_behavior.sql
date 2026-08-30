@@ -107,14 +107,14 @@ begin
   if not exists(select 1 from public.social_posts where id=published_id and content='') then raise exception 'blank completion comment was not preserved as blank'; end if;
   if progress_id is null then raise exception 'progress post was not created'; end if;
   if (select count(*) from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and task_id='aaaaaaaa-0000-4000-8000-000000000003') <> 1 then raise exception 'completion publishing was not idempotent'; end if;
-  if (select count(*) from public.social_ai_engagements where post_id=published_id and state='planned') <> 2 then raise exception 'completion publishing did not plan one reply and one ambient like'; end if;
+  if exists(select 1 from public.social_ai_engagements where post_id=published_id and state='planned') then raise exception 'private completion planned public persona engagement'; end if;
   if exists(select 1 from public.social_replies where post_id=published_id and companion_id is not null) then raise exception 'completion publishing automatically created an AI reply'; end if;
   if exists(select 1 from public.social_reactions where post_id=published_id and companion_id is not null) then raise exception 'completion publishing automatically created an AI reaction'; end if;
-  if (select count(*) from public.ai_jobs where payload->>'postId'=published_id::text and job_type='perform_social_action') <> 2 then raise exception 'completion publishing did not queue persona work'; end if;
-  if (select count(*) from public.social_ai_engagements where post_id=progress_id and state='planned') <> 2 then raise exception 'progress publishing did not plan persona engagement'; end if;
+  if exists(select 1 from public.ai_jobs where payload->>'postId'=published_id::text) then raise exception 'private completion queued persona work'; end if;
+  if exists(select 1 from public.social_ai_engagements where post_id=progress_id and state='planned') then raise exception 'progress publishing planned persona engagement'; end if;
   if exists(select 1 from public.social_replies where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reply'; end if;
   if exists(select 1 from public.social_reactions where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reaction'; end if;
-  if (select count(*) from public.ai_jobs where payload->>'postId'=progress_id::text and job_type='perform_social_action') <> 2 then raise exception 'progress publishing did not queue persona work'; end if;
+  if exists(select 1 from public.ai_jobs where payload->>'postId'=progress_id::text) then raise exception 'progress publishing queued persona work'; end if;
   if (select count(*) from public.task_completion_awards where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion awarded twice in one occurrence'; end if;
   if (select count(*) from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion published twice in one occurrence'; end if;
   if not exists(select 1 from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004' and visibility='public') then raise exception 'completion publisher ignored the explicitly confirmed audience'; end if;
@@ -131,8 +131,7 @@ do $$ begin
   end;
 end $$;
 
--- A larger AI-follower set must not fan one human post out to multiple
--- guaranteed persona replies.
+-- A larger AI-follower set must not create guaranteed persona attention.
 select set_config('app.companion_follow_transition','allowed',true);
 insert into public.user_companion_relationships(
   user_id,companion_id,companion_follow_state,companion_follow_requested_at,companion_followed_at
@@ -159,20 +158,13 @@ do $$ begin
   if exists(select 1 from public.social_ai_engagements where post_id='aaaaaaaa-1000-4000-8000-000000000004') then
     raise exception 'AI-authored post recursively enqueued persona engagement';
   end if;
-  if (
-    select count(*) from public.social_ai_engagements
+  if exists(
+    select 1 from public.social_ai_engagements
     where post_id='aaaaaaaa-1000-4000-8000-000000000002'
-      and source='human_post_guarantee' and kind='reply'
-  ) <> 1 then raise exception 'eligible human post did not cap guaranteed AI replies at one'; end if;
-  if (
-    select count(*) from public.social_ai_engagements
-    where post_id='aaaaaaaa-1000-4000-8000-000000000002'
-      and source='ambient' and kind='reaction'
-  ) <> 1 then raise exception 'eligible human post did not plan exactly one ambient like'; end if;
+  ) then raise exception 'progress post created persona engagement outside the completed-task loop'; end if;
 end $$;
 
--- Task relevance decides who the guaranteed responder is, so the classifier the
--- trigger depends on must agree with the persona affinity tables.
+-- The completed-task planner and persona affinity tables share this classifier.
 do $$ begin
   if public.classify_task_category('Finished economics essay', null, null) <> 'study'
     then raise exception 'classifier did not read an essay as study'; end if;
@@ -188,8 +180,7 @@ do $$ begin
     then raise exception 'classifier guessed instead of returning other'; end if;
 end $$;
 
--- Only a completed task draws the wider cast. A progress post keeps the single
--- guaranteed responder it has always had.
+-- Only a public completed task enters selective persona planning.
 insert into public.social_posts(id,author_id,task_id,kind,visibility,content,task_title,category,idempotency_key)
 values('aaaaaaaa-1000-4000-8000-0000000000e1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   'aaaaaaaa-0000-4000-8000-000000000003','human_completion','public','Cleaned my entire apartment.',
@@ -204,10 +195,10 @@ do $$ begin
     select 1 from public.ai_jobs
     where job_type='plan_post_engagement' and dedupe_key='plan-engagement:aaaaaaaa-1000-4000-8000-000000000002'
   ) then raise exception 'a progress post queued selective persona engagement'; end if;
-  if (
-    select count(*) from public.social_ai_engagements
+  if exists(
+    select 1 from public.social_ai_engagements
     where post_id='aaaaaaaa-1000-4000-8000-0000000000e1' and source='human_post_guarantee'
-  ) <> 1 then raise exception 'completed-task post did not keep exactly one guaranteed reply'; end if;
+  ) then raise exception 'completed-task post created guaranteed attention'; end if;
 end $$;
 
 -- A persona quote repost is an authored post carrying the original, and it
@@ -684,6 +675,20 @@ begin
   if summary.follower_count <> 1 or not summary.viewer_follows then
     raise exception 'profile follow summary did not include the human follower';
   end if;
+  -- The list behind that count. `is_viewer` is what tells the profile page not
+  -- to offer the reader a Follow button on their own row.
+  if not exists(
+    select 1 from public.list_profile_followers('cccccccc-cccc-4ccc-8ccc-cccccccccccc')
+    where id=auth.uid() and is_viewer
+  ) then raise exception 'profile follower list omitted the viewer''s own follow'; end if;
+  if exists(select 1 from public.list_profile_following('cccccccc-cccc-4ccc-8ccc-cccccccccccc')) then
+    raise exception 'profile following list reported an edge that does not exist';
+  end if;
+  begin
+    perform public.list_profile_followers('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 0);
+    raise exception 'follow list accepted an out-of-range limit';
+  exception when invalid_parameter_value then null;
+  end;
   perform public.set_user_companion_follow('10000000-0000-4000-8000-000000000001', true);
   if not exists(
     select 1 from public.get_following_post_ids(null,null,null,20)
@@ -693,6 +698,60 @@ begin
     select 1 from public.get_following_post_ids(null,null,null,20)
     where post_id='aaaaaaaa-1000-4000-8000-000000000004'
   ) then raise exception 'Following feed omitted a followed AI companion post'; end if;
+  perform public.set_user_companion_favorite('10000000-0000-4000-8000-000000000001', true);
+  perform public.set_user_companion_follow('10000000-0000-4000-8000-000000000002', true);
+  perform public.set_user_companion_follow('10000000-0000-4000-8000-000000000003', true);
+  perform public.set_user_companion_follow('10000000-0000-4000-8000-000000000004', true);
+  perform public.set_user_companion_favorite('10000000-0000-4000-8000-000000000002', true);
+  perform public.set_user_companion_favorite('10000000-0000-4000-8000-000000000003', true);
+  if (select count(*) from public.user_companion_relationships where user_id=auth.uid() and is_favorite) <> 3 then
+    raise exception 'persona favorite count did not reach the beta cap';
+  end if;
+  begin
+    perform public.set_user_companion_favorite('10000000-0000-4000-8000-000000000004', true);
+    raise exception 'a fourth persona favorite was accepted';
+  exception when raise_exception then
+    if sqlerrm='a fourth persona favorite was accepted' then raise; end if;
+  end;
+  perform public.set_user_companion_follow('10000000-0000-4000-8000-000000000001', false);
+  if exists(
+    select 1 from public.user_companion_relationships
+    where user_id=auth.uid() and companion_id='10000000-0000-4000-8000-000000000001' and is_favorite
+  ) then raise exception 'unfollowing did not remove persona favorite status'; end if;
+  begin
+    perform public.set_user_companion_favorite('10000000-0000-4000-8000-000000000005', true);
+    raise exception 'an unfollowed persona was favorited';
+  exception when raise_exception then
+    if sqlerrm='an unfollowed persona was favorited' then raise; end if;
+  end;
+  -- The card's favorites strip and the stored favorites are one predicate read
+  -- twice, so a face on the profile must be a row in the table.
+  if (select count(*) from public.list_profile_favorite_personas(auth.uid()))
+     <> (select count(*) from public.user_companion_relationships r
+         join public.social_companions c on c.id=r.companion_id and c.active
+         where r.user_id=auth.uid() and r.is_favorite) then
+    raise exception 'favorite persona strip disagreed with the stored favorites';
+  end if;
+  if exists(select 1 from public.list_profile_favorite_personas(auth.uid()) where not is_favorite) then
+    raise exception 'favorite persona strip returned a persona that is not a favorite';
+  end if;
+  -- Same rule as the AI follower pair: a count that opens a page must open a
+  -- page with that many rows on it.
+  if (select count(*) from public.list_profile_ai_following(auth.uid()))
+     <> public.get_profile_ai_following_count(auth.uid()) then
+    raise exception 'AI following list and AI following count disagreed';
+  end if;
+  -- Favorites lead the list, so the personas on the card are the personas on
+  -- top of the list the card opens.
+  if exists(
+    select 1
+    from (
+      select is_favorite, row_number() over () as position
+      from public.list_profile_ai_following(auth.uid())
+    ) ordered
+    where ordered.is_favorite
+      and ordered.position > (select count(*) from public.list_profile_favorite_personas(auth.uid()))
+  ) then raise exception 'AI following list did not lead with favorites'; end if;
   begin
     perform public.set_user_follow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
     raise exception 'private profile accepted a human follow';
@@ -722,6 +781,61 @@ do $$ begin
     where follower_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
       and followed_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
   ) then raise exception 'uninvolved user could read a human follow edge'; end if;
+end $$;
+reset role;
+
+-- A profile's counts describe the account and are shown to anyone; its follower
+-- and following lists are the social graph, which is exactly what protecting a
+-- profile withholds. User A is private and user C does not follow them.
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+do $$ begin
+  if public.get_profile_ai_follower_count('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') is null then
+    raise exception 'protected profile withheld a count that describes the account';
+  end if;
+  begin
+    perform public.list_profile_followers('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    raise exception 'protected profile exposed its follower list to a stranger';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.list_profile_ai_followers('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    raise exception 'protected profile exposed its AI follower list to a stranger';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.list_profile_ai_following('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    raise exception 'protected profile exposed the personas it follows to a stranger';
+  exception when insufficient_privilege then null;
+  end;
+  -- The favorites strip is a slice of the graph, not one of the counts, so a
+  -- stranger reading a protected profile gets no strip at all.
+  begin
+    perform public.list_profile_favorite_personas('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    raise exception 'protected profile exposed its favorite personas to a stranger';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+do $$ begin
+  -- The owner always reads their own graph, protected or not.
+  perform public.list_profile_followers(auth.uid());
+  -- The count and the list are two readings of one predicate, so they may never
+  -- disagree: a header that says 3 must open a page with 3 rows on it.
+  if (select count(*) from public.list_profile_ai_followers(auth.uid()))
+     <> public.get_profile_ai_follower_count(auth.uid()) then
+    raise exception 'AI follower list and AI follower count disagreed';
+  end if;
+  if (select count(*) from public.list_profile_ai_following(auth.uid()))
+     <> public.get_profile_ai_following_count(auth.uid()) then
+    raise exception 'AI following list and AI following count disagreed';
+  end if;
+  if (select count(*) from public.list_profile_favorite_personas(auth.uid())) > 3 then
+    raise exception 'favorite persona strip exceeded the beta cap';
+  end if;
 end $$;
 reset role;
 

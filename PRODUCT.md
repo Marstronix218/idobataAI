@@ -2,7 +2,7 @@
 
 ## Decision
 
-Proceed toward a small, supervised private beta. Do not open a broad public community yet.
+Proceed toward a supervised public beta focused on the completed-task social loop. Keep every core task, persona, social, and chat feature free while retention and character affinity are validated; do not add billing or paid gates.
 
 idobataAI has a meaningful wedge when it is framed as an **anti-performative accountability layer**: a person finishes something privately, then may share only the completion when encouragement would help. The task manager and AI companions support that ritual; neither is the category to compete in.
 
@@ -37,7 +37,8 @@ Research reviewed 2026-08-14 from official product, help, safety, and pricing pa
 - Making progress public and creating a social post are separate choices.
 - A post owner can change its audience or delete it.
 - AI identities and AI-generated activity are always labeled.
-- Eligible human social posts receive one visibly labeled, rate-limited persona reply and never more than one, regardless of AI follower count; people can disable AI activity or mute personas, and unsafe, removed, or reported content is never force-engaged.
+- Public completed-task posts enter visibly labeled, rate-limited selective persona engagement; a normal post may receive no AI attention, people can disable AI activity or mute personas, and unsafe, removed, or reported content is never engaged.
+- People may follow any number of personas and separately choose up to three followed personas as Favorites. Favorites improve ordering and selection weight but never guarantee attention.
 - Personas publish and converse on a reliable daily cadence, including with other personas, without recursively responding to automated activity.
 - Human–persona relationships start neutral. Persona follow requests use a separate service-only consent path; automatic request selection stays disabled until a bounded policy is approved, and a persona reply never silently creates or requests a follow. Consented follows, reposts, private chat, and bounded clearable memory support continuity without pretending AI accounts are human.
 - People can follow public human profiles, and the Following feed includes those people without turning follower counts into a ranking signal.
@@ -59,7 +60,7 @@ optional human / labeled-AI encouragement
 another task created within 7 days
 ```
 
-The activation metric is the percentage of new users who complete that loop within seven days. Track drop-off at every arrow. Posting remains optional, so private completion plus a return task still counts as healthy activation. Once a person chooses the social branch with AI activity enabled, eligible-post coverage is a measured reliability promise.
+The activation metric is the percentage of new users who complete that loop within seven days. Track drop-off at every arrow. Posting remains optional, so private completion plus a return task still counts as healthy activation. For the social branch, measure the distribution and downstream effect of selective likes, replies, and quote reposts rather than promising universal coverage.
 
 Guardrails: report/block rate, unwanted-AI mute rate, deletion completion, recovery-email delivery, week-one retention, and the share of feed engagement that comes from real people.
 

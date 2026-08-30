@@ -64,7 +64,8 @@ function mockPrivateProfile({
 }: { viewerId?: string; viewerFollows?: boolean; viewerRequested?: boolean; pendingRequestCount?: number } = {}) {
   const rpc = vi.fn((name: string) => {
     if (name === "get_profile_card") return Promise.resolve({ data: [card], error: null });
-    if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: 2, error: null });
+    if (name === "get_profile_ai_following_count") return Promise.resolve({ data: 2, error: null });
+    if (name === "list_profile_favorite_personas") return Promise.resolve({ data: [], error: null });
     if (name === "get_profile_follow_summary") {
       return Promise.resolve({
         data: [{

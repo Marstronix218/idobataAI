@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bell, LockKeyhole, LogOut, MessageSquare, ShieldCheck, SlidersHorizontal, Trash2, VolumeX, X } from "lucide-react";
+import { Bell, Info, LockKeyhole, LogOut, MessageSquare, ShieldCheck, SlidersHorizontal, Smartphone, Trash2, VolumeX, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
-import { PrivacyBadge } from "@/components/ui/status";
+import { BetaBadge, PrivacyBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import { createClient } from "@/lib/supabase/client";
 import type { UserProfile } from "@/types";
@@ -13,7 +13,6 @@ type Preferences = {
   reactions: boolean;
   replies: boolean;
   companion_activity: boolean;
-  email_digest: boolean;
 };
 
 type BlockedPerson = { id: string; name: string; username: string; avatarUrl: string | null };
@@ -55,7 +54,7 @@ function initials(name: string) {
 
 export function SettingsPanel() {
   const [profile, setProfile] = useState<UserProfile | null>(isPreviewMode ? previewProfile : null);
-  const [prefs, setPrefs] = useState<Preferences>({ reactions: true, replies: true, companion_activity: true, email_digest: false });
+  const [prefs, setPrefs] = useState<Preferences>({ reactions: true, replies: true, companion_activity: true });
   const [blockedPeople, setBlockedPeople] = useState<BlockedPerson[]>(isPreviewMode ? previewBlockedPeople : []);
   const [mutedCompanions, setMutedCompanions] = useState<MutedCompanion[]>(isPreviewMode ? previewMutedCompanions : []);
   const [safetyBusyId, setSafetyBusyId] = useState<string | null>(null);
@@ -158,7 +157,7 @@ export function SettingsPanel() {
     setStatus("");
     try {
       if (!isPreviewMode) await apiRequest("/api/notification-preferences", { method: "PATCH", body: JSON.stringify({
-        [key === "companion_activity" ? "companionActivity" : key === "email_digest" ? "emailDigest" : key]: next,
+        [key === "companion_activity" ? "companionActivity" : key]: next,
       }) });
       setStatus(`Notification preference saved.${isPreviewMode ? " Preview only." : ""}`);
     } catch (error) {
@@ -228,7 +227,7 @@ export function SettingsPanel() {
 
     <div className="mt-7 grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Settings sections">
-        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [ShieldCheck, "Safety"]].map(([Icon, label]) => {
+        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [Info, "About"], [ShieldCheck, "Safety"]].map(([Icon, label]) => {
           const Comp = Icon as typeof SlidersHorizontal;
           return <a key={label as string} href={`#${String(label).toLowerCase()}`} className="btn btn-ghost shrink-0 justify-start"><Comp size={17} />{label as string}</a>;
         })}
@@ -255,7 +254,7 @@ export function SettingsPanel() {
 
         <section id="notifications" className="card p-5 sm:p-6">
           <div className="flex items-center gap-2"><Bell size={19} className="text-community" /><h2 className="display text-xl font-bold">Notifications</h2></div>
-          <div className="mt-4 divide-y divide-line">{[["reactions", "Likes and reposts", "When someone likes or reposts a post"], ["replies", "Replies and quotes", "When people or AI followers join a conversation or quote your post"], ["companion_activity", "AI follower activity", "Clearly labeled AI follower posts, likes, and replies"], ["email_digest", "Weekly momentum note", "A quiet recap each Sunday"]].map(([key, title, copy]) => <div key={key} className="flex items-center justify-between gap-4 py-4"><div><p className="font-bold">{title}</p><p className="mt-1 text-sm text-muted">{copy}</p></div><Toggle checked={prefs[key as keyof Preferences]} onChange={() => void updatePreference(key as keyof Preferences)} label={title} /></div>)}</div>
+          <div className="mt-4 divide-y divide-line">{[["reactions", "Likes and reposts", "When someone likes or reposts a post"], ["replies", "Replies and quotes", "When people or AI followers join a conversation or quote your post"], ["companion_activity", "AI follower activity", "Clearly labeled AI follower posts, likes, and replies"]].map(([key, title, copy]) => <div key={key} className="flex items-center justify-between gap-4 py-4"><div><p className="font-bold">{title}</p><p className="mt-1 text-sm text-muted">{copy}</p></div><Toggle checked={prefs[key as keyof Preferences]} onChange={() => void updatePreference(key as keyof Preferences)} label={title} /></div>)}</div>
         </section>
 
         <section id="muted" className="card p-5 sm:p-6">
@@ -276,6 +275,20 @@ export function SettingsPanel() {
               <p className="min-h-5 text-sm font-bold text-muted" aria-live="polite">{feedbackStatus}</p>
             </div>
           </form>
+        </section>
+
+        <section id="about" className="card p-5 sm:p-6">
+          <div className="flex flex-wrap items-center gap-2"><Info size={19} className="text-sun" /><h2 className="display text-xl font-bold">About this beta</h2><BetaBadge /></div>
+          <p className="mt-3 text-sm leading-6 text-muted">Idobata is a beta product. Features, wording, and limits change while we learn what the completed-task loop is actually good for, AI chat runs under a daily cap, and the terms and privacy notice are still being reviewed. Nothing here is billed, and account deletion under <a href="#safety" className="font-bold text-brand hover:underline">Account and data</a> removes your profile, tasks, posts, replies, and reactions.</p>
+          <p className="mt-3 text-sm leading-6 text-muted">Found something broken or surprising? The <a href="#feedback" className="font-bold text-brand hover:underline">feedback form</a> above goes straight to the product team.</p>
+          <div className="mt-5 flex gap-3 border-t border-line pt-5">
+            <span className="mt-0.5 shrink-0 text-community"><Smartphone size={19} /></span>
+            <div>
+              <p className="font-bold">Using Idobata on your phone</p>
+              <p className="mt-1 text-sm leading-6 text-muted">Idobata is built for mobile browsers and installs to your home screen: in Safari on iOS, tap Share and then Add to Home Screen; in Chrome on Android, use Install app.</p>
+              <p className="mt-2 text-sm leading-6 text-muted">A native iOS app is in development against this same account and backend, starting with your task list, completing tasks, and sharing a win. The feed, chat, and AI Personas stay web-only for now, and there is no release date yet — the web app is the complete one.</p>
+            </div>
+          </div>
         </section>
 
         <section id="safety" className="card border-danger/25 p-5 sm:p-6">

@@ -3,6 +3,7 @@ import { assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib
 
 const relationshipUpdateSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("follow"), following: z.boolean() }).strict(),
+  z.object({ action: z.literal("favorite"), favorite: z.boolean() }).strict(),
   z.object({ action: z.literal("respond"), accept: z.boolean() }).strict(),
   z.object({ action: z.literal("dm-opt-in"), enabled: z.boolean() }).strict(),
 ]);
@@ -33,6 +34,14 @@ export async function PUT(request: Request, { params }: Context) {
       const relationship = assertDatabase(await supabase.rpc("set_user_companion_follow", {
         p_companion_id: companionId,
         p_following: input.following,
+      }));
+      return ok({ relationship });
+    }
+
+    if (input.action === "favorite") {
+      const relationship = assertDatabase(await supabase.rpc("set_user_companion_favorite", {
+        p_companion_id: companionId,
+        p_favorite: input.favorite,
       }));
       return ok({ relationship });
     }

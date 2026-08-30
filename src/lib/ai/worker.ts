@@ -5,7 +5,7 @@ import type { AIJob, Json, PostEngagementContext, SocialCompanion } from "@/type
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fallbackReply, resolveAIReply } from "@/lib/domain";
 import { checkReplyDiversity } from "@/lib/domain/reply-diversity";
-import { planPersonaEngagement, type EngagementAction } from "@/lib/domain/persona-engagement";
+import { planPersonaEngagement, type EngagementAction, type EngagementLimits } from "@/lib/domain/persona-engagement";
 import { classifyTask } from "@/lib/domain/task-affinity";
 import { getAIProvider, PERSONA_ENGAGEMENT_PROMPT_VERSION, type AIProvider } from "./provider";
 
@@ -62,6 +62,20 @@ const ACTION_KIND: Record<EngagementAction, "reply" | "reaction" | "quote"> = {
   like: "reaction",
   quote: "quote",
 };
+
+function engagementLimit(name: string, fallback: number, maximum: number) {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(parsed) ? Math.min(maximum, Math.max(0, parsed)) : fallback;
+}
+
+function configuredEngagementLimits(): EngagementLimits {
+  return {
+    maxLikes: engagementLimit("AI_ENGAGEMENT_MAX_LIKES", 5, 5),
+    maxReplies: engagementLimit("AI_ENGAGEMENT_MAX_REPLIES", 2, 2),
+    maxQuotes: engagementLimit("AI_ENGAGEMENT_MAX_QUOTES", 1, 1),
+    candidatePool: engagementLimit("AI_ENGAGEMENT_CANDIDATE_POOL", 8, 50),
+  };
+}
 
 function payload(job: AIJob) {
   return job.payload as JobPayload;
@@ -318,9 +332,9 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
     rejectionReason: error instanceof Error ? error.message : "provider_error",
   }));
 
-  // The one guaranteed reply per human post keeps its curated fallback so the
-  // promise survives a provider outage. A selective persona that could not say
-  // anything distinct simply stays quiet.
+  // Optional beta engagement stays silent when the provider cannot produce a
+  // distinct in-character response. Historical guarantee rows keep their
+  // fallback behavior while they drain after an upgrade.
   if (!attempt.content && planned.source !== "human_post_guarantee") {
     const reason = `reply rejected: ${attempt.rejectionReason ?? "no usable generation"}`;
     logEngagement({
@@ -349,7 +363,7 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
 }
 
 /**
- * Decides which of the remaining personas notice a completed task. Ranking is
+ * Decides which personas notice a completed task. Ranking is
  * deterministic and runs entirely without the provider, so a post costs model
  * calls only for the few characters that actually chose to say something.
  */
@@ -387,6 +401,7 @@ async function planPostEngagement(job: AIJob, lease: string) {
       id: companion.id,
       slug: companion.slug,
       active: companion.active,
+      isFavorite: companion.isFavorite,
       socialActivity: companion.socialActivity,
       likeAffinity: Number(companion.likeAffinity),
       replyAffinity: Number(companion.replyAffinity),
@@ -399,6 +414,7 @@ async function planPostEngagement(job: AIJob, lease: string) {
       quotesRecently: Number(companion.quotesRecently),
     }])),
     flags: context.flags,
+    limits: configuredEngagementLimits(),
     excludeCompanionIds: excludeCompanionId ? [excludeCompanionId] : [],
   });
 
@@ -447,11 +463,10 @@ export async function drainAIJobs(limit = 5) {
 }
 
 /**
- * Scheduled drains alone left a human waiting until the next cron tick for the
- * reply their post had already queued. This kicks a small, priority-ordered
- * drain after the response is sent, so the guaranteed reply lands while the
- * author is still looking at the thread. It never blocks or fails the write:
- * the job stays queued and the scheduled worker remains the durable path.
+ * Scheduled drains alone can leave a completion waiting until the next cron
+ * tick. This kicks a small, priority-ordered drain after the response is sent
+ * so any selected action can land promptly. It never blocks or fails the write;
+ * the scheduled worker remains the durable path.
  */
 export function drainAfterHumanEngagement(limit = 2) {
   after(async () => {

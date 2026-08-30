@@ -28,7 +28,7 @@ describe("SettingsPanel production loading", () => {
         current_streak: 0, last_completion_date: null,
         created_at: "2026-08-14T12:00:00.000Z", updated_at: "2026-08-14T12:00:00.000Z",
       });
-      if (path === "/api/notification-preferences") return Promise.resolve({ reactions: true, replies: true, companion_activity: true, email_digest: false });
+      if (path === "/api/notification-preferences") return Promise.resolve({ reactions: true, replies: true, companion_activity: true });
       if (path === "/api/blocks") return Promise.reject(new Error("blocks unavailable"));
       if (path === "/api/companion-mutes") return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`Unexpected path: ${path}`));
@@ -51,7 +51,7 @@ describe("SettingsPanel production loading", () => {
         current_streak: 0, last_completion_date: null,
         created_at: "2026-08-14T12:00:00.000Z", updated_at: "2026-08-14T12:00:00.000Z",
       });
-      if (path === "/api/notification-preferences") return Promise.resolve({ reactions: true, replies: true, companion_activity: true, email_digest: false });
+      if (path === "/api/notification-preferences") return Promise.resolve({ reactions: true, replies: true, companion_activity: true });
       if (path === "/api/blocks" || path === "/api/companion-mutes") return Promise.resolve({ items: [] });
       if (path === "/api/feedback") return Promise.resolve({ id: "feedback-1" });
       return Promise.reject(new Error(`Unexpected path: ${path}`));

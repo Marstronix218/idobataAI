@@ -24,21 +24,43 @@ select public.get_or_create_chat_thread('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 
 select public.get_or_create_chat_thread('dddddddd-dddd-4ddd-8ddd-dddddddddddd', null);
 select public.get_or_create_chat_thread(null, '20000000-0000-4000-8000-000000000001');
 
+reset role;
 do $$
-declare human_thread uuid; ai_thread uuid;
+declare human_thread uuid; ai_thread uuid; ai_message public.chat_messages;
 begin
   select id into human_thread from public.chat_threads where user_two_id is not null;
   select id into ai_thread from public.chat_threads where companion_id is not null;
-  perform public.create_chat_message(human_thread, 'A private hello.');
-  perform public.create_chat_message(ai_thread, 'Hello, AI profile.');
-end $$;
+  perform public.create_beta_chat_message(
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc', human_thread, 'A private hello.',
+    '10000000-0000-4000-8000-000000000001', 100
+  );
+  ai_message := public.create_beta_chat_message(
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc', ai_thread, 'Hello, AI profile.',
+    '10000000-0000-4000-8000-000000000002', 100
+  );
+  perform public.create_beta_chat_message(
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc', ai_thread, 'Hello, AI profile.',
+    '10000000-0000-4000-8000-000000000002', 100
+  );
+  perform public.create_companion_chat_reply(
+    ai_thread, '20000000-0000-4000-8000-000000000001', ai_message.id,
+    'A clearly labeled AI reply.'
+  );
+  perform public.create_companion_chat_reply(
+    ai_thread, '20000000-0000-4000-8000-000000000001', ai_message.id,
+    'A duplicate generation that must not be inserted.'
+  );
 
-reset role;
-select public.create_companion_chat_message(
-  (select id from public.chat_threads where companion_id = '20000000-0000-4000-8000-000000000001'),
-  '20000000-0000-4000-8000-000000000001',
-  'A clearly labeled AI reply.'
-);
+  begin
+    perform public.create_beta_chat_message(
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc', ai_thread, 'This exceeds a one-message daily limit.',
+      '10000000-0000-4000-8000-000000000003', 1
+    );
+    raise exception 'daily AI chat limit was not enforced';
+  exception when others then
+    if sqlerrm <> 'daily AI chat limit exceeded' then raise; end if;
+  end;
+end $$;
 
 do $$ begin
   if (select count(*) from public.chat_threads where user_two_id is not null) <> 1 then
@@ -54,11 +76,20 @@ do $$ begin
     or has_table_privilege('authenticated', 'public.chat_messages', 'INSERT') then
     raise exception 'authenticated users can bypass chat RPCs';
   end if;
-  if has_function_privilege('authenticated', 'public.create_companion_chat_message(uuid,uuid,text)', 'EXECUTE') then
+  if has_function_privilege('authenticated', 'public.create_chat_message(uuid,text)', 'EXECUTE')
+    or has_function_privilege('authenticated', 'public.create_beta_chat_message(uuid,uuid,text,uuid,integer)', 'EXECUTE')
+    or has_function_privilege('authenticated', 'public.create_companion_chat_reply(uuid,uuid,uuid,text)', 'EXECUTE') then
     raise exception 'authenticated users can forge AI chat messages';
   end if;
-  if not has_function_privilege('service_role', 'public.create_companion_chat_message(uuid,uuid,text)', 'EXECUTE') then
-    raise exception 'service role cannot create AI chat messages';
+  if not has_function_privilege('service_role', 'public.create_beta_chat_message(uuid,uuid,text,uuid,integer)', 'EXECUTE')
+    or not has_function_privilege('service_role', 'public.create_companion_chat_reply(uuid,uuid,uuid,text)', 'EXECUTE') then
+    raise exception 'service role cannot create reliable chat messages';
+  end if;
+  if (select count(*) from public.chat_messages where client_request_id = '10000000-0000-4000-8000-000000000002') <> 1 then
+    raise exception 'client request id did not deduplicate the user message';
+  end if;
+  if (select count(*) from public.chat_messages where reply_to_message_id is not null) <> 1 then
+    raise exception 'user message did not deduplicate the AI reply';
   end if;
 end $$;
 

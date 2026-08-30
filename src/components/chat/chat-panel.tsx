@@ -40,12 +40,15 @@ function previewMessage(
   content: string,
   sender: "me" | "user" | "companion",
   minutesAgo: number,
+  replyToMessageId: string | null = null,
 ): ChatMessage {
   return {
     id,
     thread_id: threadId,
     sender_user_id: sender === "me" ? "preview-user" : sender === "user" ? "preview-peer" : null,
     sender_companion_id: sender === "companion" ? "moss" : null,
+    client_request_id: sender === "me" ? id : null,
+    reply_to_message_id: replyToMessageId,
     content,
     content_status: "active",
     is_ai_generated: sender === "companion",
@@ -98,9 +101,9 @@ const previewDetails: Record<string, ChatThreadDetail> = {
     ...previewThreads[0],
     messages: [
       previewMessage("m1", "preview-moss", "I keep putting off the outline because it feels bigger than it is.", "me", 18),
-      previewMessage("m2", "preview-moss", "That makes sense. Big, fuzzy tasks can take up more room than the work itself.", "companion", 16),
+      previewMessage("m2", "preview-moss", "That makes sense. Big, fuzzy tasks can take up more room than the work itself.", "companion", 16, "m1"),
       previewMessage("m3", "preview-moss", "Maybe I can just sketch the three main sections.", "me", 5),
-      previewMessage("m4", "preview-moss", "A ten-minute outline sounds like a gentle place to start.", "companion", 3),
+      previewMessage("m4", "preview-moss", "A ten-minute outline sounds like a gentle place to start.", "companion", 3, "m3"),
     ],
   },
   "preview-jonah": {
@@ -114,7 +117,7 @@ const previewDetails: Record<string, ChatThreadDetail> = {
     ...previewThreads[2],
     messages: [
       previewMessage("k1", "preview-kage", "I trimmed the plan down to the three things that matter.", "me", 84),
-      previewMessage("k2", "preview-kage", "Objective reduced to three targets. Operational clarity restored.", "companion", 78),
+      previewMessage("k2", "preview-kage", "Objective reduced to three targets. Operational clarity restored.", "companion", 78, "k1"),
     ],
   },
 };
@@ -148,6 +151,12 @@ function updateThreadPreview(items: ChatThreadSummary[], threadId: string, messa
   } : item).sort((a, b) => (b.thread.last_message_at ?? b.thread.created_at).localeCompare(a.thread.last_message_at ?? a.thread.created_at));
 }
 
+function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, message);
+  return [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id));
+}
+
 export function ChatPanel() {
   const [threads, setThreads] = useState<ChatThreadSummary[]>(isPreviewMode ? previewThreads : []);
   const [details, setDetails] = useState<Record<string, ChatThreadDetail>>(isPreviewMode ? previewDetails : {});
@@ -158,12 +167,14 @@ export function ChatPanel() {
   const [status, setStatus] = useState(isPreviewMode ? "Preview messages stay on this device." : "");
   const [loading, setLoading] = useState(!isPreviewMode);
   const [sending, setSending] = useState(false);
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [contactQuery, setContactQuery] = useState("");
   const [contacts, setContacts] = useState<ChatContact[]>(isPreviewMode ? previewContacts : []);
   const [contactsLoading, setContactsLoading] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const previewIdRef = useRef(0);
+  const failedSendRef = useRef<{ content: string; requestId: string } | null>(null);
 
   const visibleThreads = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -172,6 +183,13 @@ export function ChatPanel() {
   }, [query, threads]);
   const selectedSummary = threads.find((item) => item.thread.id === selectedId) ?? null;
   const selectedDetail = selectedId ? details[selectedId] ?? null : null;
+  const pendingReplyIds = useMemo(() => {
+    if (selectedSummary?.peer.kind !== "companion" || !selectedDetail) return new Set<string>();
+    const repliedTo = new Set(selectedDetail.messages.map((message) => message.reply_to_message_id).filter((id): id is string => Boolean(id)));
+    return new Set(selectedDetail.messages
+      .filter((message) => message.sender_user_id && message.client_request_id && !repliedTo.has(message.id))
+      .map((message) => message.id));
+  }, [selectedDetail, selectedSummary?.peer.kind]);
   const visibleContacts = useMemo(() => {
     const needle = contactQuery.trim().toLowerCase();
     return needle ? contacts.filter((contact) => `${contact.name} ${contact.handle} ${contact.description ?? ""}`.toLowerCase().includes(needle)) : contacts;
@@ -300,6 +318,9 @@ export function ChatPanel() {
     if (!selectedSummary || !draft.trim() || sending) return;
     const content = draft.trim();
     const threadId = selectedSummary.thread.id;
+    const requestId = failedSendRef.current?.content === content
+      ? failedSendRef.current.requestId
+      : crypto.randomUUID();
     setDraft("");
     setSending(true);
     setStatus(selectedSummary.peer.kind === "companion" ? `${selectedSummary.peer.name} is thinking…` : "Sending…");
@@ -312,6 +333,8 @@ export function ChatPanel() {
           thread_id: threadId,
           sender_user_id: "preview-user",
           sender_companion_id: null,
+          client_request_id: requestId,
+          reply_to_message_id: null,
           content,
           content_status: "active",
           is_ai_generated: false,
@@ -326,6 +349,8 @@ export function ChatPanel() {
             id: `preview-ai-${++previewIdRef.current}`,
             sender_user_id: null,
             sender_companion_id: selectedSummary.peer.id,
+            client_request_id: null,
+            reply_to_message_id: message.id,
             content: `That sounds worth making a little room for. What would a kind, workable next step look like for you?`,
             is_ai_generated: true,
           };
@@ -338,7 +363,7 @@ export function ChatPanel() {
       } else {
         const result = await apiRequest<SendResult>(`/api/chat/${threadId}/messages`, {
           method: "POST",
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, requestId }),
         });
         const added = [result.message, result.aiMessage].filter((message): message is ChatMessage => Boolean(message));
         const latest = added[added.length - 1];
@@ -346,7 +371,7 @@ export function ChatPanel() {
           ...current,
           [threadId]: {
             ...(current[threadId] ?? { ...selectedSummary, messages: [] }),
-            messages: [...(current[threadId]?.messages ?? []), ...added],
+            messages: mergeMessages(current[threadId]?.messages ?? [], added),
           },
         }));
         if (latest) setThreads((current) => updateThreadPreview(current, threadId, latest));
@@ -356,11 +381,44 @@ export function ChatPanel() {
             ? "Message sent. The AI reply is taking longer than usual."
             : "Message sent.");
       }
+      failedSendRef.current = null;
     } catch (error) {
+      failedSendRef.current = { content, requestId };
       setDraft(content);
       setStatus(errorMessage(error));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function retryReply(message: ChatMessage) {
+    if (!selectedSummary || selectedSummary.peer.kind !== "companion" || retryingMessageId) return;
+    const threadId = selectedSummary.thread.id;
+    setRetryingMessageId(message.id);
+    setStatus(`Retrying ${selectedSummary.peer.name}’s reply…`);
+    try {
+      const result = await apiRequest<SendResult>(`/api/chat/${threadId}/messages/retry`, {
+        method: "POST",
+        body: JSON.stringify({ messageId: message.id }),
+      });
+      const added = [result.message, result.aiMessage].filter((item): item is ChatMessage => Boolean(item));
+      setDetails((current) => ({
+        ...current,
+        [threadId]: {
+          ...(current[threadId] ?? { ...selectedSummary, messages: [] }),
+          messages: mergeMessages(current[threadId]?.messages ?? [], added),
+        },
+      }));
+      if (result.aiMessage) {
+        setThreads((current) => updateThreadPreview(current, threadId, result.aiMessage!));
+        setStatus(`${selectedSummary.peer.name} replied.`);
+      } else {
+        setStatus("The AI reply is still taking longer than usual.");
+      }
+    } catch (error) {
+      setStatus(errorMessage(error));
+    } finally {
+      setRetryingMessageId(null);
     }
   }
 
@@ -386,15 +444,15 @@ export function ChatPanel() {
         {visibleThreads.map(({ thread, peer }) => {
           const active = thread.id === selectedId;
           const profileHref = peer.kind === "companion" ? `/ai-personas/${peer.handle}` : `/u/${peer.handle}`;
-          return <button type="button" key={thread.id} onClick={() => void selectThread(thread.id)} className={`flex w-full items-start gap-3 border-t border-line px-4 py-4 text-left transition-colors first:border-t-0 hover:bg-surface/45 ${active ? "bg-surface/70" : ""}`}>
-            <Link href={profileHref} onClick={(event) => event.stopPropagation()} aria-label={`Open ${peer.name}'s profile`} className="shrink-0">
+          return <div key={thread.id} className={`flex w-full items-start gap-3 border-t border-line px-4 py-4 text-left transition-colors first:border-t-0 hover:bg-surface/45 ${active ? "bg-surface/70" : ""}`}>
+            <Link href={profileHref} aria-label={`Open ${peer.name}'s profile`} className="shrink-0">
               <Avatar initials={initials(peer.name)} avatarUrl={peer.avatarUrl} name={peer.name} ai={peer.kind === "companion"} />
             </Link>
-            <span className="min-w-0 flex-1">
+            <button type="button" onClick={() => void selectThread(thread.id)} className="min-w-0 flex-1 text-left">
               <span className="flex items-baseline gap-1.5"><strong className="truncate">{peer.name}</strong>{peer.kind === "companion" && <span className="shrink-0 text-xs font-extrabold text-community">AI</span>}<time className="ml-auto shrink-0 text-xs text-muted">{shortTime(thread.last_message_at)}</time></span>
               <span className="mt-1 block truncate text-sm text-muted">{thread.last_message_preview ?? "Start the conversation"}</span>
-            </span>
-          </button>;
+            </button>
+          </div>;
         })}
         {!visibleThreads.length && !loading && <div className="px-6 py-12 text-center"><LogoMark size={36} className="mx-auto" /><h2 className="display mt-4 text-lg font-bold">{query ? "No conversations found" : "Your inbox is quiet"}</h2><p className="mt-2 text-sm leading-6 text-muted">{query ? "Try another name or message." : "Start a private chat with a person or a clearly labeled AI profile."}</p><button type="button" className="btn btn-primary mt-5" onClick={() => setNewChatOpen(true)}>New conversation</button></div>}
       </div>
@@ -417,6 +475,7 @@ export function ChatPanel() {
                 {message.is_ai_generated && <p className="mb-1 text-xs font-extrabold uppercase tracking-[.08em] text-community">AI · {selectedSummary.peer.name}</p>}
                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 <time className={`mt-1 block text-right text-xs ${mine ? "text-white/70" : "text-muted"}`}>{shortTime(message.created_at)}</time>
+                {pendingReplyIds.has(message.id) && <button type="button" disabled={retryingMessageId === message.id} onClick={() => void retryReply(message)} className="mt-2 rounded-full border border-white/45 px-2.5 py-1 text-xs font-bold text-white disabled:opacity-60">{retryingMessageId === message.id ? "Retrying…" : "Retry AI reply"}</button>}
               </div>
             </div>;
           })}</div> : !loading && <div className="mx-auto flex max-w-md flex-col items-center py-12 text-center"><Avatar initials={initials(selectedSummary.peer.name)} avatarUrl={selectedSummary.peer.avatarUrl} name={selectedSummary.peer.name} ai={selectedSummary.peer.kind === "companion"} size="xl" /><div className="mt-4 flex items-center gap-2"><h3 className="display text-xl font-bold">{selectedSummary.peer.name}</h3>{selectedSummary.peer.kind === "companion" && <AIBadge />}</div><p className="mt-2 text-sm text-muted">@{selectedSummary.peer.handle}</p>{selectedSummary.peer.description && <p className="mt-4 text-sm leading-6 text-muted">{selectedSummary.peer.description}</p>}<p className="mt-5 rounded-2xl bg-surface px-4 py-3 text-sm leading-6 text-muted">{selectedSummary.peer.kind === "companion" ? "This is a private chat with an AI profile. It will always be clearly labeled as AI." : "Send a message to start this private conversation."}</p></div>}
@@ -426,8 +485,8 @@ export function ChatPanel() {
         <form onSubmit={(event) => void sendMessage(event)} className="border-t border-line bg-canvas p-3 sm:p-4">
           <div className="flex items-end gap-2 rounded-[1.4rem] border border-line bg-surface p-2 pl-4 focus-within:border-line-strong">
             <label htmlFor="chat-message" className="sr-only">Message {selectedSummary.peer.name}</label>
-            <textarea id="chat-message" rows={1} value={draft} maxLength={2000} disabled={sending} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown} placeholder={`Message ${selectedSummary.peer.name}`} className="max-h-32 min-h-10 flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-muted" />
-            <button type="submit" className="icon-btn border-transparent bg-brand text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={sending || !draft.trim()} aria-label="Send message"><Send size={18} /></button>
+            <textarea id="chat-message" rows={1} value={draft} maxLength={2000} disabled={sending || Boolean(retryingMessageId)} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown} placeholder={`Message ${selectedSummary.peer.name}`} className="max-h-32 min-h-10 flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-muted" />
+            <button type="submit" className="icon-btn border-transparent bg-brand text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={sending || Boolean(retryingMessageId) || !draft.trim()} aria-label="Send message"><Send size={18} /></button>
           </div>
           <p className="mt-2 min-h-4 px-2 text-xs text-muted" role="status">{status}</p>
         </form>

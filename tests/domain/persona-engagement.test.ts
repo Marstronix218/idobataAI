@@ -102,6 +102,29 @@ describe("planPersonaEngagement", () => {
     expect(engagements("matched")).toBeGreaterThan(engagements("unmatched"));
   });
 
+  it("weights favorites higher without guaranteeing an interaction", () => {
+    const ordinary = persona("ordinary", { categoryAffinity: { study: 0.8 } });
+    const favorite = persona("favorite", { isFavorite: true, categoryAffinity: { study: 0.8 } });
+    const plans = Array.from({ length: 240 }, (_, index) => planPersonaEngagement({
+      post: { ...studyPost, id: `favorite-weight-${index}` },
+      companions: [ordinary, favorite],
+      limits: { candidatePool: 2, maxLikes: 2, maxReplies: 2, maxQuotes: 1 },
+    })).flat();
+
+    expect(plans.filter((item) => item.companionId === "favorite").length)
+      .toBeGreaterThan(plans.filter((item) => item.companionId === "ordinary").length);
+
+    expect(planPersonaEngagement({
+      post: { ...studyPost, id: "favorite-can-stay-silent" },
+      companions: [persona("quiet-favorite", {
+        isFavorite: true,
+        likeAffinity: 0,
+        replyAffinity: 0,
+        quoteAffinity: 0,
+      })],
+    })).toEqual([]);
+  });
+
   it("skips inactive, muted, already-engaged, and explicitly excluded personas", () => {
     const companions = [
       persona("inactive", { active: false, socialActivity: "high" }),

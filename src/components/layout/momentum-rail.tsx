@@ -90,11 +90,9 @@ export function MomentumRail() {
           <div><dt className="flex items-center justify-center gap-1 text-xs text-muted"><Flame size={13} className="text-sun" /> Current streak</dt><dd className="mt-1 text-sm font-bold">{profile?.current_streak ?? 0} days</dd></div>
           <div><dt className="text-xs text-muted">Completed today</dt><dd className="mt-1 text-sm font-bold">{completedCount} task{completedCount === 1 ? "" : "s"}</dd></div>
         </dl>
-        <p className="mt-3 border-t border-line pt-3 text-xs leading-5 text-muted">A streak is consecutive days with at least one completed task. Extra completions that day do not add more days.</p>
       </section>
 
       {status && <p className="rounded-xl border border-line bg-surface px-3 py-2 text-xs leading-5 text-muted" role="status">{status}</p>}
-      <p className="px-3 text-xs leading-5 text-muted">Progress, not popularity · Tasks stay private unless you choose otherwise</p>
     </div>
   </aside>;
 }

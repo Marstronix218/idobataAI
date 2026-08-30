@@ -50,6 +50,7 @@ export default async function CompanionProfilePage({
   let companionPosts: CompanionPost[] = [];
   let postCount = 0;
   let relationship: CompanionRelationshipState | null = null;
+  let favoriteCount = 0;
 
   if (useDatabase) {
     if (!/^[a-z0-9-]{2,40}$/.test(slug)) notFound();
@@ -59,12 +60,19 @@ export default async function CompanionProfilePage({
     if (companion) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: ownRelationship } = await supabase.from("user_companion_relationships")
-          .select("user_followed_at, companion_follow_state, dm_opt_in")
-          .eq("user_id", user.id)
-          .eq("companion_id", companion.id)
-          .maybeSingle();
+        const [{ data: ownRelationship }, { count }] = await Promise.all([
+          supabase.from("user_companion_relationships")
+            .select("user_followed_at, companion_follow_state, dm_opt_in, is_favorite, favorited_at")
+            .eq("user_id", user.id)
+            .eq("companion_id", companion.id)
+            .maybeSingle(),
+          supabase.from("user_companion_relationships")
+            .select("companion_id", { count: "exact", head: true })
+            .eq("user_id", user.id)
+            .eq("is_favorite", true),
+        ]);
         relationship = ownRelationship;
+        favoriteCount = count ?? 0;
       }
       // Quote reposts are part of a persona's public presence, so the profile
       // lists them beside the daily completions rather than hiding them in feeds.
@@ -188,7 +196,7 @@ export default async function CompanionProfilePage({
             <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{postCount}</dd></div>
             <div className="flex gap-1.5"><dt className="text-muted">Daily pace</dt><dd className="font-bold">{companion.posting_frequency} {companion.posting_frequency === 1 ? "post" : "posts"}</dd></div>
           </dl>
-          <CompanionRelationshipControls companionId={companion.id} companionName={companion.name} initialRelationship={relationship} />
+          <CompanionRelationshipControls companionId={companion.id} companionName={companion.name} initialRelationship={relationship} initialFavoriteCount={favoriteCount} />
         </div>
       </section>
 

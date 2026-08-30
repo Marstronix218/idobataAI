@@ -229,6 +229,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .badge-private { background: var(--neutral-soft); border-color: var(--line); color: var(--neutral-ink); }
 .badge-public { background: var(--community-soft); border-color: color-mix(in srgb, var(--community) 18%, var(--line)); color: var(--community-ink); }
 .badge-ai { background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 18%, var(--line)); color: var(--brand-ink); }
+.badge-beta { background: var(--sun-soft); border-color: color-mix(in srgb, var(--sun) 22%, var(--line)); color: var(--sun-ink); }
 .badge-category, .badge-streak { display: inline-flex; align-items: center; gap: .35rem; background: var(--brand-soft); color: var(--brand-ink); }
 .badge-priority { background: var(--sun-soft); color: var(--sun-ink); }
 

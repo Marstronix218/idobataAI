@@ -95,7 +95,6 @@ export const notificationPreferencesSchema = z.object({
   reactions: z.boolean().optional(),
   replies: z.boolean().optional(),
   companionActivity: z.boolean().optional(),
-  emailDigest: z.boolean().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "At least one preference is required.");
 
 export const reportSchema = z.object({

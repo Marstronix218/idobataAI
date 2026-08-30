@@ -15,6 +15,8 @@ export interface PersonaEngagementProfile {
   slug?: string;
   active: boolean;
   muted?: boolean;
+  /** User-selected preference. It raises weight but never bypasses a roll. */
+  isFavorite?: boolean;
   socialActivity: SocialActivity;
   likeAffinity: number;
   replyAffinity: number;
@@ -68,6 +70,7 @@ export interface PlannedPersonaEngagement {
     taskCategory: TaskCategory;
     affinity: number;
     score: number;
+    isFavorite: boolean;
     probability: number;
     roll: number;
   };
@@ -113,6 +116,8 @@ const LIKE_ACTIVITY_WEIGHT: Record<SocialActivity, number> = {
  * is scaled by this on top of an already-low per-persona affinity.
  */
 const QUOTE_SCARCITY = 0.22;
+const FAVORITE_RANK_BOOST = 0.18;
+const FAVORITE_PROBABILITY_MULTIPLIER = 1.25;
 
 /** Consecutive replies to one author read as a bot following them around. */
 const MAX_CONSECUTIVE_REPLIES_TO_AUTHOR = 2;
@@ -199,6 +204,7 @@ export function planPersonaEngagement({
       // Controlled randomness keeps the same persona from owning a category
       // forever, while affinity keeps the shortlist recognisably relevant.
       const jitter = roll(post.id, companion.id, "rank");
+      const favoriteBoost = companion.isFavorite ? FAVORITE_RANK_BOOST : 0;
       return {
         companion,
         history,
@@ -206,7 +212,7 @@ export function planPersonaEngagement({
         activityWeight,
         // Weighted so a persona the task actually suits normally outranks a
         // chattier one, without the shortlist becoming the same faces forever.
-        score: affinity * 0.6 + activityWeight * 0.26 + jitter * 0.14,
+        score: affinity * 0.6 + activityWeight * 0.26 + jitter * 0.14 + favoriteBoost,
       };
     })
     .filter(({ companion, history }) => eligible(companion, history, excluded))
@@ -220,7 +226,9 @@ export function planPersonaEngagement({
 
   for (const candidate of ranked) {
     const { companion, history, affinity, activityWeight, score } = candidate;
-    const base = { taskCategory, affinity, score };
+    const isFavorite = Boolean(companion.isFavorite);
+    const favoriteMultiplier = isFavorite ? FAVORITE_PROBABILITY_MULTIPLIER : 1;
+    const base = { taskCategory, affinity, score, isFavorite };
 
     const quoteRoll = roll(post.id, companion.id, "quote");
     const quoteProbability = enabled.quotes
@@ -228,7 +236,7 @@ export function planPersonaEngagement({
       && (history.quotesRecently ?? 0) < MAX_RECENT_QUOTES_PER_PERSONA
       // Squaring the affinity is what makes a quote require a real angle rather
       // than mere tolerance for the category.
-      ? clamp01(companion.quoteAffinity * affinity * affinity * activityWeight * significance) * QUOTE_SCARCITY
+      ? clamp01(companion.quoteAffinity * affinity * affinity * activityWeight * significance * favoriteMultiplier) * QUOTE_SCARCITY
       : 0;
     if (quoteProbability > 0 && quoteRoll < quoteProbability) {
       quotes += 1;
@@ -245,7 +253,7 @@ export function planPersonaEngagement({
     const replyRoll = roll(post.id, companion.id, "reply");
     const replyProbability = enabled.replies && replies < caps.maxReplies
       && (history.repliesToAuthorRecently ?? 0) < MAX_CONSECUTIVE_REPLIES_TO_AUTHOR
-      ? clamp01(companion.replyAffinity * affinity * activityWeight)
+      ? clamp01(companion.replyAffinity * affinity * activityWeight * favoriteMultiplier)
       : 0;
     if (replyProbability > 0 && replyRoll < replyProbability) {
       replies += 1;
@@ -261,7 +269,7 @@ export function planPersonaEngagement({
 
     const likeRoll = roll(post.id, companion.id, "like");
     const likeProbability = enabled.likes && likes < caps.maxLikes
-      ? clamp01(companion.likeAffinity * affinity * (LIKE_ACTIVITY_WEIGHT[companion.socialActivity] ?? LIKE_ACTIVITY_WEIGHT.medium))
+      ? clamp01(companion.likeAffinity * affinity * (LIKE_ACTIVITY_WEIGHT[companion.socialActivity] ?? LIKE_ACTIVITY_WEIGHT.medium) * favoriteMultiplier)
       : 0;
     if (likeProbability > 0 && likeRoll < likeProbability) {
       likes += 1;

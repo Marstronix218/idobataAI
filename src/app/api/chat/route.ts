@@ -24,16 +24,20 @@ export async function GET(request: Request) {
       .filter((id): id is string => Boolean(id) && id !== user.id))];
     const companionIds = [...new Set(threads.map((thread) => thread.companion_id)
       .filter((id): id is string => Boolean(id)))];
-    const [profileResult, companionResult] = await Promise.all([
+    const [profileResult, companionResult, favoriteResult] = await Promise.all([
       userIds.length
         ? supabase.from("user_profiles").select("id, username, display_name, avatar_url, bio").in("id", userIds)
         : Promise.resolve({ data: [], error: null }),
       companionIds.length
         ? supabase.from("social_companions").select("id, slug, name, avatar_url, personality").in("id", companionIds)
         : Promise.resolve({ data: [], error: null }),
+      companionIds.length
+        ? supabase.from("user_companion_relationships").select("companion_id").eq("user_id", user.id).eq("is_favorite", true).in("companion_id", companionIds)
+        : Promise.resolve({ data: [], error: null }),
     ]);
     const profiles = assertDatabase(profileResult) as Array<Pick<UserProfile, "id" | "username" | "display_name" | "avatar_url" | "bio">>;
     const companions = assertDatabase(companionResult) as Array<Pick<SocialCompanion, "id" | "slug" | "name" | "avatar_url" | "personality">>;
+    const favoriteCompanionIds = new Set((assertDatabase(favoriteResult) ?? []).map((relationship) => relationship.companion_id));
     const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
     const companionMap = new Map(companions.map((companion) => [companion.id, companion]));
 
@@ -62,7 +66,9 @@ export async function GET(request: Request) {
         };
       }
       return peer ? [{ thread, peer }] : [];
-    });
+    }).map((item, index) => ({ item, index }))
+      .sort((left, right) => Number(favoriteCompanionIds.has(right.item.thread.companion_id ?? "")) - Number(favoriteCompanionIds.has(left.item.thread.companion_id ?? "")) || left.index - right.index)
+      .map(({ item }) => item);
 
     return ok({ items });
   });

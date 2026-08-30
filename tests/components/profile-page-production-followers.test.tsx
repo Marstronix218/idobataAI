@@ -62,10 +62,21 @@ const target: UserProfile = {
 
 const viewer = { username: "mina", display_name: "Mina", avatar_url: null };
 
+const favoritePersona = {
+  id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  slug: "moss",
+  name: "Moss",
+  avatar_url: null,
+  personality: "A forest spirit at a human university.",
+  followed_at: "2026-08-28T00:00:00.000Z",
+  viewer_follows: false,
+  is_favorite: true,
+};
+
 function mockProfileClient(followSummaryResult: {
   data: Array<{ follower_count: number; following_count: number; viewer_follows: boolean }> | null;
   error: { message: string; code?: string } | null;
-}, aiFollowerCount = 2, config: { viewerId?: string; completionAwards?: number } = {}) {
+}, aiFollowingCount = 2, config: { viewerId?: string; completionAwards?: number; favorites?: unknown[] } = {}) {
   const from = vi.fn((table: string) => ({
     select: vi.fn((selection: string, options?: { count?: string }) => {
       if (table === "user_profiles") return query({ data: selection === "*" ? target : viewer, error: null });
@@ -82,7 +93,8 @@ function mockProfileClient(followSummaryResult: {
     from,
     rpc: vi.fn((name: string) => {
       if (name === "get_profile_follow_summary") return Promise.resolve(followSummaryResult);
-      if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: aiFollowerCount, error: null });
+      if (name === "get_profile_ai_following_count") return Promise.resolve({ data: aiFollowingCount, error: null });
+      if (name === "list_profile_favorite_personas") return Promise.resolve({ data: config.favorites ?? [], error: null });
       throw new Error(`Unexpected RPC: ${name}`);
     }),
   });
@@ -137,7 +149,8 @@ function mockProfilePostsFailure(failure: ProfilePostsFailure) {
       if (name === "get_profile_follow_summary") {
         return Promise.resolve({ data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null });
       }
-      if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: 2, error: null });
+      if (name === "get_profile_ai_following_count") return Promise.resolve({ data: 2, error: null });
+      if (name === "list_profile_favorite_personas") return Promise.resolve({ data: [], error: null });
       throw new Error(`Unexpected RPC: ${name}`);
     }),
   });
@@ -163,7 +176,11 @@ describe("ProfilePage production followers", () => {
 
   it("renders the human follower count and viewer relationship returned by the database", async () => {
     vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
-    const { from } = mockProfileClient({ data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null });
+    const { from } = mockProfileClient(
+      { data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null },
+      2,
+      { favorites: [favoritePersona] },
+    );
 
     render(await ProfilePage({
       params: Promise.resolve({ username: "jonah" }),
@@ -173,9 +190,28 @@ describe("ProfilePage production followers", () => {
     expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/7\s*Followers/);
     expect(screen.getByText("People followed").closest("div")).toHaveTextContent(/4\s*Following/);
     expect(screen.getByRole("button", { name: "Unfollow Jonah" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("link", { name: "View 2 AI followers" })).toHaveAttribute("href", "/ai-personas");
+    expect(screen.getByRole("link", { name: "View 7 followers" })).toHaveAttribute("href", "/u/jonah/followers");
+    expect(screen.getByRole("link", { name: "View the 4 accounts Jonah follows" })).toHaveAttribute("href", "/u/jonah/following");
+    // The AI side of the card is the favorites strip, which opens the AI half
+    // of the same Following list rather than adding a count of its own.
+    expect(screen.queryByText(/AI followers/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See all 2" })).toHaveAttribute("href", "/u/jonah/following?kind=ai");
     expect(from).toHaveBeenCalledWith("social_reposts");
     expect(from).not.toHaveBeenCalledWith("social_companions");
+  });
+
+  it("collapses the favorites strip on someone else's profile when they have none", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
+    mockProfileClient({ data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null });
+
+    render(await ProfilePage({
+      params: Promise.resolve({ username: "jonah" }),
+      searchParams: Promise.resolve({}),
+    }));
+
+    // A visitor learns nothing from an empty strip, and the AI list is still
+    // one tap away behind the Following count.
+    expect(screen.queryByRole("region", { name: "Favorite AI personas" })).not.toBeInTheDocument();
   });
 
   it("fails loudly instead of rendering a false zero when the follower summary is unavailable", async () => {
