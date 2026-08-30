@@ -3,6 +3,6 @@
   "crons": [
     { "path": "/api/cron/companions", "schedule": "5 0 * * *" },
     { "path": "/api/cron/rollover", "schedule": "10 0 * * *" },
-    { "path": "/api/workers/ai?limit=25", "schedule": "35 0 * * *" }
+    { "path": "/api/workers/ai?limit=200", "schedule": "35 0 * * *" }
   ]
 }

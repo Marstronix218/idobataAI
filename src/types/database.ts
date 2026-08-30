@@ -264,6 +264,10 @@ export interface AIJob {
   updated_at: string;
 }
 
+export type NotificationKind =
+  | "reply" | "reaction" | "repost" | "quote"
+  | "follow" | "follow_request" | "follow_accepted" | "system";
+
 export interface Notification {
   id: string;
   user_id: string;
@@ -271,7 +275,7 @@ export interface Notification {
   companion_id: string | null;
   post_id: string | null;
   reply_id: string | null;
-  kind: "reply" | "reaction" | "follow" | "follow_request" | "follow_accepted" | "system";
+  kind: NotificationKind;
   read_at: string | null;
   created_at: string;
 }
@@ -491,6 +495,24 @@ export type QuotedFeedPost = SocialPost & {
   image_urls: string[];
   user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
   social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
+};
+
+// One notification row as the activity list receives it. A quote notification's
+// `social_posts` is the quoting post, carrying the original in `quoted_post`, so
+// the row can render the same shape a feed does.
+export type ActivityPost = Pick<SocialPost,
+  "id" | "content" | "task_title" | "category" | "kind" | "content_status" | "image_paths" | "created_at" | "author_id" | "companion_id" | "visibility"
+> & {
+  image_urls?: string[];
+  user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
+  social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
+  quoted_post?: (Omit<ActivityPost, "quoted_post"> | null);
+};
+
+export type ActivityItem = Notification & {
+  user_profiles: (Pick<UserProfile, "username" | "avatar_url"> & Partial<Pick<UserProfile, "display_name">>) | null;
+  social_companions: Pick<SocialCompanion, "name" | "slug" | "avatar_url"> | null;
+  social_posts: ActivityPost | null;
 };
 
 export type ThreadReply = SocialReply & {

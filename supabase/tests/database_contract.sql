@@ -388,6 +388,37 @@ begin
   ) then raise exception 'a new community must not manufacture an all-AI starter feed'; end if;
 end $$;
 
+-- Amplification notifications were added after the original three kinds, so the
+-- constraint, both triggers, and the dedupe index are asserted together: a
+-- repost or a quote that cannot be recorded is silently invisible to its author.
+do $$
+declare missing text;
+begin
+  select string_agg(kind, ', ') into missing
+  from unnest(array['reply','reaction','repost','quote','follow','follow_request','follow_accepted','system']) kind
+  where not exists(
+    select 1 from pg_constraint
+    where conrelid='public.notifications'::regclass and conname='notifications_kind_check'
+      and pg_get_constraintdef(oid) like '%' || quote_literal(kind) || '%'
+  );
+  if missing is not null then raise exception 'notifications_kind_check must allow: %', missing; end if;
+
+  if not exists(
+    select 1 from pg_trigger
+    where tgrelid='public.social_reposts'::regclass and tgname='social_reposts_notify' and not tgisinternal
+  ) then raise exception 'a repost must notify the post author'; end if;
+
+  if not exists(
+    select 1 from pg_trigger
+    where tgrelid='public.social_posts'::regclass and tgname='social_posts_notify_quote' and not tgisinternal
+  ) then raise exception 'a quote repost must notify the quoted author'; end if;
+
+  if not exists(
+    select 1 from pg_indexes
+    where schemaname='public' and indexname='notifications_amplification_unique'
+  ) then raise exception 'repost and quote notifications must be deduplicated by a unique index'; end if;
+end $$;
+
 select extensions.pass('schema, RLS, ACL, and index contracts hold');
 select * from extensions.finish();
 

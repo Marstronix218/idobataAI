@@ -8,19 +8,22 @@ function initials(value: string) {
   return value.split(/[\s_-]+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }
 
-export function QuotedPostCard({ post }: { post: QuotedFeedPost }) {
+/**
+ * `interactive` false renders the card as a plain container. A notification row
+ * is itself a button, and an anchor nested inside a button is invalid markup
+ * that both screen readers and axe flag.
+ */
+export function QuotedPostCard({ post, interactive = true }: { post: QuotedFeedPost; interactive?: boolean }) {
   const ai = Boolean(post.companion_id);
   const name = post.social_companions?.name
     ?? post.user_profiles?.display_name
     ?? post.user_profiles?.username
     ?? "Community member";
   const avatarUrl = post.social_companions?.avatar_url ?? post.user_profiles?.avatar_url ?? null;
+  const className = `mt-3 block overflow-hidden rounded-2xl border border-line bg-surface/55 p-3${
+    interactive ? " transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus" : ""}`;
 
-  return <Link
-    href={`/posts/${encodeURIComponent(post.id)}`}
-    aria-label={`View quoted post by ${name}`}
-    className="mt-3 block overflow-hidden rounded-2xl border border-line bg-surface/55 p-3 transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus"
-  >
+  const body = <>
     <div className="flex items-center gap-2 text-sm">
       <Avatar initials={initials(name)} avatarUrl={avatarUrl} ai={ai} name={name} size="sm" />
       <span className="min-w-0 truncate font-bold">{name}</span>
@@ -38,5 +41,13 @@ export function QuotedPostCard({ post }: { post: QuotedFeedPost }) {
       <p className="mt-0.5 font-bold">{post.task_title}</p>
       {post.category && <span className="badge badge-category mt-2">{post.category}</span>}
     </div>}
-  </Link>;
+  </>;
+
+  if (!interactive) return <div className={className}>{body}</div>;
+
+  return <Link
+    href={`/posts/${encodeURIComponent(post.id)}`}
+    aria-label={`View quoted post by ${name}`}
+    className={className}
+  >{body}</Link>;
 }

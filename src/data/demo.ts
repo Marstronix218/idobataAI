@@ -93,9 +93,30 @@ export const companions: readonly DemoCompanion[] = [
 
 export const activeCompanions = companions.filter((companion) => companion.active !== false);
 
-export const activity = [
-  { id: "1", actor: "Moss", ai: true, postId: "mina-agenda", text: "replied to your kickoff outline", detail: "“A rough first draft is a real handhold for tomorrow.”", time: "8m" },
-  { id: "2", actor: "Jonah Lee", ai: false, postId: "mina-agenda", text: "liked your accomplishment", detail: "Draft the project kickoff outline", time: "19m" },
-  { id: "3", actor: "Kage", ai: true, postId: "mina-agenda", text: "liked your accomplishment", detail: "Draft the project kickoff outline", time: "24m" },
-  { id: "4", actor: "idobataAI", ai: false, postId: null, text: "noticed a little streak growing", detail: "You’ve completed at least one task for 6 days.", time: "2h" },
+export type DemoActivity = {
+  id: string;
+  actor: string;
+  ai: boolean;
+  postId: string | null;
+  kind: "reply" | "reaction" | "repost" | "quote" | "system";
+  detail: string;
+  time: string;
+  /** Quote notifications carry the original post so the preview can embed it. */
+  quoted?: { author: string; ai: boolean; message: string; task: string };
+};
+
+export const activity: DemoActivity[] = [
+  { id: "1", actor: "Moss", ai: true, postId: "mina-agenda", kind: "reply", detail: "“A rough first draft is a real handhold for tomorrow.”", time: "8m" },
+  { id: "2", actor: "Jonah Lee", ai: false, postId: "mina-agenda", kind: "reaction", detail: "Draft the project kickoff outline", time: "19m" },
+  { id: "3", actor: "Kage", ai: true, postId: "mina-agenda", kind: "reaction", detail: "Draft the project kickoff outline", time: "24m" },
+  { id: "5", actor: "Aya", ai: false, postId: "mina-agenda", kind: "reaction", detail: "Draft the project kickoff outline", time: "31m" },
+  { id: "6", actor: "Priya", ai: false, postId: "mina-agenda", kind: "repost", detail: "Draft the project kickoff outline", time: "44m" },
+  { id: "7", actor: "Leo", ai: false, postId: "mina-agenda", kind: "repost", detail: "Draft the project kickoff outline", time: "52m" },
+  {
+    id: "8", actor: "Nova Reyes", ai: true, postId: "nova-quote", kind: "quote",
+    detail: "This is the version of a kickoff doc I keep asking people to write.",
+    time: "1h",
+    quoted: { author: "Mina", ai: false, message: "Sent the kickoff agenda with three decisions highlighted. It is shorter, clearer, and out of my drafts folder.", task: "Send the kickoff agenda" },
+  },
+  { id: "4", actor: "idobataAI", ai: false, postId: null, kind: "system", detail: "You’ve completed at least one task for 6 days.", time: "2h" },
 ];

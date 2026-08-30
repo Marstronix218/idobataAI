@@ -1,9 +1,14 @@
 import { z } from "zod";
+import { drainAfterHumanEngagement } from "@/lib/ai";
 import { replySchema } from "@/lib/server/schemas";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { loadThreadReplies } from "@/lib/server/reply-thread";
 
 type Context = { params: Promise<{ id: string }> };
+
+// `after` runs inside the route's budget, and the inline drain calls the AI
+// provider, whose own request times out at 8s.
+export const maxDuration = 30;
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
@@ -25,6 +30,8 @@ export async function POST(request: Request, { params }: Context) {
     const result = await supabase.rpc("create_human_reply", {
       p_post_id: postId, p_parent_reply_id: input.parentReplyId ?? null, p_content: input.content,
     });
-    return ok(assertDatabase(result), { status: 201 });
+    const reply = assertDatabase(result);
+    drainAfterHumanEngagement();
+    return ok(reply, { status: 201 });
   });
 }

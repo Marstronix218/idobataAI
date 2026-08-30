@@ -1,5 +1,6 @@
 import "server-only";
 
+import { after } from "next/server";
 import type { AIJob, Json, SocialCompanion } from "@/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fallbackReply, resolveAIReply } from "@/lib/domain";
@@ -182,4 +183,25 @@ export async function drainAIJobs(limit = 5) {
     }
   }));
   return results as unknown as Json;
+}
+
+/**
+ * Scheduled drains alone left a human waiting until the next cron tick for the
+ * reply their post had already queued. This kicks a small, priority-ordered
+ * drain after the response is sent, so the guaranteed reply lands while the
+ * author is still looking at the thread. It never blocks or fails the write:
+ * the job stays queued and the scheduled worker remains the durable path.
+ */
+export function drainAfterHumanEngagement(limit = 2) {
+  after(async () => {
+    try {
+      await drainAIJobs(limit);
+    } catch (error) {
+      console.error(JSON.stringify({
+        level: "error",
+        scope: "ai_worker_inline",
+        message: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  });
 }

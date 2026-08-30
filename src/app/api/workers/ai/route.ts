@@ -5,12 +5,14 @@ import { ok, withApi } from "@/lib/server/http";
 
 export const maxDuration = 60;
 
-const limitSchema = z.coerce.number().int().min(1).max(25).catch(5);
+// The database caps a claim at 200. A scheduled drain needs to clear a full
+// day of planned engagement in one run, not 25 jobs of it.
+const limitSchema = z.coerce.number().int().min(1).max(200).catch(25);
 
 async function run(request: Request) {
   return withApi(async () => {
     assertPrivilegedRequest(request);
-    const limit = limitSchema.parse(new URL(request.url).searchParams.get("limit") ?? 5);
+    const limit = limitSchema.parse(new URL(request.url).searchParams.get("limit") ?? 25);
     return ok({ jobs: await drainAIJobs(limit) });
   });
 }
