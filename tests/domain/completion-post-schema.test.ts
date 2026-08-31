@@ -14,4 +14,8 @@ describe("completion post schema", () => {
   it("rejects comments longer than the shared limit", () => {
     expect(publishSchema.safeParse({ ...base, message: "x".repeat(301) }).success).toBe(false);
   });
+
+  it("accepts explicit completion-tag visibility choices", () => {
+    expect(publishSchema.safeParse({ ...base, showCategoryTag: false, showStreakTag: false }).success).toBe(true);
+  });
 });

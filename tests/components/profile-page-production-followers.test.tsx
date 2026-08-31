@@ -76,7 +76,7 @@ const favoritePersona = {
 function mockProfileClient(followSummaryResult: {
   data: Array<{ follower_count: number; following_count: number; viewer_follows: boolean }> | null;
   error: { message: string; code?: string } | null;
-}, aiFollowingCount = 2, config: { viewerId?: string; completionAwards?: number; favorites?: unknown[] } = {}) {
+}, aiCounts = { followers: 3, following: 2 }, config: { viewerId?: string; completionAwards?: number; favorites?: unknown[] } = {}) {
   const from = vi.fn((table: string) => ({
     select: vi.fn((selection: string, options?: { count?: string }) => {
       if (table === "user_profiles") return query({ data: selection === "*" ? target : viewer, error: null });
@@ -93,7 +93,8 @@ function mockProfileClient(followSummaryResult: {
     from,
     rpc: vi.fn((name: string) => {
       if (name === "get_profile_follow_summary") return Promise.resolve(followSummaryResult);
-      if (name === "get_profile_ai_following_count") return Promise.resolve({ data: aiFollowingCount, error: null });
+      if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: aiCounts.followers, error: null });
+      if (name === "get_profile_ai_following_count") return Promise.resolve({ data: aiCounts.following, error: null });
       if (name === "list_profile_favorite_personas") return Promise.resolve({ data: config.favorites ?? [], error: null });
       throw new Error(`Unexpected RPC: ${name}`);
     }),
@@ -149,6 +150,7 @@ function mockProfilePostsFailure(failure: ProfilePostsFailure) {
       if (name === "get_profile_follow_summary") {
         return Promise.resolve({ data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null });
       }
+      if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: 3, error: null });
       if (name === "get_profile_ai_following_count") return Promise.resolve({ data: 2, error: null });
       if (name === "list_profile_favorite_personas") return Promise.resolve({ data: [], error: null });
       throw new Error(`Unexpected RPC: ${name}`);
@@ -161,7 +163,7 @@ describe("ProfilePage production followers", () => {
     vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
     const { from } = mockProfileClient(
       { data: [{ follower_count: 0, following_count: 0, viewer_follows: false }], error: null },
-      0,
+      { followers: 0, following: 0 },
       { viewerId: target.id, completionAwards: 9 },
     );
 
@@ -174,11 +176,11 @@ describe("ProfilePage production followers", () => {
     expect(from).toHaveBeenCalledWith("task_completion_awards");
   });
 
-  it("renders the human follower count and viewer relationship returned by the database", async () => {
+  it("renders combined human and AI relationship totals", async () => {
     vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
     const { from } = mockProfileClient(
       { data: [{ follower_count: 7, following_count: 4, viewer_follows: true }], error: null },
-      2,
+      { followers: 3, following: 2 },
       { favorites: [favoritePersona] },
     );
 
@@ -187,15 +189,16 @@ describe("ProfilePage production followers", () => {
       searchParams: Promise.resolve({}),
     }));
 
-    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/7\s*Followers/);
-    expect(screen.getByText("People followed").closest("div")).toHaveTextContent(/4\s*Following/);
+    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/10\s*Followers/);
+    expect(screen.getByRole("link", { name: "View all 6 accounts Jonah follows" })).toHaveTextContent(/6\s*Following/);
     expect(screen.getByRole("button", { name: "Unfollow Jonah" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("link", { name: "View 7 followers" })).toHaveAttribute("href", "/u/jonah/followers");
-    expect(screen.getByRole("link", { name: "View the 4 accounts Jonah follows" })).toHaveAttribute("href", "/u/jonah/following");
-    // The AI side of the card is the favorites strip, which opens the AI half
-    // of the same Following list rather than adding a count of its own.
+    expect(screen.getByRole("link", { name: "View all 10 followers" })).toHaveAttribute("href", "/u/jonah/followers");
+    expect(screen.getByRole("link", { name: "View all 6 accounts Jonah follows" })).toHaveAttribute("href", "/u/jonah/following");
+    // The totals include AI, while the favorites strip still opens the AI
+    // filter without adding another count to the profile card.
     expect(screen.queryByText(/AI followers/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "See all 2" })).toHaveAttribute("href", "/u/jonah/following?kind=ai");
+    expect(screen.getByRole("link", { name: "View AI following" })).toHaveAttribute("href", "/u/jonah/following?kind=ai");
+    expect(screen.queryByText("See all 2")).not.toBeInTheDocument();
     expect(from).toHaveBeenCalledWith("social_reposts");
     expect(from).not.toHaveBeenCalledWith("social_companions");
   });

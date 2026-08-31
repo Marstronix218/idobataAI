@@ -22,11 +22,10 @@ function initials(name: string) {
  * graph: `list_profile_favorite_personas` refuses it for a stranger reading a
  * private profile, and the page simply passes nothing.
  */
-export function FavoritePersonas({ username, personas, isOwner, followingCount }: {
+export function FavoritePersonas({ username, personas, isOwner }: {
   username: string;
   personas: ProfileFollowPersona[];
   isOwner: boolean;
-  followingCount: number;
 }) {
   // A visitor learns nothing from an empty strip, so it collapses. The owner
   // sees the prompt instead, because for them the emptiness is an action.
@@ -38,9 +37,9 @@ export function FavoritePersonas({ username, personas, isOwner, followingCount }
         <Star size={14} className="text-sun" aria-hidden="true" fill="currentColor" />
         Favorite AI personas
       </h3>
-      {followingCount > 0 && <Link href={`/u/${encodeURIComponent(username)}/following?kind=ai`} className="text-xs font-bold text-brand hover:underline">
-        See all {followingCount}
-      </Link>}
+      <Link href={`/u/${encodeURIComponent(username)}/following?kind=ai`} className="text-xs font-bold text-brand hover:underline">
+        {isOwner ? "Manage favorites" : "View AI following"}
+      </Link>
     </div>
 
     {personas.length

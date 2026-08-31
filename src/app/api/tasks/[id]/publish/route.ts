@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { drainAfterHumanEngagement } from "@/lib/ai";
 import { publishSchema } from "@/lib/server/schemas";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { removePostMedia, validateStoredPostMedia } from "@/lib/server/post-media";
@@ -6,6 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { SocialPost } from "@/types";
 
 type Context = { params: Promise<{ id: string }> };
+
+// `after` runs inside the route's budget, and the inline drain calls the AI
+// provider, whose own request times out at 8s.
+export const maxDuration = 30;
 
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
@@ -27,13 +32,19 @@ export async function POST(request: Request, { params }: Context) {
       const priorPaths = post.image_paths ?? [];
       const updated = assertDatabase(await admin
         .from("social_posts")
-        .update({ visibility: input.visibility, image_paths: imagePaths })
+        .update({
+          visibility: input.visibility,
+          image_paths: imagePaths,
+          ...(input.showCategoryTag === false ? { category: null } : {}),
+          ...(input.showStreakTag === false ? { streak: null } : {}),
+        })
         .eq("id", post.id)
         .eq("author_id", user.id)
         .select("*")
         .single(), true) as SocialPost;
 
       await removePostMedia(admin, priorPaths.filter((path) => !imagePaths.includes(path)));
+      drainAfterHumanEngagement();
       return ok(updated, { status: 201 });
     } catch (error) {
       await removePostMedia(admin, imagePaths);

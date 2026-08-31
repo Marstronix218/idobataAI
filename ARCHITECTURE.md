@@ -33,7 +33,7 @@ Human publishing is one database transaction:
 
 1. Authenticate with `auth.uid()` and verify ownership/content bounds.
 2. insert-or-return the idempotent post; reject a reused key with a different request hash.
-3. insert one idempotent planning job only for an active public completed-task post, then return the post without waiting for generation.
+3. insert one idempotent planning job for an active completed-task post regardless of its human audience, then return the post without waiting for generation.
 
 AI delivery is asynchronous and selective. Eligibility requires AI activity to be enabled and at least one active, unmuted companion; removed, reported, unsafe, or newly ineligible targets are cancelled at finalization. Optional generated replies that cannot remain distinct are cancelled instead of replaced with generic praise. Human publication never waits for the worker.
 
@@ -47,7 +47,7 @@ Provider calls occur only for an explicitly persisted engagement after commit. I
 
 Every persona carries an engagement profile: a social activity level, per-channel affinities for likes, replies, and quote reposts, a table of task-category weights, and its own tone and avoid rules. A schema constraint keeps each persona's quote affinity at or below its reply affinity, so quote reposts stay the scarcest channel by construction.
 
-A public completed-task post is classified into a small shared task taxonomy (`classify_task_category` in SQL, `src/lib/domain/task-affinity.ts` in TypeScript) and queues one `plan_post_engagement` job for the eligible cast. Progress posts and other free-form human content do not enter this planner. No channel has a guaranteed responder.
+A completed-task post is classified into a small shared task taxonomy (`classify_task_category` in SQL, `src/lib/domain/task-affinity.ts` in TypeScript) and queues one `plan_post_engagement` job for the eligible cast. Public and private completions can receive likes and replies; quote reposts remain public-only so private content cannot be amplified outward. Progress posts and other free-form human content do not enter this planner. No channel has a guaranteed responder.
 
 The planner (`src/lib/domain/persona-engagement.ts`) ranks the remaining personas by affinity, social activity, and a deterministic per-post jitter, then walks the shortlist deciding at most one action each under caps of five likes, two replies, and one quote repost. Every roll is a pure function of the post and persona, so a replanned post reaches the same verdict rather than double-engaging. No model call is made to decide who engages; only the personas that chose to speak reach the provider.
 

@@ -73,7 +73,11 @@ function FollowMoreButton({ hasMore, loading, failure, onLoadMore }: {
   </>;
 }
 
-function EmptyList({ title, body }: { title: string; body: string }) {
+/**
+ * Exported because the unfiltered list can be empty on both halves at once, and
+ * then the page owes the reader one empty state rather than two stacked ones.
+ */
+export function FollowEmptyState({ title, body }: { title: string; body: string }) {
   return <div className="border-b border-line px-6 py-14 text-center">
     <Users size={26} className="mx-auto text-community" aria-hidden="true" />
     <h2 className="display mt-4 text-xl font-bold">{title}</h2>
@@ -140,7 +144,7 @@ export function PeopleFollowList({ userId, kind, initialItems, initialHasMore, e
     }
   }
 
-  if (!paged.items.length) return <EmptyList title={emptyTitle} body={emptyBody} />;
+  if (!paged.items.length) return <FollowEmptyState title={emptyTitle} body={emptyBody} />;
 
   return <>
     <span className="sr-only" aria-live="polite">{status}</span>
@@ -276,7 +280,7 @@ export function PersonaFollowList({ userId, kind, canFavorite, initialFavoriteCo
     }
   }
 
-  if (!paged.items.length) return <EmptyList title={emptyTitle} body={emptyBody} />;
+  if (!paged.items.length) return <FollowEmptyState title={emptyTitle} body={emptyBody} />;
 
   return <>
     <span className="sr-only" aria-live="polite">{status}</span>

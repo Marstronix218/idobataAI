@@ -3,7 +3,12 @@ import "server-only";
 import { after } from "next/server";
 import type { AIJob, Json, PostEngagementContext, SocialCompanion } from "@/types";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fallbackReply, resolveAIReply } from "@/lib/domain";
+import {
+  canPlanPersonaEngagement,
+  fallbackReply,
+  personaEngagementChannels,
+  resolveAIReply,
+} from "@/lib/domain";
 import { checkReplyDiversity } from "@/lib/domain/reply-diversity";
 import { planPersonaEngagement, type EngagementAction, type EngagementLimits } from "@/lib/domain/persona-engagement";
 import { classifyTask } from "@/lib/domain/task-affinity";
@@ -382,7 +387,11 @@ async function planPostEngagement(job: AIJob, lease: string) {
     return { id: job.id, status, planned };
   };
 
-  if (!context || context.post.contentStatus !== "active" || context.post.visibility !== "public") {
+  if (!context || !canPlanPersonaEngagement({
+    kind: context.post.kind,
+    visibility: context.post.visibility,
+    contentStatus: context.post.contentStatus,
+  })) {
     return complete("engagement_skipped");
   }
 
@@ -413,7 +422,7 @@ async function planPostEngagement(job: AIJob, lease: string) {
       repliesToAuthorRecently: Number(companion.repliesToAuthorRecently),
       quotesRecently: Number(companion.quotesRecently),
     }])),
-    flags: context.flags,
+    flags: personaEngagementChannels(context.post, context.flags),
     limits: configuredEngagementLimits(),
     excludeCompanionIds: excludeCompanionId ? [excludeCompanionId] : [],
   });

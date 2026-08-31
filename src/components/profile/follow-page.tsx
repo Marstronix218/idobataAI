@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
 import { AppTabLayout } from "@/components/layout/app-tab-layout";
-import { PeopleFollowList, PersonaFollowList } from "@/components/profile/follow-list";
+import { FollowEmptyState, PeopleFollowList, PersonaFollowList } from "@/components/profile/follow-list";
 import { activeCompanions } from "@/data/demo";
 import { assertDatabase } from "@/lib/server/http";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
@@ -17,9 +17,14 @@ const PAGE_SIZE = 30;
  * top-level tabs would mix the axes -- `AI followers` next to `Following` is a
  * direction-and-audience next to a direction -- and leave no room for the
  * fourth quadrant at all.
+ *
+ * The audience starts at `all` because the honest answer to "who follows this
+ * account" is everyone who does. Landing on `people` made the AI half invisible
+ * unless you already knew to look for it, and made the chips read as a
+ * two-option switch you could not leave rather than as filters you turn on.
  */
 export type FollowDirection = "followers" | "following";
-export type FollowAudience = "people" | "ai";
+export type FollowAudience = "all" | "people" | "ai";
 
 const previewPeople: ProfileFollowPerson[] = [
   { id: "preview-amara", username: "amara", display_name: "Amara Osei", avatar_url: null, bio: "Marathon training and slow mornings.", profile_visibility: "public", followed_at: new Date().toISOString(), viewer_follows: false, viewer_requested: false, is_viewer: false },
@@ -42,7 +47,12 @@ const previewPersonas: ProfileFollowPersona[] = activeCompanions.map((companion,
 
 function listHref(username: string, direction: FollowDirection, audience: FollowAudience) {
   const handle = encodeURIComponent(username);
-  return audience === "ai" ? `/u/${handle}/${direction}?kind=ai` : `/u/${handle}/${direction}`;
+  return audience === "all" ? `/u/${handle}/${direction}` : `/u/${handle}/${direction}?kind=${audience}`;
+}
+
+/** The bare route is the unfiltered list, so any `kind` we do not know is that. */
+export function parseAudience(kind: string | undefined): FollowAudience {
+  return kind === "ai" || kind === "people" ? kind : "all";
 }
 
 const EMPTY_COPY: Record<`${FollowDirection}-${FollowAudience}`, (name: string, isOwner: boolean) => { title: string; body: string }> = {
@@ -69,6 +79,18 @@ const EMPTY_COPY: Record<`${FollowDirection}-${FollowAudience}`, (name: string, 
     body: isOwner
       ? "Follow a persona from the directory, then star up to three to show them on your profile."
       : `${name} does not follow any AI persona yet.`,
+  }),
+  "followers-all": (name, isOwner) => ({
+    title: "No followers yet",
+    body: isOwner
+      ? "People and AI personas who follow you will appear here. Nothing you finish is shared until you choose to share it."
+      : `Nobody follows ${name} yet.`,
+  }),
+  "following-all": (name, isOwner) => ({
+    title: "Not following anyone yet",
+    body: isOwner
+      ? "Follow an account or an AI persona, and what they share will show up in your feed."
+      : `${name} does not follow anyone yet.`,
   }),
 };
 
@@ -101,8 +123,11 @@ export async function FollowPage({ username, direction, audience }: {
   let counts = { followers: 3, following: 5, aiFollowers: previewPersonas.length, aiFollowing: previewPersonas.length };
   let favoriteCount = previewPersonas.filter((persona) => persona.is_favorite).length;
   let people: ProfileFollowPerson[] = audience === "ai" ? [] : previewPeople;
-  let personas: ProfileFollowPersona[] = audience === "ai" ? previewPersonas : [];
-  let hasMore = false;
+  let personas: ProfileFollowPersona[] = audience === "people" ? [] : previewPersonas;
+  // Each half pages on its own, so the unfiltered list cannot let one side's
+  // "Show more" speak for the other.
+  let peopleHasMore = false;
+  let personasHasMore = false;
 
   if (useDatabase) {
     if (!/^[A-Za-z0-9_]{3,24}$/.test(username)) notFound();
@@ -162,29 +187,39 @@ export async function FollowPage({ username, direction, audience }: {
       // The branches name their function rather than indexing a map, so the row
       // type stays narrowed instead of collapsing to a union of both shapes.
       const args = { p_user_id: card.id, p_limit: PAGE_SIZE + 1, p_offset: 0 };
-      if (audience === "ai") {
-        const rows = direction === "followers"
-          ? assertDatabase(await supabase.rpc("list_profile_ai_followers", args)) ?? []
-          : assertDatabase(await supabase.rpc("list_profile_ai_following", args)) ?? [];
-        hasMore = rows.length > PAGE_SIZE;
-        personas = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-        people = [];
+      // A filter drops one half's query entirely; the unfiltered list needs
+      // both, and issuing them together costs one round trip rather than two.
+      const wantsPeople = audience !== "ai";
+      const wantsPersonas = audience !== "people";
+      const [peopleRows, personaRows, favoriteRows] = await Promise.all([
+        !wantsPeople ? null
+          : direction === "following"
+            ? supabase.rpc("list_profile_following", args)
+            : supabase.rpc("list_profile_followers", args),
+        !wantsPersonas ? null
+          : direction === "following"
+            ? supabase.rpc("list_profile_ai_following", args)
+            : supabase.rpc("list_profile_ai_followers", args),
         // Only the owner can star a row, and only their own cap matters, so the
         // extra read is skipped for every other reader.
-        if (isOwner) {
-          favoriteCount = (assertDatabase(await supabase.rpc("list_profile_favorite_personas", { p_user_id: card.id })) ?? []).length;
-        }
-      } else if (direction === "following") {
-        const rows = assertDatabase(await supabase.rpc("list_profile_following", args)) ?? [];
-        hasMore = rows.length > PAGE_SIZE;
-        people = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-        personas = [];
+        wantsPersonas && isOwner ? supabase.rpc("list_profile_favorite_personas", { p_user_id: card.id }) : null,
+      ]);
+
+      if (peopleRows) {
+        const rows = assertDatabase(peopleRows) ?? [];
+        peopleHasMore = rows.length > PAGE_SIZE;
+        people = peopleHasMore ? rows.slice(0, PAGE_SIZE) : rows;
       } else {
-        const rows = assertDatabase(await supabase.rpc("list_profile_followers", args)) ?? [];
-        hasMore = rows.length > PAGE_SIZE;
-        people = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+        people = [];
+      }
+      if (personaRows) {
+        const rows = assertDatabase(personaRows) ?? [];
+        personasHasMore = rows.length > PAGE_SIZE;
+        personas = personasHasMore ? rows.slice(0, PAGE_SIZE) : rows;
+      } else {
         personas = [];
       }
+      if (favoriteRows) favoriteCount = (assertDatabase(favoriteRows) ?? []).length;
     } else {
       people = [];
       personas = [];
@@ -195,11 +230,18 @@ export async function FollowPage({ username, direction, audience }: {
     { id: "followers", label: "Followers" },
     { id: "following", label: "Following" },
   ];
-  const audiences: Array<{ id: FollowAudience; label: string; count: number }> = [
+  const audiences: Array<{ id: Exclude<FollowAudience, "all">; label: string; count: number }> = [
     { id: "people", label: "People", count: direction === "followers" ? counts.followers : counts.following },
     { id: "ai", label: "AI", count: direction === "followers" ? counts.aiFollowers : counts.aiFollowing },
   ];
   const empty = EMPTY_COPY[`${direction}-${audience}`](displayName, isOwner);
+  // A filtered view keeps its own empty state -- "no AI followers" is a real
+  // answer. The unfiltered view only shows an empty state when both halves are,
+  // and otherwise hides the half that has nothing rather than stacking two
+  // headings over two apologies.
+  const showPeople = audience === "people" || (audience === "all" && people.length > 0);
+  const showPersonas = audience === "ai" || (audience === "all" && personas.length > 0);
+  const sectionHeading = "border-b border-line bg-canvas-deep/45 px-4 py-2 text-xs font-bold uppercase tracking-[.08em] text-muted";
 
   return <AppTabLayout>
     <div className="min-w-0 border-x border-line bg-canvas">
@@ -230,16 +272,24 @@ export async function FollowPage({ username, direction, audience }: {
         </Link>)}
       </nav>
 
-      <div className="flex gap-2 border-b border-line px-4 py-3" role="group" aria-label="Filter by audience">
-        {audiences.map((option) => <Link
-          key={option.id}
-          href={listHref(handle, direction, option.id)}
-          aria-current={audience === option.id ? "true" : undefined}
-          className={`badge min-h-9 gap-1.5 px-3 text-sm transition-colors ${audience === option.id ? "border-brand bg-brand-soft text-ink" : "text-muted hover:bg-surface/55"}`}
-        >
-          <span className="font-bold">{option.label}</span>
-          <span>{option.count}</span>
-        </Link>)}
+      {/* Off by default: the list below is everyone. Tapping a chip narrows it,
+          tapping the lit one clears it again, and the glow on the active chip's
+          outline is what tells you which of the three you are looking at. */}
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3" role="group" aria-label="Filter by audience">
+        {audiences.map((option) => {
+          const active = audience === option.id;
+          return <Link
+            key={option.id}
+            href={listHref(handle, direction, active ? "all" : option.id)}
+            aria-current={active ? "true" : undefined}
+            aria-label={active ? `${option.label} filter on, showing ${option.count}. Clear filter` : `Show ${option.label} only, ${option.count}`}
+            className={`badge filter-chip min-h-9 gap-1.5 px-3 text-sm ${option.id === "ai" ? "filter-chip-ai" : ""} ${active ? "" : "text-muted hover:bg-surface/55"}`}
+          >
+            <span className="font-bold">{option.label}</span>
+            <span>{option.count}</span>
+          </Link>;
+        })}
+        <span className="ml-auto text-xs text-muted">{audience === "all" ? "Showing everyone" : "Filtered"}</span>
       </div>
 
       {!canView
@@ -251,25 +301,33 @@ export async function FollowPage({ username, direction, audience }: {
             {viewerRequested ? " Your request is waiting for them." : " To ask for access, tap Follow on their profile."}
           </p>
         </section>
-        : audience === "ai"
-          ? <PersonaFollowList
-            kind={direction === "followers" ? "ai-followers" : "ai-following"}
-            userId={userId}
-            canFavorite={isOwner}
-            initialFavoriteCount={favoriteCount}
-            initialItems={personas}
-            initialHasMore={hasMore}
-            emptyTitle={empty.title}
-            emptyBody={empty.body}
-          />
-          : <PeopleFollowList
-            kind={direction}
-            userId={userId}
-            initialItems={people}
-            initialHasMore={hasMore}
-            emptyTitle={empty.title}
-            emptyBody={empty.body}
-          />}
+        : <>
+          {!showPeople && !showPersonas && <FollowEmptyState title={empty.title} body={empty.body} />}
+          {showPeople && <>
+            {audience === "all" && <h2 className={sectionHeading}>People</h2>}
+            <PeopleFollowList
+              kind={direction}
+              userId={userId}
+              initialItems={people}
+              initialHasMore={peopleHasMore}
+              emptyTitle={empty.title}
+              emptyBody={empty.body}
+            />
+          </>}
+          {showPersonas && <>
+            {audience === "all" && <h2 className={sectionHeading}>AI personas</h2>}
+            <PersonaFollowList
+              kind={direction === "followers" ? "ai-followers" : "ai-following"}
+              userId={userId}
+              canFavorite={isOwner}
+              initialFavoriteCount={favoriteCount}
+              initialItems={personas}
+              initialHasMore={personasHasMore}
+              emptyTitle={empty.title}
+              emptyBody={empty.body}
+            />
+          </>}
+        </>}
     </div>
   </AppTabLayout>;
 }

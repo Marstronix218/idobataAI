@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FollowPage } from "@/components/profile/follow-page";
+import { FollowPage, parseAudience } from "@/components/profile/follow-page";
 
 export const metadata: Metadata = { title: "Following" };
 
@@ -10,5 +10,5 @@ export default async function ProfileFollowingPage({ params, searchParams }: {
 }) {
   const username = decodeURIComponent((await params).username);
   const kind = (await searchParams).kind;
-  return <FollowPage username={username} direction="following" audience={kind === "ai" ? "ai" : "people"} />;
+  return <FollowPage username={username} direction="following" audience={parseAudience(kind)} />;
 }

@@ -107,10 +107,12 @@ begin
   if not exists(select 1 from public.social_posts where id=published_id and content='') then raise exception 'blank completion comment was not preserved as blank'; end if;
   if progress_id is null then raise exception 'progress post was not created'; end if;
   if (select count(*) from public.social_posts where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and task_id='aaaaaaaa-0000-4000-8000-000000000003') <> 1 then raise exception 'completion publishing was not idempotent'; end if;
-  if exists(select 1 from public.social_ai_engagements where post_id=published_id and state='planned') then raise exception 'private completion planned public persona engagement'; end if;
   if exists(select 1 from public.social_replies where post_id=published_id and companion_id is not null) then raise exception 'completion publishing automatically created an AI reply'; end if;
   if exists(select 1 from public.social_reactions where post_id=published_id and companion_id is not null) then raise exception 'completion publishing automatically created an AI reaction'; end if;
-  if exists(select 1 from public.ai_jobs where payload->>'postId'=published_id::text) then raise exception 'private completion queued persona work'; end if;
+  if (
+    select count(*) from public.ai_jobs
+    where job_type='plan_post_engagement' and dedupe_key='plan-engagement:'||published_id::text
+  ) <> 1 then raise exception 'private completion did not queue exactly one selective engagement plan'; end if;
   if exists(select 1 from public.social_ai_engagements where post_id=progress_id and state='planned') then raise exception 'progress publishing planned persona engagement'; end if;
   if exists(select 1 from public.social_replies where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reply'; end if;
   if exists(select 1 from public.social_reactions where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reaction'; end if;
@@ -120,6 +122,70 @@ begin
   if not exists(select 1 from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004' and visibility='public') then raise exception 'completion publisher ignored the explicitly confirmed audience'; end if;
   if not exists(select 1 from public.tasks where id='aaaaaaaa-0000-4000-8000-000000000004' and recurrence_instance_id=current_date::text) then raise exception 'recurring task did not use its canonical occurrence key'; end if;
 end $$;
+
+-- Private completion engagement is service-authored but remains visible only to
+-- the post owner through the existing child-row RLS policies.
+do $$
+declare private_post uuid; selected_job public.ai_jobs; token uuid;
+begin
+  select id into private_post from public.social_posts
+  where author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    and task_id='aaaaaaaa-0000-4000-8000-000000000003';
+
+  perform public.enqueue_social_action(
+    'test:private-completion-reaction', 'human_post_engagement', 'reaction',
+    private_post, '10000000-0000-4000-8000-000000000001', null, now(),
+    '{"test":"private completion"}'::jsonb
+  );
+  select * into selected_job from public.ai_jobs
+  where dedupe_key='social-action:test:private-completion-reaction';
+  token := gen_random_uuid();
+  update public.ai_jobs set status='processing',lease_token=token,
+    lease_expires_at=now()+interval '1 minute' where id=selected_job.id;
+  if not public.finalize_social_action(selected_job.id,token,null) then
+    raise exception 'private completion reaction did not finalize';
+  end if;
+
+  perform public.enqueue_social_action(
+    'test:private-completion-reply', 'human_post_engagement', 'reply',
+    private_post, '10000000-0000-4000-8000-000000000002', null, now(),
+    '{"test":"private completion"}'::jsonb
+  );
+  select * into selected_job from public.ai_jobs
+  where dedupe_key='social-action:test:private-completion-reply';
+  token := gen_random_uuid();
+  update public.ai_jobs set status='processing',lease_token=token,
+    lease_expires_at=now()+interval '1 minute' where id=selected_job.id;
+  if not public.finalize_social_action(selected_job.id,token,'Private completion reply fixture.') then
+    raise exception 'private completion reply did not finalize';
+  end if;
+
+  if not exists(select 1 from public.social_reactions
+    where post_id=private_post and companion_id='10000000-0000-4000-8000-000000000001') then
+    raise exception 'private completion lost its persona reaction';
+  end if;
+  if not exists(select 1 from public.social_replies
+    where post_id=private_post and companion_id='10000000-0000-4000-8000-000000000002'
+      and content='Private completion reply fixture.') then
+    raise exception 'private completion lost its persona reply';
+  end if;
+end $$;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+do $$ begin
+  if not exists(select 1 from public.social_replies
+    where content='Private completion reply fixture.') then
+    raise exception 'private completion owner cannot read its persona reply';
+  end if;
+  if not exists(
+    select 1 from public.social_reactions reaction
+    join public.social_posts post on post.id=reaction.post_id
+    where post.task_id='aaaaaaaa-0000-4000-8000-000000000003'
+      and reaction.companion_id='10000000-0000-4000-8000-000000000001'
+  ) then raise exception 'private completion owner cannot read its persona reaction'; end if;
+end $$;
+reset role;
 
 do $$ begin
   begin
@@ -180,7 +246,8 @@ do $$ begin
     then raise exception 'classifier guessed instead of returning other'; end if;
 end $$;
 
--- Only a public completed task enters selective persona planning.
+-- Public and private completed tasks enter selective persona planning; ordinary
+-- progress posts remain outside it.
 insert into public.social_posts(id,author_id,task_id,kind,visibility,content,task_title,category,idempotency_key)
 values('aaaaaaaa-1000-4000-8000-0000000000e1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   'aaaaaaaa-0000-4000-8000-000000000003','human_completion','public','Cleaned my entire apartment.',
@@ -190,7 +257,7 @@ do $$ begin
   if (
     select count(*) from public.ai_jobs
     where job_type='plan_post_engagement' and dedupe_key='plan-engagement:aaaaaaaa-1000-4000-8000-0000000000e1'
-  ) <> 1 then raise exception 'completed-task post did not queue exactly one selective engagement plan'; end if;
+  ) <> 1 then raise exception 'public completed-task post did not queue exactly one selective engagement plan'; end if;
   if exists(
     select 1 from public.ai_jobs
     where job_type='plan_post_engagement' and dedupe_key='plan-engagement:aaaaaaaa-1000-4000-8000-000000000002'
@@ -277,6 +344,13 @@ set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 do $$ begin
   if exists(select 1 from public.tasks where owner_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') then raise exception 'another user can read private tasks'; end if;
   if exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000001') then raise exception 'another user can read a private post'; end if;
+  if exists(select 1 from public.social_replies where content='Private completion reply fixture.') then raise exception 'another user can read a persona reply on a private post'; end if;
+  if exists(
+    select 1 from public.social_reactions reaction
+    join public.social_posts post on post.id=reaction.post_id
+    where post.task_id='aaaaaaaa-0000-4000-8000-000000000003'
+      and reaction.companion_id='10000000-0000-4000-8000-000000000001'
+  ) then raise exception 'another user can read a persona reaction on a private post'; end if;
   if not exists(select 1 from public.social_posts where id='aaaaaaaa-1000-4000-8000-000000000002') then raise exception 'authenticated user cannot read a public post'; end if;
 end $$;
 

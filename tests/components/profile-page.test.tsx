@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { activeCompanions } from "@/data/demo";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.ComponentProps<"a">) => (
@@ -57,13 +58,14 @@ describe("ProfilePage", () => {
       searchParams: Promise.resolve({}),
     }));
 
-    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/3\s*Followers/);
-    expect(screen.getByRole("link", { name: "View 3 followers" })).toHaveAttribute("href", "/u/mina/followers");
-    expect(screen.getByRole("link", { name: "View the 5 accounts Mina Mori follows" })).toHaveAttribute("href", "/u/mina/following");
-    // Two counts, both human. The AI graph reaches the card as the favorites
-    // strip below, not as a third and fourth number beside these.
+    const followerCount = 3 + activeCompanions.length;
+    const followingCount = 5 + activeCompanions.length;
+    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(new RegExp(`${followerCount}\\s*Followers`));
+    expect(screen.getByRole("link", { name: `View all ${followerCount} followers` })).toHaveAttribute("href", "/u/mina/followers");
+    expect(screen.getByRole("link", { name: `View all ${followingCount} accounts Mina Mori follows` })).toHaveAttribute("href", "/u/mina/following");
+    // The totals include people and AI without adding separate count columns.
     expect(screen.queryByText(/AI followers/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /See all/ })).toHaveAttribute("href", "/u/mina/following?kind=ai");
+    expect(screen.getByRole("link", { name: "Manage favorites" })).toHaveAttribute("href", "/u/mina/following?kind=ai");
   });
 
   it("names the owner's favorite personas under the counts, capped at three", async () => {

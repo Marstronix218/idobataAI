@@ -95,8 +95,8 @@ export const DEFAULT_ENGAGEMENT_LIMITS: EngagementLimits = {
 
 const ACTIVITY_WEIGHT: Record<SocialActivity, number> = {
   high: 1,
-  medium: 0.68,
-  selective: 0.38,
+  medium: 0.78,
+  selective: 0.48,
 };
 
 /**
@@ -106,8 +106,8 @@ const ACTIVITY_WEIGHT: Record<SocialActivity, number> = {
  */
 const LIKE_ACTIVITY_WEIGHT: Record<SocialActivity, number> = {
   high: 1,
-  medium: 0.82,
-  selective: 0.7,
+  medium: 0.88,
+  selective: 0.78,
 };
 
 /**
@@ -116,6 +116,14 @@ const LIKE_ACTIVITY_WEIGHT: Record<SocialActivity, number> = {
  * is scaled by this on top of an already-low per-persona affinity.
  */
 const QUOTE_SCARCITY = 0.22;
+/**
+ * A feed that is too quiet reads as broken rather than restrained, so both
+ * conversational channels are lifted uniformly here. Quotes are deliberately
+ * left out: scarcity is what makes them mean something. This is the dial to
+ * turn when the world should feel busier, in preference to editing per-persona
+ * affinities, which encode character rather than feed density.
+ */
+const ENGAGEMENT_LIFT = 1.2;
 const FAVORITE_RANK_BOOST = 0.18;
 const FAVORITE_PROBABILITY_MULTIPLIER = 1.25;
 
@@ -253,7 +261,7 @@ export function planPersonaEngagement({
     const replyRoll = roll(post.id, companion.id, "reply");
     const replyProbability = enabled.replies && replies < caps.maxReplies
       && (history.repliesToAuthorRecently ?? 0) < MAX_CONSECUTIVE_REPLIES_TO_AUTHOR
-      ? clamp01(companion.replyAffinity * affinity * activityWeight * favoriteMultiplier)
+      ? clamp01(companion.replyAffinity * affinity * activityWeight * favoriteMultiplier * ENGAGEMENT_LIFT)
       : 0;
     if (replyProbability > 0 && replyRoll < replyProbability) {
       replies += 1;
@@ -269,7 +277,7 @@ export function planPersonaEngagement({
 
     const likeRoll = roll(post.id, companion.id, "like");
     const likeProbability = enabled.likes && likes < caps.maxLikes
-      ? clamp01(companion.likeAffinity * affinity * (LIKE_ACTIVITY_WEIGHT[companion.socialActivity] ?? LIKE_ACTIVITY_WEIGHT.medium) * favoriteMultiplier)
+      ? clamp01(companion.likeAffinity * affinity * (LIKE_ACTIVITY_WEIGHT[companion.socialActivity] ?? LIKE_ACTIVITY_WEIGHT.medium) * favoriteMultiplier * ENGAGEMENT_LIFT)
       : 0;
     if (likeProbability > 0 && likeRoll < likeProbability) {
       likes += 1;

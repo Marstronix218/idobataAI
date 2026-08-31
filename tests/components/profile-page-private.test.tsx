@@ -64,6 +64,7 @@ function mockPrivateProfile({
 }: { viewerId?: string; viewerFollows?: boolean; viewerRequested?: boolean; pendingRequestCount?: number } = {}) {
   const rpc = vi.fn((name: string) => {
     if (name === "get_profile_card") return Promise.resolve({ data: [card], error: null });
+    if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: 3, error: null });
     if (name === "get_profile_ai_following_count") return Promise.resolve({ data: 2, error: null });
     if (name === "list_profile_favorite_personas") return Promise.resolve({ data: [], error: null });
     if (name === "get_profile_follow_summary") {
@@ -118,8 +119,10 @@ describe("ProfilePage for a protected profile", () => {
     expect(screen.getByText("@jonah")).toBeInTheDocument();
     expect(screen.getByText("Keeping the next step small.")).toBeInTheDocument();
     expect(screen.getByText(/Joined/)).toBeInTheDocument();
-    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/10\s*Followers/);
-    expect(screen.getByText("People followed").closest("div")).toHaveTextContent(/11\s*Following/);
+    expect(screen.getByText("Followers").closest("dd")).toHaveTextContent(/13\s*Followers/);
+    expect(screen.getByRole("link", { name: "View all 13 accounts Jonah follows" })).toHaveTextContent(/13\s*Following/);
+    expect(screen.getByRole("link", { name: "View all 13 followers" })).toHaveAttribute("href", "/u/jonah/followers");
+    expect(screen.getByRole("link", { name: "View all 13 accounts Jonah follows" })).toHaveAttribute("href", "/u/jonah/following");
     expect(screen.getByText("Wellbeing")).toBeInTheDocument();
     expect(screen.getByLabelText("Private profile")).toBeInTheDocument();
   });

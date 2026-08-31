@@ -18,7 +18,7 @@ const nav = [
   { href: "/tasks", label: "Your Tasks", shortLabel: "Tasks", icon: CheckSquare2 },
   { href: "/chat", label: "Chat", shortLabel: "Chat", icon: MessageCircle },
   { href: "/ai-personas", label: "AI Personas", shortLabel: "AI", icon: Bot },
-  { href: "/activity", label: "Notifications", shortLabel: "Alerts", icon: Bell },
+  { href: "/notifications", label: "Notifications", shortLabel: "Notifs", icon: Bell },
   // `/profile` resolves the signed-in username on the server and redirects to
   // `/u/{username}`; the rewrite below only skips that hop once the shell has
   // the username in hand.

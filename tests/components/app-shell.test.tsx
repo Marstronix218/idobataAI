@@ -31,6 +31,7 @@ describe("AppShell", () => {
       expect(links[1]).toHaveAttribute("href", "/tasks");
       expect(links[2]).toHaveAttribute("href", "/chat");
       expect(links[3]).toHaveAttribute("href", "/ai-personas");
+      expect(within(navigation).getByRole("link", { name: "Notifications" })).toHaveAttribute("href", "/notifications");
       expect(within(navigation).getByRole("link", { name: "AI Personas" })).toHaveAttribute("href", "/ai-personas");
       expect(within(navigation).getByRole("link", { name: "Profile" })).toHaveAttribute("href", "/u/mina");
       expect(within(navigation).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");

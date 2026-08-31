@@ -233,6 +233,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .badge-category, .badge-streak { display: inline-flex; align-items: center; gap: .35rem; background: var(--brand-soft); color: var(--brand-ink); }
 .badge-priority { background: var(--sun-soft); color: var(--sun-ink); }
 
+/* Audience filters default to off -- the follow lists show people and personas
+   together -- so an active filter has to announce itself: the glowing outline is
+   the only thing separating "everyone" from "people only". Each chip carries its
+   own accent so the color says *which* filter is on, not just that one is. */
+.filter-chip {
+  --chip-accent: var(--brand);
+  --chip-soft: var(--brand-soft);
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.filter-chip-ai { --chip-accent: var(--community); --chip-soft: var(--community-soft); }
+.filter-chip:hover { border-color: color-mix(in srgb, var(--chip-accent) 45%, var(--line)); }
+.filter-chip[aria-current="true"] {
+  border-color: var(--chip-accent);
+  background: var(--chip-soft);
+  color: var(--ink);
+  animation: filter-chip-glow 2.6s ease-in-out infinite;
+}
+@keyframes filter-chip-glow {
+  0%, 100% { box-shadow: 0 0 0 1px var(--chip-accent), 0 0 6px 0 color-mix(in srgb, var(--chip-accent) 30%, transparent); }
+  50% { box-shadow: 0 0 0 1px var(--chip-accent), 0 0 14px 3px color-mix(in srgb, var(--chip-accent) 55%, transparent); }
+}
+
 .segmented { display: flex; gap: .25rem; padding: .25rem; border-radius: 999px; background: var(--segmented); }
 .segmented button, .segmented a {
   display: flex; min-height: 40px; flex: 1; align-items: center; justify-content: center;
@@ -280,6 +302,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
      left reduced-motion users with a disabled button and no feedback at all.
      Restore a non-moving busy signal in its place. */
   [aria-busy="true"], .icon-btn:disabled, .btn:disabled { opacity: .6; }
+  /* The pulse is decoration; the lit ring is the state. Keep the ring. */
+  .filter-chip[aria-current="true"] {
+    animation: none;
+    box-shadow: 0 0 0 1px var(--chip-accent), 0 0 12px 2px color-mix(in srgb, var(--chip-accent) 45%, transparent);
+  }
 }
 
 @media (forced-colors: active) {

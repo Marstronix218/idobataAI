@@ -83,8 +83,8 @@ const restrictedProfileDefaults = {
   updated_at: "",
 } satisfies Partial<UserProfile>;
 
-const previewHumanFollowerCount = 3;
-const previewHumanFollowingCount = 5;
+const previewFollowerCount = 3 + previewCompanions.length;
+const previewFollowingCount = 5 + previewCompanions.length;
 
 // The card's strip is capped at three by the database, so preview mode takes
 // the first three demo personas rather than all of them.
@@ -329,9 +329,8 @@ export default async function ProfilePage({
   let likedPosts = previewLikedPosts;
   let postCount = previewTimeline.length;
   let completionCount = previewPosts.filter((post) => post.kind === "human_completion").length;
-  let humanFollowerCount = previewHumanFollowerCount;
-  let humanFollowingCount = previewHumanFollowingCount;
-  let aiFollowingCount = previewCompanions.length;
+  let followerCount = previewFollowerCount;
+  let followingCount = previewFollowingCount;
   let favoritePersonas = previewFavoritePersonas;
   let viewerFollowsProfile = false;
   let viewerRequestedFollow = false;
@@ -412,26 +411,26 @@ export default async function ProfilePage({
       if (!isOwner) {
         postCountQuery = postCountQuery.eq("visibility", "public");
       }
-      const [countResult, postCountResult, repostCountResult, aiFollowingCountResult, followSummaryResult] = await Promise.all([
+      const [countResult, postCountResult, repostCountResult, followSummaryResult, aiFollowerResult, aiFollowingResult] = await Promise.all([
         completionCountQuery,
         postCountQuery,
         repostCountQuery,
-        supabase.rpc("get_profile_ai_following_count", { p_user_id: profile.id }),
         supabase.rpc("get_profile_follow_summary", { p_user_id: profile.id }),
+        supabase.rpc("get_profile_ai_follower_count", { p_user_id: profile.id }),
+        supabase.rpc("get_profile_ai_following_count", { p_user_id: profile.id }),
       ]);
       assertDatabase(countResult);
       assertDatabase(postCountResult);
       assertDatabase(repostCountResult);
       postCount = (postCountResult.count ?? 0) + (repostCountResult.count ?? 0);
       completionCount = countResult.count ?? 0;
-      aiFollowingCount = assertDatabase(aiFollowingCountResult) ?? 0;
       // Visibility no longer withholds this row, so a missing one means the two
       // accounts have blocked each other. That should read as "no such profile"
       // rather than as a server fault, the same way the directory omits it.
       const followSummary = assertDatabase(followSummaryResult)?.[0];
       if (!followSummary) notFound();
-      humanFollowerCount = followSummary.follower_count;
-      humanFollowingCount = followSummary.following_count;
+      followerCount = followSummary.follower_count + (assertDatabase(aiFollowerResult) ?? 0);
+      followingCount = followSummary.following_count + (assertDatabase(aiFollowingResult) ?? 0);
       viewerFollowsProfile = followSummary.viewer_follows;
       viewerRequestedFollow = followSummary.viewer_requested;
       pendingRequestCount = followSummary.pending_request_count;
@@ -577,25 +576,20 @@ export default async function ProfilePage({
             {isOwner && <PrivacyBadge isPublic={profile.profile_visibility === "public"} />}
           </div>
           {profile.interests.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{profile.interests.map((interest) => <span key={interest} className="badge badge-category">{interest}</span>)}</div>}
-          {/* Two counts, both human. Merging people and personas would make the
-              number that matters -- how many people are actually watching --
-              unreadable, but a third and fourth number for the AI side made the
-              card a wall of digits nobody parsed. The AI graph moved one level
-              down instead: each count opens a list that is split by audience,
-              and the part of it worth naming on the card is the favorites strip
-              below, which the cap of three keeps to a single line. */}
+          {/* Each relationship count includes people and AI personas. The list
+              behind it keeps those audiences filterable, while the favorite
+              strip below names the AI relationships the owner values most. */}
           <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
             <div className="flex gap-1.5"><dt className="text-muted">Completions</dt><dd className="font-bold">{completionCount}</dd></div>
             <div className="flex gap-1.5"><dt className="text-muted">Momentum</dt><dd className="font-bold">{profile.current_streak} days</dd></div>
-            <div><dt className="sr-only">Human followers</dt><dd><Link href={`/u/${profile.username}/followers`} aria-label={`View ${humanFollowerCount} followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{humanFollowerCount}</span><span className="text-muted">{humanFollowerCount === 1 ? "Follower" : "Followers"}</span></Link></dd></div>
-            <div><dt className="sr-only">People followed</dt><dd><Link href={`/u/${profile.username}/following`} aria-label={`View the ${humanFollowingCount} accounts ${displayName} follows`} className="flex gap-1.5 hover:underline"><span className="font-bold">{humanFollowingCount}</span><span className="text-muted">Following</span></Link></dd></div>
+            <div><dt className="sr-only">Total followers</dt><dd><Link href={`/u/${profile.username}/followers`} aria-label={`View all ${followerCount} followers`} className="flex gap-1.5 hover:underline"><span className="font-bold">{followerCount}</span><span className="text-muted">{followerCount === 1 ? "Follower" : "Followers"}</span></Link></dd></div>
+            <div><dt className="sr-only">Total accounts followed</dt><dd><Link href={`/u/${profile.username}/following`} aria-label={`View all ${followingCount} accounts ${displayName} follows`} className="flex gap-1.5 hover:underline"><span className="font-bold">{followingCount}</span><span className="text-muted">Following</span></Link></dd></div>
           </dl>
 
           {canViewProfile && <FavoritePersonas
             username={profile.username}
             personas={favoritePersonas}
             isOwner={isOwner}
-            followingCount={aiFollowingCount}
           />}
 
           {isOwner && pendingRequestCount > 0 && <Link href="/follow-requests" className="mt-4 flex items-center gap-2 rounded-2xl border border-line bg-surface p-4 text-sm font-bold transition-colors hover:bg-surface/70">

@@ -39,6 +39,9 @@ export function ShareComposer({ taskId }: { taskId: string }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [audience, setAudience] = useState<"public" | "private">("private");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [showCategoryTag, setShowCategoryTag] = useState(true);
+  const [showStreakTag, setShowStreakTag] = useState(true);
+  const [showCompletedAtTag, setShowCompletedAtTag] = useState(true);
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(!isPreviewMode);
   const [status, setStatus] = useState("");
@@ -146,6 +149,8 @@ export function ShareComposer({ taskId }: { taskId: string }) {
             message: message.trim() || null,
             visibility: audience,
             recurrenceInstanceId: task.recurrence_instance_id,
+            showCategoryTag,
+            showStreakTag,
             ...(uploadedPaths.length ? { imagePaths: uploadedPaths } : {}),
           }),
         });
@@ -224,7 +229,20 @@ export function ShareComposer({ taskId }: { taskId: string }) {
                   <div className="min-w-0"><p className="truncate text-sm font-bold">{name} <span className="font-normal text-muted">{handle}</span></p><p className="text-xs text-muted">Your completed task</p></div>
                 </div>
                 <p className="mt-3 text-[.98rem] font-bold leading-6">{task.title}</p>
-                <div className="mt-3 flex flex-wrap gap-2">{task.category && <span className="badge badge-category">{task.category}</span>}{profile && <span className="badge badge-streak">🔥 {profile.current_streak}-day streak</span>}<span className="badge badge-private">{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.completed_at!))}</span></div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {task.category && showCategoryTag && <span className="badge badge-category gap-1 pr-1">
+                    {task.category}
+                    <button type="button" className="grid h-5 w-5 place-items-center rounded-full hover:bg-black/10" onClick={() => setShowCategoryTag(false)} disabled={busy} aria-label={`Remove ${task.category} tag`}><X size={12} aria-hidden="true" /></button>
+                  </span>}
+                  {profile && showStreakTag && <span className="badge badge-streak gap-1 pr-1">
+                    🔥 {profile.current_streak}-day streak
+                    <button type="button" className="grid h-5 w-5 place-items-center rounded-full hover:bg-black/10" onClick={() => setShowStreakTag(false)} disabled={busy} aria-label="Remove streak tag"><X size={12} aria-hidden="true" /></button>
+                  </span>}
+                  {showCompletedAtTag && <span className="badge badge-private gap-1 pr-1">
+                    {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.completed_at!))}
+                    <button type="button" className="grid h-5 w-5 place-items-center rounded-full hover:bg-black/10" onClick={() => setShowCompletedAtTag(false)} disabled={busy} aria-label="Remove completion date tag"><X size={12} aria-hidden="true" /></button>
+                  </span>}
+                </div>
               </div>
             </article>
 

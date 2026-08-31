@@ -45,6 +45,8 @@ export const publishSchema = z.object({
   message: optionalClean(COMPLETION_COMMENT_MAX_CHARACTERS),
   visibility: z.enum(["private", "public"]),
   recurrenceInstanceId: optionalClean(100),
+  showCategoryTag: z.boolean().optional(),
+  showStreakTag: z.boolean().optional(),
   imagePaths: z.array(z.string().min(1).max(300)).max(4).optional(),
 }).strict();
 

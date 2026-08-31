@@ -66,7 +66,7 @@ function mockClient({
     if (name === "get_profile_ai_follower_count") return Promise.resolve({ data: 2, error: null });
     if (name === "get_profile_ai_following_count") return Promise.resolve({ data: 5, error: null });
     if (name === "list_profile_favorite_personas") return Promise.resolve({ data: lists.list_profile_favorite_personas ?? [], error: null });
-    if (name in lists) return Promise.resolve({ data: lists[name as keyof typeof lists], error: null });
+    if (name.startsWith("list_profile_")) return Promise.resolve({ data: lists[name as keyof typeof lists] ?? [], error: null });
     throw new Error(`Unexpected RPC: ${name}`);
   });
   createClient.mockResolvedValue({
@@ -107,13 +107,70 @@ describe("FollowPage", () => {
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual(["Followers", "Following"]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
-    expect(tabs[1]).toHaveAttribute("href", "/u/jonah/following");
+    expect(tabs[1]).toHaveAttribute("href", "/u/jonah/following?kind=people");
 
     // Each count is printed exactly once, and never as a people+AI total.
     const chips = within(screen.getByRole("group", { name: "Filter by audience" })).getAllByRole("link");
     expect(chips.map((chip) => chip.textContent)).toEqual(["People3", "AI2"]);
     expect(chips[0]).toHaveAttribute("aria-current", "true");
+    // The lit chip clears itself; the other one swaps the filter over.
+    expect(chips[0]).toHaveAttribute("href", "/u/jonah/followers");
     expect(chips[1]).toHaveAttribute("href", "/u/jonah/followers?kind=ai");
+  });
+
+  it("lists people and personas together until a filter is turned on", async () => {
+    const { rpc } = mockClient({ lists: { list_profile_followers: followers, list_profile_ai_followers: personas } });
+
+    render(await FollowPage({ username: "jonah", direction: "followers", audience: "all" }));
+
+    // Both halves are queried, and both are on the page under their own heading.
+    expect(rpc).toHaveBeenCalledWith("list_profile_followers", { p_user_id: OWNER, p_limit: 31, p_offset: 0 });
+    expect(rpc).toHaveBeenCalledWith("list_profile_ai_followers", { p_user_id: OWNER, p_limit: 31, p_offset: 0 });
+    expect(screen.getByRole("heading", { name: "People" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI personas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Amara Osei/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Moss/ })).toBeInTheDocument();
+
+    // Neither chip is lit, because nothing is being filtered out.
+    const chips = within(screen.getByRole("group", { name: "Filter by audience" })).getAllByRole("link");
+    expect(chips.some((chip) => chip.getAttribute("aria-current") === "true")).toBe(false);
+    expect(chips[0]).toHaveAttribute("href", "/u/jonah/followers?kind=people");
+    expect(chips[1]).toHaveAttribute("href", "/u/jonah/followers?kind=ai");
+    expect(screen.getByText("Showing everyone")).toBeInTheDocument();
+  });
+
+  it("marks the active filter with the glow class so it reads as on", async () => {
+    mockClient({ lists: { list_profile_ai_followers: personas } });
+
+    render(await FollowPage({ username: "jonah", direction: "followers", audience: "ai" }));
+
+    const chips = within(screen.getByRole("group", { name: "Filter by audience" })).getAllByRole("link");
+    // `.filter-chip` carries the pulse, `.filter-chip-ai` swaps its accent so
+    // the color says which half is showing.
+    expect(chips[1]).toHaveAttribute("aria-current", "true");
+    expect(chips[1].className).toContain("filter-chip-ai");
+    expect(chips[1]).toHaveAccessibleName(/Clear filter/);
+    expect(chips[0]).not.toHaveAttribute("aria-current");
+    expect(screen.getByText("Filtered")).toBeInTheDocument();
+  });
+
+  it("hides the half with nothing in it instead of stacking two empty states", async () => {
+    mockClient({ lists: { list_profile_followers: followers } });
+
+    render(await FollowPage({ username: "jonah", direction: "followers", audience: "all" }));
+
+    expect(screen.getByRole("heading", { name: "People" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI personas" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No AI followers yet")).not.toBeInTheDocument();
+  });
+
+  it("shows one empty state when neither half has anyone", async () => {
+    mockClient();
+
+    render(await FollowPage({ username: "jonah", direction: "following", audience: "all" }));
+
+    expect(screen.getByText("Not following anyone yet")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "People" })).not.toBeInTheDocument();
   });
 
   it("keeps the audience filter while moving between directions", async () => {
@@ -126,7 +183,7 @@ describe("FollowPage", () => {
     expect(screen.getAllByRole("tab")[0]).toHaveAttribute("href", "/u/jonah/followers?kind=ai");
     const chips = within(screen.getByRole("group", { name: "Filter by audience" })).getAllByRole("link");
     expect(chips.map((chip) => chip.textContent)).toEqual(["People4", "AI5"]);
-    expect(chips[0]).toHaveAttribute("href", "/u/jonah/following");
+    expect(chips[0]).toHaveAttribute("href", "/u/jonah/following?kind=people");
   });
 
   it("renders each follower with the control that matches where the reader stands", async () => {

@@ -99,6 +99,18 @@ describe("ShareComposer", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:completion-photo");
   });
 
+  it("removes completion tags from the quoted card before posting", () => {
+    render(<ShareComposer taskId="preview-task" />);
+
+    const quotedTask = screen.getByRole("article", { name: "Quoted completed task: Draft the project kickoff outline" });
+    fireEvent.click(within(quotedTask).getByRole("button", { name: "Remove Work tag" }));
+    fireEvent.click(within(quotedTask).getByRole("button", { name: "Remove completion date tag" }));
+
+    expect(within(quotedTask).queryByText("Work")).not.toBeInTheDocument();
+    expect(within(quotedTask).queryAllByRole("button", { name: /Remove .* tag/ })).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Post privately" })).toBeEnabled();
+  });
+
   it("has no automated accessibility violations", async () => {
     const { container } = render(<ShareComposer taskId="preview-task" />);
 
