@@ -7,9 +7,14 @@ import {
   canPlanPersonaEngagement,
   fallbackReply,
   personaEngagementChannels,
-  resolveAIReply,
 } from "@/lib/domain";
-import { checkReplyDiversity } from "@/lib/domain/reply-diversity";
+import { checkReplyDiversity, sanitizePersonaReply } from "@/lib/domain/reply-diversity";
+import {
+  buildThreadConversation,
+  resolveThreadConversationLimits,
+  threadPostSummary,
+  type ThreadConversationContext,
+} from "@/lib/domain/thread-conversation";
 import { planPersonaEngagement, type EngagementAction, type EngagementLimits } from "@/lib/domain/persona-engagement";
 import { classifyTask } from "@/lib/domain/task-affinity";
 import { getAIProvider, PERSONA_ENGAGEMENT_PROMPT_VERSION, type AIProvider } from "./provider";
@@ -111,27 +116,41 @@ async function enhanceLegacyReply(job: AIJob, lease: string, provider: AIProvide
   if (!ids.replyId || !ids.postId || !ids.companionId) throw new Error("Malformed job payload.");
   const [{ data: reply }, { data: post }, { data: companion }, { count: reports }] = await Promise.all([
     admin.from("social_replies").select("id, content, content_status").eq("id", ids.replyId).single(),
-    admin.from("social_posts").select("id, content, content_status, task_title, category").eq("id", ids.postId).single(),
-    admin.from("social_companions").select("id, name, personality, writing_style, safety_instructions, active").eq("id", ids.companionId).single(),
+    admin.from("social_posts").select("id, author_id, content, content_status, task_title, category, streak, xp_earned").eq("id", ids.postId).single(),
+    admin.from("social_companions").select(ENGAGEMENT_COMPANION_COLUMNS).eq("id", ids.companionId).single(),
     admin.from("content_reports").select("id", { count: "exact", head: true }).eq("post_id", ids.postId),
   ]);
   if (!reply || !post || !companion || reply.content_status !== "active" || post.content_status !== "active" || !companion.active || reports) {
     throw new Error("Engagement target is unavailable, reported, or unsafe.");
   }
-  const generated = await resolveAIReply({
-    fallback: reply.content,
-    generate: () => provider.generateReply({
+  const typedPost = post as ActionPost;
+  const typedCompanion = companion as EngagementCompanion;
+  const context = await loadGenerationContext(ids.postId, ids.companionId);
+  const taskCategory = classifyTask({ taskTitle: typedPost.task_title, category: typedPost.category, content: typedPost.content });
+  const generated = await generateDistinctText({
+    siblingReplies: context.siblingReplies,
+    personaRecentReplies: context.recentReplies,
+    sourceTexts: [typedPost.task_title, typedPost.content],
+    generate: (avoid) => provider.generateReply({
       companionName: companion.name,
       personality: companion.personality,
       writingStyle: companion.writing_style,
       safetyInstructions: companion.safety_instructions,
-      postContent: post.content,
-      taskTitle: post.task_title,
-      category: post.category,
+      replyStyle: typedCompanion.reply_style,
+      toneRules: typedCompanion.tone_rules,
+      avoidRules: typedCompanion.avoid_rules,
+      postContent: typedPost.content,
+      taskTitle: typedPost.task_title,
+      category: typedPost.category,
+      taskCategory,
+      streak: typedPost.streak,
+      xpEarned: typedPost.xp_earned,
+      siblingReplies: context.siblingReplies,
+      recentReplies: avoid,
     }),
   });
-  if (generated.source !== "provider") {
-    throw new Error(`Provider enhancement failed; fallback remains visible. ${generated.error ?? "No provider detail."}`);
+  if (!generated.content) {
+    throw new Error(`Provider enhancement failed quality checks; fallback remains visible. ${generated.rejectionReason ?? "No provider detail."}`);
   }
   const { data: finalized, error } = await admin.rpc("finalize_ai_reply_job", {
     p_job_id: job.id,
@@ -183,6 +202,35 @@ async function loadGenerationContext(postId: string, companionId: string) {
 }
 
 /**
+ * The conversation one persona is having in a single branch of a thread.
+ *
+ * Returns null when this character has never spoken in that branch, which is
+ * how a first reaction to a task stays a reaction: only a persona answering its
+ * own conversation partner gets the conversational prompt.
+ */
+async function loadThreadConversation(targetReplyId: string, companionId: string) {
+  const limits = resolveThreadConversationLimits();
+  const { data, error } = await createAdminClient().rpc("get_reply_thread_context", {
+    p_reply_id: targetReplyId,
+    // One extra turn beyond the window so the trim is a real choice rather than
+    // whatever the database happened to return.
+    p_limit: limits.contextMessages + 2,
+  });
+  if (error) throw error;
+  const context = data as ThreadConversationContext | null;
+  if (!context?.messages?.length) return null;
+
+  const conversation = buildThreadConversation(context, companionId, limits);
+  if (!conversation.conversational || !conversation.turns.length) return null;
+  return {
+    turns: conversation.turns,
+    post: threadPostSummary(context, limits),
+    depth: context.depth,
+    personaTurns: conversation.personaTurns,
+  };
+}
+
+/**
  * Generates, screens, and regenerates once. A near-duplicate of a sibling reply
  * is worse than silence: it is visible proof that the characters are one voice.
  */
@@ -190,23 +238,43 @@ async function generateDistinctText({
   generate,
   siblingReplies,
   personaRecentReplies,
+  sourceTexts,
+  maxCharacters = 280,
 }: {
   generate: (avoid: string[]) => Promise<string>;
   siblingReplies: string[];
   personaRecentReplies: string[];
+  sourceTexts: Array<string | null | undefined>;
+  maxCharacters?: number;
 }) {
   // The rejected draft is fed back as something to avoid, so the retry is a
   // genuine second attempt rather than the same prompt rolled again.
   const avoid = [...personaRecentReplies];
   let rejectionReason: string | undefined;
   for (let attempts = 1; attempts <= 2; attempts += 1) {
-    const content = (await generate(avoid)).trim();
-    const verdict = checkReplyDiversity({ content, siblingReplies, personaRecentReplies });
-    if (verdict.ok) return { content: content as string | null, attempts, rejectionReason: undefined as string | undefined };
-    rejectionReason = verdict.reason;
-    avoid.push(content);
+    try {
+      const content = sanitizePersonaReply(await generate(avoid));
+      const verdict = checkReplyDiversity({ content, siblingReplies, personaRecentReplies, sourceTexts, maxCharacters });
+      if (verdict.ok) return { content: content as string | null, attempts, rejectionReason: undefined as string | undefined };
+      rejectionReason = verdict.reason;
+      avoid.push(content);
+    } catch (error) {
+      rejectionReason = error instanceof Error ? error.message : "provider_error";
+    }
   }
   return { content: null as string | null, attempts: 2, rejectionReason };
+}
+
+function usableFallback(
+  candidates: Array<string | null | undefined>,
+  sourceTexts: Array<string | null | undefined>,
+) {
+  for (const candidate of candidates) {
+    if (!candidate?.trim()) continue;
+    const content = sanitizePersonaReply(candidate);
+    if (checkReplyDiversity({ content, sourceTexts }).ok) return content;
+  }
+  return "Noted. That one counts.";
 }
 
 async function performSocialAction(job: AIJob, lease: string, provider: AIProvider) {
@@ -273,6 +341,12 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
     xpEarned: post.xp_earned,
   };
   const context = await loadGenerationContext(planned.post_id, planned.companion_id);
+  // A reply aimed at another reply may be a turn in a conversation this persona
+  // is already having. Loading the branch decides which of the two prompts is
+  // right: react to the task, or answer what was just said.
+  const conversation = planned.kind === "reply" && planned.target_reply_id
+    ? await loadThreadConversation(planned.target_reply_id, planned.companion_id)
+    : null;
 
   if (planned.kind === "quote") {
     const author = post.author_id
@@ -284,6 +358,8 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
     const attempt = await generateDistinctText({
       siblingReplies: context.recentQuotes,
       personaRecentReplies: context.recentQuotes,
+      sourceTexts: [task.taskTitle, task.postContent],
+      maxCharacters: 320,
       generate: (avoid) => provider.generateQuoteRepost({
         ...voice,
         ...task,
@@ -318,19 +394,31 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
     return { id: job.id, status: "quoted" };
   }
 
-  const fallback = (planned.fallback_content?.trim()
-    || companion.fallback_replies[0]?.trim()
-    || fallbackReply(companion, { taskTitle: post.task_title, category: post.category })).slice(0, 500);
+  const fallback = usableFallback([
+    planned.fallback_content,
+    companion.fallback_replies[0],
+    fallbackReply(companion, { taskTitle: post.task_title, category: post.category }),
+  ], [task.taskTitle, task.postContent]);
   const attempt = await generateDistinctText({
     siblingReplies: context.siblingReplies,
     personaRecentReplies: context.recentReplies,
-    generate: (avoid) => provider.generateReply({
-      ...voice,
-      ...task,
-      replyStyle: companion.reply_style,
-      siblingReplies: context.siblingReplies,
-      recentReplies: avoid,
-    }),
+    sourceTexts: [task.taskTitle, task.postContent],
+    generate: (avoid) => conversation
+      ? provider.generateThreadReply({
+        ...voice,
+        replyStyle: companion.reply_style,
+        post: conversation.post,
+        taskCategory,
+        turns: conversation.turns,
+        recentReplies: avoid,
+      })
+      : provider.generateReply({
+        ...voice,
+        ...task,
+        replyStyle: companion.reply_style,
+        siblingReplies: context.siblingReplies,
+        recentReplies: avoid,
+      }),
   }).catch((error: unknown) => ({
     content: null,
     attempts: 1,
@@ -345,6 +433,7 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
     logEngagement({
       event: "reply_rejected", engagementId, postId: planned.post_id, companionId: planned.companion_id,
       taskCategory, attempts: attempt.attempts, reason, promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION,
+      mode: conversation ? "conversation" : "reaction", threadDepth: conversation?.depth,
     });
     const { error } = await admin.rpc("cancel_social_action", { p_job_id: job.id, p_lease_token: lease, p_reason: reason });
     if (error) throw error;
@@ -363,6 +452,7 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
     event: "reply_published", engagementId, postId: planned.post_id, companionId: planned.companion_id,
     taskCategory, source: planned.source, attempts: attempt.attempts,
     generated: Boolean(attempt.content), promptVersion: PERSONA_ENGAGEMENT_PROMPT_VERSION,
+    mode: conversation ? "conversation" : "reaction", threadDepth: conversation?.depth,
   });
   return { id: job.id, status: attempt.content ? "replied" : "fallback" };
 }

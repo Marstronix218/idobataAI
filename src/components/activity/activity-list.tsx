@@ -20,6 +20,7 @@ const kindIcon: Record<NotificationKind, { Icon: typeof Heart; className: string
   reaction: { Icon: Heart, className: "fill-current text-rose-500" },
   repost: { Icon: Repeat2, className: "text-emerald-500" },
   reply: { Icon: MessageCircle, className: "text-community" },
+  thread_reply: { Icon: MessageCircle, className: "text-community" },
   quote: { Icon: Repeat2, className: "text-emerald-500" },
   follow: { Icon: UserPlus, className: "text-brand" },
   follow_request: { Icon: UserPlus, className: "text-brand" },
@@ -165,7 +166,10 @@ function ActivityRow({ group, onOpen, onOpenThread, onNotice }: {
   onOpenThread: (postId: string) => void;
   onNotice: (message: string) => void;
 }) {
-  const { Icon, className: iconClassName } = kindIcon[group.kind];
+  // A kind this build has never heard of still has to render: the database can
+  // start writing a new one before this bundle is deployed, and a notification
+  // list that throws is worse than one that shows a generic row.
+  const { Icon, className: iconClassName } = kindIcon[group.kind] ?? kindIcon.system;
   const [lead, ...rest] = group.actors;
   const shown = group.actors.slice(0, MAX_SHOWN_AVATARS);
   const quotePost = group.kind === "quote" ? group.item.social_posts : null;

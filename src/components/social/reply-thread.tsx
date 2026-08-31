@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { Heart, MessageCircle, MoreHorizontal } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { AIBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
+import { awaitsPersonaThreadReply } from "@/lib/domain/thread-conversation";
 import type { SocialReaction, ThreadReply } from "@/types";
 
 // `username` is carried alongside the display name because a reply row renders
@@ -26,6 +27,14 @@ const MAX_VISUAL_DEPTH = 4;
 // burying everything under it.
 const COLLAPSE_AFTER = 3;
 const VISIBLE_WHEN_COLLAPSED = 2;
+
+// Answering a persona is expected to be answered back, and the reply is written
+// by a background job rather than by the request that posted it. The thread
+// refetches on this schedule so the response appears on its own, then gives up:
+// a persona that declined to answer must not leave a spinner running forever.
+const PERSONA_REPLY_POLL_DELAYS_MS = [2000, 3000, 4000, 6000, 8000, 10000];
+
+export type PendingPersonaReply = { replyId: string; name: string; avatarUrl: string | null };
 
 export type ThreadNode = ThreadReply & { depth: number; children: ThreadNode[] };
 
@@ -166,6 +175,7 @@ type RowProps = {
   currentUserId: string | null;
   replyAuthor: ReplyAuthor | null;
   busyId: string | null;
+  pendingPersonaReply: PendingPersonaReply | null;
   replyingTo: string | null;
   setReplyingTo: (id: string | null) => void;
   onLike: (reply: ThreadReply) => void;
@@ -175,7 +185,7 @@ type RowProps = {
 };
 
 function ReplyRow(props: RowProps) {
-  const { node, currentUserId, replyAuthor, busyId, replyingTo, setReplyingTo, onLike, onSubmitReply, onDelete, onReport } = props;
+  const { node, currentUserId, replyAuthor, busyId, pendingPersonaReply, replyingTo, setReplyingTo, onLike, onSubmitReply, onDelete, onReport } = props;
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { name, handle, avatarUrl, href, ai } = replyIdentity(node);
@@ -186,7 +196,8 @@ function ReplyRow(props: RowProps) {
   const collapsed = node.children.length > COLLAPSE_AFTER && !expanded;
   const shownChildren = collapsed ? node.children.slice(0, VISIBLE_WHEN_COLLAPSED) : node.children;
   const hiddenCount = node.children.length - shownChildren.length;
-  const showConnector = shownChildren.length > 0 || composing;
+  const awaitingPersona = pendingPersonaReply?.replyId === node.id;
+  const showConnector = shownChildren.length > 0 || composing || awaitingPersona;
 
   return <article className="flex gap-2.5" aria-label={`Reply by ${name}`}>
     <div className="flex flex-col items-center">
@@ -256,6 +267,16 @@ function ReplyRow(props: RowProps) {
         {shownChildren.map((child) => <ReplyRow key={child.id} {...props} node={child} />)}
       </div>}
 
+      {/* The answer is generated after the request that posted this reply has
+          already returned, so the thread says so rather than looking finished. */}
+      {awaitingPersona && <p className="mt-2 flex items-center gap-2 text-xs text-muted" aria-live="polite">
+        <Avatar
+          size="sm" ai initials={initials(pendingPersonaReply.name)}
+          avatarUrl={pendingPersonaReply.avatarUrl} name={pendingPersonaReply.name}
+        />
+        {pendingPersonaReply.name} is replying…
+      </p>}
+
       {hiddenCount > 0 && <button type="button" className="btn btn-ghost mt-2 min-h-9 px-2 text-xs font-bold text-community" onClick={() => setExpanded(true)}>
         Show {hiddenCount} more {hiddenCount === 1 ? "reply" : "replies"}
       </button>}
@@ -273,7 +294,50 @@ export function ReplyThread({ postId, replies, currentUserId, replyAuthor, onCha
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingPersonaReply, setPendingPersonaReply] = useState<PendingPersonaReply | null>(null);
   const tree = useMemo(() => buildReplyTree(replies), [replies]);
+  // Read through refs so a watch started by one render keeps writing to the
+  // current thread instead of closing over the list it was started with.
+  const onChangeRef = useRef(onChange);
+  const repliesRef = useRef(replies);
+  useEffect(() => { onChangeRef.current = onChange; repliesRef.current = replies; }, [onChange, replies]);
+  const watchRef = useRef<{ cancelled: boolean } | null>(null);
+  useEffect(() => () => { if (watchRef.current) watchRef.current.cancelled = true; }, []);
+
+  /**
+   * Waits for the persona to answer, without blocking anything.
+   *
+   * The reply is already posted and visible when this starts; every refetch is
+   * the server's own view of the thread, so a failed poll, a persona that
+   * declines to answer, and a generation that fails all end the same way: the
+   * indicator disappears and the conversation is exactly as the user left it.
+   */
+  async function watchForPersonaReply(userReplyId: string, persona: Omit<PendingPersonaReply, "replyId">) {
+    if (isPreviewMode) return;
+    if (watchRef.current) watchRef.current.cancelled = true;
+    const watch = { cancelled: false };
+    watchRef.current = watch;
+    setPendingPersonaReply({ replyId: userReplyId, ...persona });
+
+    for (const delay of PERSONA_REPLY_POLL_DELAYS_MS) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (watch.cancelled) return;
+      try {
+        const fetched = await apiRequest<ThreadReply[]>(`/api/posts/${postId}/replies`);
+        if (watch.cancelled) return;
+        // Anything written locally since this poll was issued is kept, so a
+        // reply posted while the request was in flight cannot blink out of the
+        // thread and reappear on the next tick.
+        const local = repliesRef.current.filter((reply) => !fetched.some((row) => row.id === reply.id));
+        onChangeRef.current(local.length ? [...fetched, ...local] : fetched);
+        if (fetched.some((reply) => reply.parent_reply_id === userReplyId && reply.companion_id)) break;
+      } catch {
+        // A refused or offline poll is not worth a notice: the thread already
+        // shows everything the user wrote, and the next attempt may succeed.
+      }
+    }
+    if (!watch.cancelled) setPendingPersonaReply(null);
+  }
 
   function patch(replyId: string, changes: Partial<ThreadReply>) {
     onChange(replies.map((reply) => reply.id === replyId ? { ...reply, ...changes } : reply));
@@ -305,6 +369,10 @@ export function ReplyThread({ postId, replies, currentUserId, replyAuthor, onCha
       onChange([...replies.map((reply) => reply.id === parent.id ? { ...reply, reply_count: reply.reply_count + 1 } : reply), saved]);
       setReplyingTo(null);
       onNotice(`Reply posted.${isPreviewMode ? " Preview only." : ""}`);
+      const persona = parent.social_companions;
+      if (persona && awaitsPersonaThreadReply({ parentIsPersona: true, authoredByViewer: true })) {
+        void watchForPersonaReply(saved.id, { name: persona.name, avatarUrl: persona.avatar_url });
+      }
     } catch (error) { onNotice(errorMessage(error)); }
     finally { setBusyId(null); }
   }
@@ -342,6 +410,7 @@ export function ReplyThread({ postId, replies, currentUserId, replyAuthor, onCha
       currentUserId={currentUserId}
       replyAuthor={replyAuthor}
       busyId={busyId}
+      pendingPersonaReply={pendingPersonaReply}
       replyingTo={replyingTo}
       setReplyingTo={setReplyingTo}
       onLike={(reply) => void toggleLike(reply)}

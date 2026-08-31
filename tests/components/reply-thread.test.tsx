@@ -61,6 +61,67 @@ describe("buildReplyTree", () => {
   });
 });
 
+describe("Human and AI conversation threads", () => {
+  function aiReply(id: string, parentReplyId: string | null, name: string): ThreadReply {
+    return {
+      ...reply(id, parentReplyId),
+      author_id: null,
+      companion_id: `companion-${name.toLowerCase()}`,
+      is_ai_generated: true,
+      user_profiles: null,
+      social_companions: { name, slug: name.toLowerCase(), avatar_url: null },
+    };
+  }
+
+  it("keeps a multi-turn exchange in one branch, alternating the two voices", () => {
+    const tree = buildReplyTree([
+      aiReply("rika-1", null, "Rika"),
+      reply("mina-1", "rika-1"),
+      aiReply("rika-2", "mina-1", "Rika"),
+      reply("mina-2", "rika-2"),
+    ]);
+
+    const chain = [];
+    for (let node = tree[0]; node; node = node.children[0]) {
+      chain.push({ id: node.id, ai: replyIdentity(node).ai, depth: node.depth });
+    }
+
+    expect(chain).toEqual([
+      { id: "rika-1", ai: true, depth: 0 },
+      { id: "mina-1", ai: false, depth: 1 },
+      { id: "rika-2", ai: true, depth: 2 },
+      { id: "mina-2", ai: false, depth: 3 },
+    ]);
+  });
+
+  it("keeps two personas' conversations on the same post apart", () => {
+    const tree = buildReplyTree([
+      aiReply("rika-1", null, "Rika"),
+      aiReply("vex-1", null, "Vex"),
+      reply("mina-to-rika", "rika-1"),
+      reply("mina-to-vex", "vex-1"),
+      aiReply("rika-2", "mina-to-rika", "Rika"),
+      aiReply("vex-2", "mina-to-vex", "Vex"),
+    ]);
+
+    expect(tree.map((node) => node.id)).toEqual(["rika-1", "vex-1"]);
+    expect(tree[0].children[0].children.map((node) => replyIdentity(node).name)).toEqual(["Rika"]);
+    expect(tree[1].children[0].children.map((node) => replyIdentity(node).name)).toEqual(["Vex"]);
+  });
+
+  it("stops indenting a long back-and-forth so it stays readable on a phone", () => {
+    const turns = ["rika-1", "mina-1", "rika-2", "mina-2", "rika-3", "mina-3", "rika-4"];
+    const tree = buildReplyTree(turns.map((id, index) => index % 2 === 0
+      ? aiReply(id, index ? turns[index - 1] : null, "Rika")
+      : reply(id, turns[index - 1])));
+
+    const depths = [];
+    for (let node = tree[0]; node; node = node.children[0]) depths.push(node.depth);
+
+    expect(depths).toEqual([0, 1, 2, 3, 4, 4, 4]);
+  });
+});
+
 describe("replyIdentity", () => {
   it("links AI replies to the canonical AI Personas route", () => {
     expect(replyIdentity({

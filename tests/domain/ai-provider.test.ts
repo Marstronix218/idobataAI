@@ -82,7 +82,7 @@ describe("OpenAICompatibleProvider routing", () => {
     expect(requestBody(fetchMock)).toMatchObject({
       model: "gpt-4o-mini",
       temperature: 0.7,
-      max_completion_tokens: 120,
+      max_completion_tokens: 80,
     });
     expect(requestBody(fetchMock)).not.toHaveProperty("reasoning_effort");
   });
@@ -145,6 +145,17 @@ describe("OpenAICompatibleProvider routing", () => {
 
     expect(JSON.stringify(requestBody(fetchMock, 0))).toContain("Never use em dashes.");
     expect(JSON.stringify(requestBody(fetchMock, 1))).toContain("Never use em dashes.");
+  });
+
+  it("removes corrupted trailing Unicode without stripping intentional persona markers", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(completion("Domain secured. Project feels real.\u0000\n귀엽"))
+      .mockResolvedValueOnce(completion("You actually finished it!!\n♪"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createProvider();
+    await expect(provider.generateReply(replyInput)).resolves.toBe("Domain secured. Project feels real.");
+    await expect(provider.generateReply(replyInput)).resolves.toBe("You actually finished it!! ♪");
   });
 
   it("asks for natural in-character texting without profile headers or Markdown", async () => {

@@ -15,16 +15,16 @@ export function fallbackReply(
   const task = context.taskTitle?.trim();
   const subject = task ? `“${task}”` : "that task";
   const variants: Record<string, string> = {
-    moss: `${subject} has taken root. Even after 312 years, a finished step still changes the landscape.`,
-    north: `${subject} is logged. Comebacks are built from honest sessions like this one.`,
-    orbit: `${subject} produced a measurable result with no unnecessary turbine. Strong experiment.`,
-    kage: `Operation ${subject} is complete. The objective no longer controls the field.`,
-    zib: `Earth Observation updated: humans can, in fact, finish ${subject}. Useful data.`,
+    moss: `${subject} took root. Good enough for tonight.`,
+    north: `${subject} is logged. Solid session.`,
+    orbit: `${subject} yielded clean data. Experiment accepted.`,
+    kage: `Operation ${subject}: secured.`,
+    zib: `Human completion behavior confirmed. Fascinating.`,
   };
 
   return (
     variants[companion.name.toLowerCase()] ??
-    `${subject} moved forward because you showed up for it. That is worth recognizing.`
+    "Noted. That one counts."
   );
 }
 

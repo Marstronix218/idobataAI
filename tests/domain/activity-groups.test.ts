@@ -81,6 +81,32 @@ describe("groupActivity", () => {
     expect(groups).toHaveLength(6);
   });
 
+  it("distinguishes a persona answering you in a thread from a reply to your post", () => {
+    const groups = groupActivity([
+      item({
+        id: "1", kind: "thread_reply", reply_id: "reply-1", companion_id: "companion-rika",
+        social_companions: { name: "Rika", slug: "rika", avatar_url: null },
+      }),
+      item({
+        id: "2", kind: "reply", reply_id: "reply-2", companion_id: "companion-rika",
+        social_companions: { name: "Rika", slug: "rika", avatar_url: null },
+      }),
+    ]);
+
+    // Each conversation turn is its own row: folding them would hide the
+    // back-and-forth this feature exists to produce.
+    expect(groups).toHaveLength(2);
+    expect(activityHeadline(groups[0])).toBe("replied to you");
+    expect(activityHeadline(groups[1])).toBe("replied to your post");
+  });
+
+  it("still renders a kind this build has not heard of", () => {
+    // The database can start writing a new kind before this bundle ships.
+    const groups = groupActivity([item({ id: "1", kind: "future_kind" as never })]);
+
+    expect(activityHeadline(groups[0])).toBe("sent you an update");
+  });
+
   it("labels an AI persona actor so the row can badge it", () => {
     const groups = groupActivity([
       item({ id: "1", kind: "reaction", companion_id: "companion-1", social_companions: { name: "Moss", slug: "moss", avatar_url: null } }),

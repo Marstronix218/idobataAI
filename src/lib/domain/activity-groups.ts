@@ -101,6 +101,7 @@ export function groupActivity(items: ActivityItem[]): ActivityGroup[] {
 export function activityHeadline(group: ActivityGroup) {
   const verb = {
     reply: "replied to your post",
+    thread_reply: "replied to you",
     reaction: "liked your post",
     repost: "reposted your post",
     quote: "quoted your post",
@@ -108,7 +109,7 @@ export function activityHeadline(group: ActivityGroup) {
     follow_request: "requested to follow you",
     follow_accepted: "accepted your follow request",
     system: "shared an update about your progress",
-  }[group.kind];
+  }[group.kind] ?? "sent you an update";
   const others = group.actors.length - 1;
   if (others <= 0) return verb;
   return `and ${others} ${others === 1 ? "other" : "others"} ${verb}`;

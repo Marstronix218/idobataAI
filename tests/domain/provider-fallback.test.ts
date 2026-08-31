@@ -35,6 +35,14 @@ describe("fallbackReply", () => {
 
     expect(fallbackReply(momo, context)).not.toBe(fallbackReply(kai, context));
   });
+
+  it("keeps every built-in fallback compact and non-coaching", () => {
+    for (const name of ["Moss", "North", "Orbit", "Kage", "Zib", "Momo"]) {
+      const content = fallbackReply({ name }, context);
+      expect(content.split(/\s+/).length).toBeLessThanOrEqual(25);
+      expect(content).not.toMatch(/keep it up|you've got this|because you showed up/i);
+    }
+  });
 });
 
 describe("resolveAIReply", () => {

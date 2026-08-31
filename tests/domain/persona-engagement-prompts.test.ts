@@ -63,6 +63,15 @@ describe("generateReply prompt", () => {
     expect(system).toContain("Mission vocabulary; Never wink at the reader");
     expect(system).toContain("Emoji; Explaining the bit");
     expect(system).toContain("Stay clearly fictional and age-appropriate.");
+    expect(system).toContain("React instead of summarizing the task");
+    expect(system).toContain("Usually write 5 to 25 words");
+    expect(system).toContain("Do not explain your joke or metaphor");
+    expect(system).toContain("Do not force a signature format, catchphrase, emoji, or persona gimmick");
+    expect(system).toContain("Match the energy to the task");
+    expect(system).toContain("Questions are optional");
+    expect(system).toContain("Avoid essay language such as merely, therefore, thus");
+    expect(system).toContain("Vary the opening, sentence shape, punctuation, catchphrases, and joke structure");
+    expect(system).toContain("Character habits to draw from selectively, not a checklist");
   });
 
   it("forbids the generic praise the diversity filter would reject anyway", async () => {
@@ -123,6 +132,9 @@ describe("generateQuoteRepost prompt", () => {
     expect(system).toContain("Files the completion as an objective cleared before extraction.");
     expect(system).toContain("Write commentary, not a reply.");
     expect(system).toMatch(/stand alone/i);
+    expect(system).toContain("Choose one character-specific angle and stop");
+    expect(system).toContain("Usually write 5 to 30 words");
+    expect(system).toContain("react or reinterpret instead of restating");
     expect(JSON.parse(body.messages[1].content)).toMatchObject({
       original_author: "@mina",
       completed_task: "Clean the apartment",

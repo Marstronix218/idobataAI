@@ -1,3 +1,5 @@
+import type { ThreadConversationContext } from "@/lib/domain/thread-conversation";
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type TaskVisibility = "private" | "public";
@@ -360,7 +362,9 @@ export interface AIJob {
 }
 
 export type NotificationKind =
-  | "reply" | "reaction" | "repost" | "quote"
+  // `thread_reply` is someone answering you inside a thread, which reads
+  // differently from someone replying to your post.
+  | "reply" | "thread_reply" | "reaction" | "repost" | "quote"
   | "follow" | "follow_request" | "follow_accepted" | "system";
 
 export interface Notification {
@@ -568,6 +572,12 @@ export interface Database {
         Returns: string;
       };
       get_post_engagement_context: { Args: { p_post_id: string }; Returns: PostEngagementContext | null };
+      get_reply_thread_context: {
+        Args: { p_reply_id: string; p_limit?: number };
+        Returns: ThreadConversationContext | null;
+      };
+      reply_thread_path: { Args: { p_reply_id: string }; Returns: Array<{ reply_id: string; depth: number }> };
+      app_tuning_value: { Args: { p_key: string; p_default: number }; Returns: number };
       cancel_social_action: { Args: { p_job_id: string; p_lease_token: string; p_reason: string }; Returns: boolean };
       reconcile_persona_engagements: { Args: { p_date?: string }; Returns: number };
       finalize_social_action: { Args: { p_job_id: string; p_lease_token: string; p_content?: string | null }; Returns: boolean };

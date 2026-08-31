@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { checkReplyDiversity, contentSimilarity, isGenericPraise } from "@/lib/domain/reply-diversity";
+import {
+  checkReplyDiversity,
+  contentSimilarity,
+  isGenericPraise,
+  sanitizePersonaReply,
+} from "@/lib/domain/reply-diversity";
 
 describe("isGenericPraise", () => {
   it("catches the praise that could come from any character", () => {
@@ -33,7 +38,7 @@ describe("contentSimilarity", () => {
 });
 
 describe("checkReplyDiversity", () => {
-  const inCharacter = "Sector secured. Disorder eliminated. Acceptable work.";
+  const inCharacter = "Sector secured. Disorder eliminated.";
 
   it("accepts a distinct in-character reply", () => {
     expect(checkReplyDiversity({
@@ -70,5 +75,86 @@ describe("checkReplyDiversity", () => {
     expect(contentSimilarity(content, prior[0])).toBeLessThan(0.55);
     expect(checkReplyDiversity({ content, siblingReplies: prior }).ok).toBe(false);
     expect(checkReplyDiversity({ content, personaRecentReplies: prior }).ok).toBe(true);
+  });
+
+  it.each([
+    ["too_long", Array.from({ length: 41 }, () => "word").join(" ")],
+    ["too_long", "x".repeat(281)],
+    ["multiple_paragraphs", "Room restored.\n\nThe dust has retreated."],
+    ["too_many_sentences", "Room restored. Dust defeated. Peace achieved."],
+    ["markdown", "**Room restored.**"],
+    ["model_artifact", "Reply: Room restored."],
+    ["unfinished_sentence", "The room is finally"],
+    ["malformed_unicode", "Room restored.\uFFFD"],
+  ])("rejects %s output before it can be stored", (reason, content) => {
+    expect(checkReplyDiversity({ content })).toMatchObject({ ok: false, reason });
+  });
+
+  it("rejects assistant-like task summaries but allows a direct reaction", () => {
+    const sourceTexts = ["Cleaned my entire apartment before dinner."];
+    expect(checkReplyDiversity({
+      content: "You successfully completed the task of cleaning your apartment.",
+      sourceTexts,
+    })).toMatchObject({ ok: false, reason: "task_summary" });
+    expect(checkReplyDiversity({ content: "Okay, the place can breathe again.", sourceTexts }))
+      .toMatchObject({ ok: true });
+  });
+
+  it("rejects a repeated opening even when the rest of the wording changes", () => {
+    expect(checkReplyDiversity({
+      content: "Objective secured. Laundry no longer controls the field.",
+      personaRecentReplies: ["Objective secured. Extraction can begin."],
+    })).toMatchObject({ ok: false, reason: "repeats_persona" });
+  });
+});
+
+describe("sanitizePersonaReply", () => {
+  it("removes control corruption and a dangling non-Latin artifact line", () => {
+    expect(sanitizePersonaReply("Domain secured. Project feels real.\u0000\n귀엽"))
+      .toBe("Domain secured. Project feels real.");
+  });
+
+  it("keeps intentional emoji and decorative voice markers", () => {
+    expect(sanitizePersonaReply("You actually finished it!!\n♪"))
+      .toBe("You actually finished it!! ♪");
+  });
+});
+
+describe("persona and task coverage", () => {
+  const samples = [
+    ["Ren", "studied 60 minutes", "An hour, properly used. Good."],
+    ["Rika", "finished essay", "okay fine, the final draft survived 😭"],
+    ["Kage", "cleaned room", "Area secured. Disorder eliminated."],
+    ["North", "went for a run", "Solid run. Let your legs settle."],
+    ["Kumo", "fixed bug", "bug deleted. production may resume pretending to be stable"],
+    ["Ember", "cooked dinner", "Dinner's warm. That's the right ending."],
+    ["Sora", "practiced drawing", "The lines look less afraid now."],
+    ["Orbit", "bought a domain", "Domain acquired. Project legitimacy increased by 43%."],
+    ["Hikari", "submitted thesis", "You actually finished it!! Go breathe for a minute ♪"],
+    ["Zib", "did laundry", "Textile purification complete. Human nesting conditions improved."],
+  ] as const;
+
+  it.each(samples)("accepts a short natural %s reaction to %s", (_persona, task, content) => {
+    expect(checkReplyDiversity({ content, sourceTexts: [task] })).toMatchObject({ ok: true });
+  });
+
+  it("keeps several personas meaningfully different on the same task", () => {
+    const replies = [
+      "Domain acquired. Project legitimacy increased by 43%.",
+      "okayyy, owning the domain makes it official now 😭",
+      "Good. One less loose end.",
+      "Objective secured.",
+      "It has a home now. That's nice.",
+      "congrats, now you have somewhere official to deploy the bugs",
+    ];
+
+    for (const reply of replies) {
+      expect(checkReplyDiversity({ content: reply, sourceTexts: ["got idobata-ai.com"] }).ok).toBe(true);
+    }
+    for (let left = 0; left < replies.length; left += 1) {
+      for (let right = left + 1; right < replies.length; right += 1) {
+        expect(contentSimilarity(replies[left], replies[right])).toBeLessThan(0.4);
+      }
+    }
   });
 });
