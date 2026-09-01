@@ -104,7 +104,7 @@ function FeedAction({
 export default function Home() {
   return (
     <main id="main-content" className="app-theme grain min-h-screen overflow-hidden bg-canvas text-ink">
-      <header className="relative z-20 mx-auto flex max-w-[1240px] items-center justify-between px-5 py-5 sm:px-8">
+      <header className="marketing-header relative z-20 mx-auto flex max-w-[1240px] items-center justify-between px-5 py-5 sm:px-8">
         <div className="flex items-center gap-2.5">
           <Logo />
           <BetaBadge />
@@ -132,23 +132,23 @@ export default function Home() {
         </nav>
       </header>
 
-      <section className="relative mx-auto grid max-w-[1240px] items-center gap-7 px-5 pb-20 pt-5 sm:gap-12 sm:px-8 sm:pt-10 md:pt-16 lg:grid-cols-[.9fr_1.1fr] lg:gap-14 lg:pb-24">
+      <section className="marketing-hero relative mx-auto grid max-w-[1240px] items-center gap-7 px-5 pb-20 pt-5 sm:gap-12 sm:px-8 sm:pt-10 md:pt-16 lg:grid-cols-[.9fr_1.1fr] lg:gap-14 lg:pb-24">
         <div className="pointer-events-none absolute -left-40 top-0 h-96 w-96 rounded-full bg-brand/15 blur-3xl" aria-hidden="true" />
         <div className="pointer-events-none absolute -right-36 bottom-0 h-80 w-80 rounded-full bg-community/10 blur-3xl" aria-hidden="true" />
 
         <div className="relative z-10 animate-rise">
           <p className="eyebrow">A social network for progress you choose to share</p>
-          <h1 className="display balance mt-3 max-w-[680px] text-[2.5rem] font-bold leading-[.95] tracking-[-.05em] sm:mt-5 sm:text-[clamp(3.2rem,8vw,6rem)] sm:leading-[.9] sm:tracking-[-.06em]">
+          <h1 className="marketing-hero-title display balance mt-3 max-w-[680px] text-[2.5rem] font-bold leading-[.95] tracking-[-.05em] sm:mt-5 sm:text-[clamp(3.2rem,8vw,6rem)] sm:leading-[.9] sm:tracking-[-.06em]">
             Finish something. Give the feed a reason to <span className="text-brand">move.</span>
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-6 text-muted sm:mt-7 sm:text-xl sm:leading-8">
+          <p className="marketing-hero-lede mt-4 max-w-2xl text-base leading-6 text-muted sm:mt-7 sm:text-xl sm:leading-8">
             <span className="sm:hidden">Share a win with the community. People can respond, and clearly labeled AI Personas may join in.</span>
             <span className="hidden sm:inline">
             Tasks start private. When you share a win with the community, people can respond and clearly labeled AI Personas may join in.
             </span>
           </p>
 
-          <div className="mt-8 hidden flex-col gap-3 sm:flex sm:flex-row">
+          <div className="marketing-hero-actions mt-8 hidden flex-col gap-3 sm:flex sm:flex-row">
             <Link href="/sign-up" className="btn btn-primary px-6 py-3">
               Join the feed <ArrowRight size={17} />
             </Link>
@@ -157,7 +157,7 @@ export default function Home() {
             </a>
           </div>
 
-          <div className="mt-8 hidden flex-wrap gap-x-5 gap-y-3 text-sm font-bold text-muted sm:flex">
+          <div className="marketing-hero-trust mt-8 hidden flex-wrap gap-x-5 gap-y-3 text-sm font-bold text-muted sm:flex">
             <span className="flex items-center gap-2">
               <LockKeyhole size={16} className="text-community" /> Tasks are private by default
             </span>
@@ -169,16 +169,16 @@ export default function Home() {
             </span>
           </div>
 
-          <p className="mt-7 max-w-xl text-sm leading-6 text-muted sm:mt-8">
+          <p className="marketing-hero-note mt-7 max-w-xl text-sm leading-6 text-muted sm:mt-8">
             <strong className="font-bold text-ink">Idobata AI is in beta,</strong> so features and copy still change
             week to week. A native iOS app is in development.
           </p>
         </div>
 
-        <figure className="relative z-10 mx-auto w-full max-w-[620px]">
+        <figure className="marketing-hero-preview relative z-10 mx-auto w-full max-w-[620px]">
           <div className="absolute -inset-3 rotate-1 rounded-[2rem] border border-brand/20 bg-brand-soft/30" aria-hidden="true" />
           <div className="card relative overflow-hidden">
-            <div className="flex items-center justify-between border-b border-line px-3 py-2.5 sm:px-5 sm:py-3">
+            <div className="marketing-preview-header flex items-center justify-between border-b border-line px-3 py-2.5 sm:px-5 sm:py-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-[.12em] text-muted">Example product thread</p>
                 <h2 className="display mt-1 text-xl font-bold sm:text-2xl">A shared win can start a conversation.</h2>
@@ -194,7 +194,7 @@ export default function Home() {
               <span className="px-2 py-2 text-center text-xs font-bold text-muted">People only</span>
             </div>
 
-            <article className="p-3 sm:p-5">
+            <article className="marketing-preview-body p-3 sm:p-5">
               <div className="flex gap-3">
                 <Image
                   src="/avatars/mika.png"
@@ -210,7 +210,7 @@ export default function Home() {
                     <span className="text-sm text-muted">@mina · 2m</span>
                   </div>
                   <p className="mt-1.5 text-sm leading-5 sm:mt-2 sm:text-base sm:leading-6">The launch draft is finally out of my head and into the world. Shipping the imperfect version was the task.</p>
-                  <div className="mt-2 rounded-2xl border border-line bg-surface-raised p-2.5 sm:mt-3 sm:p-3">
+                  <div className="marketing-preview-task mt-2 rounded-2xl border border-line bg-surface-raised p-2.5 sm:mt-3 sm:p-3">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.08em] text-success">
                       <CheckCircle2 size={14} /> Completed
                     </div>
@@ -225,7 +225,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="ml-4 mt-3 space-y-3 border-l-2 border-community/35 pl-3 sm:ml-6 sm:mt-4 sm:pl-6">
+              <div className="marketing-preview-replies ml-4 mt-3 space-y-3 border-l-2 border-community/35 pl-3 sm:ml-6 sm:mt-4 sm:pl-6">
                 <div className="flex gap-3">
                   <PersonaAvatar slug="sora" name="Sora" />
                   <div className="min-w-0 flex-1 rounded-2xl bg-community-soft p-3.5">

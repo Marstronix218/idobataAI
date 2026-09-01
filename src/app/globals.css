@@ -282,6 +282,64 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .app-page { padding: 2rem 2rem 4rem; }
 }
 
+/* Keep the complete landing story in the first desktop viewport. The default
+   mobile/tablet flow stays comfortably stacked; laptop-height screens get a
+   denser version of the same content instead of a cropped hero. */
+@media (min-width: 1024px) {
+  .marketing-header {
+    min-height: 72px;
+    padding-block: .875rem;
+  }
+
+  .marketing-hero {
+    min-height: calc(100svh - 72px);
+    padding-top: clamp(1rem, 2.5svh, 2rem);
+    padding-bottom: clamp(1.5rem, 3svh, 3rem);
+  }
+
+  .marketing-hero-title {
+    font-size: clamp(3.5rem, 5.4vw, 4.75rem);
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 900px) {
+  .marketing-hero {
+    column-gap: 2.5rem;
+    padding-top: 1rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .marketing-hero-title { margin-top: .75rem; }
+  .marketing-hero-lede {
+    margin-top: 1rem;
+    font-size: 1.0625rem;
+    line-height: 1.5rem;
+  }
+  .marketing-hero-actions,
+  .marketing-hero-trust,
+  .marketing-hero-note { margin-top: 1rem; }
+  .marketing-hero-trust { row-gap: .5rem; }
+  .marketing-hero-note { line-height: 1.25rem; }
+
+  .marketing-hero-preview { max-width: 580px; }
+  .marketing-preview-header { padding-block: .625rem; }
+  .marketing-preview-header h2 {
+    font-size: 1.25rem;
+    line-height: 1.5rem;
+  }
+  .marketing-preview-body { padding: .875rem; }
+  .marketing-preview-task {
+    margin-top: .5rem;
+    padding: .625rem;
+  }
+  .marketing-preview-replies {
+    margin-top: .75rem;
+    row-gap: .625rem;
+    padding-left: 1rem;
+  }
+  .marketing-preview-replies > div > div:last-child { padding: .75rem; }
+}
+
 /* iOS Safari zooms the page on focus for any control under 16px and never
    zooms back out. The quick-add row and the chat composer both used 13-15px
    text, so opening a dropdown or tapping the composer left the app zoomed.
