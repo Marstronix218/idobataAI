@@ -1,0 +1,17 @@
+{
+  "id": "video_6a95757e8c288191a562197002381533050eafeacebba51b",
+  "object": "video",
+  "created_at": 1788179838,
+  "status": "completed",
+  "completed_at": 1788180067,
+  "edited_from_video_id": null,
+  "error": null,
+  "expires_at": 1788352867,
+  "extended_from_video_id": null,
+  "model": "sora-2-pro",
+  "progress": 100,
+  "prompt": "A cinematic vertical 9:16 anime-game scene featuring the exact same Rika Kisaragi from the reference. Preserve her brown high ponytail, bangs, bright green eyes, black gaming headset and microphone, black esports jacket with neon-green accents, face, age, and proportions. At a competitive gaming PC in a black and dark-gray esports bedroom with restrained neon green and magenta RGB, she notices a subtle glow from a phone beside her keyboard, glances toward it, changes from focused to mildly surprised, then gives a tiny smug competitive half-smile: reluctantly impressed. Do not make her cheerful or camera-aware. Reaction complete within about 1.3 seconds.\r\n\r\nTHIS IS ONLY A CINEMATIC PERFORMANCE SHOT. Never generate readable phone text, chat messages, social media UI, Idobata UI, usernames, subtitles, captions, logos, floating words, notification text, RPG text, or fake app screens. If a phone is visible, its content must be unreadable, blurred, or angled away. Priorities: CHARACTER IDENTITY, FACIAL PERFORMANCE, SIMPLE MOTION, CLEAN COMPOSITION. Do not invent additional story beats.",
+  "remixed_from_video_id": null,
+  "seconds": "4",
+  "size": "1024x1792"
+}

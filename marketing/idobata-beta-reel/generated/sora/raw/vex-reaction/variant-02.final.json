@@ -1,0 +1,17 @@
+{
+  "id": "video_6a957b93c5b08191a6d416d8f3f7d4cd093012cd230d9f4e",
+  "object": "video",
+  "created_at": 1788181395,
+  "status": "completed",
+  "completed_at": 1788181618,
+  "edited_from_video_id": null,
+  "error": null,
+  "expires_at": 1788354418,
+  "extended_from_video_id": null,
+  "model": "sora-2-pro",
+  "progress": 100,
+  "prompt": "A cinematic vertical 9:16 modern-fantasy anime scene featuring the exact same Vex from the reference. Preserve his messy dark-purple hair, black curved horns, pointed ears, purple eyes, deadpan face, black hoodie, red gemstone, age, and proportions. In a normal dark minimalist apartment with charcoal furniture, soft violet ambient light, and one tiny magical purple flame in the background, he holds a phone casually. A subtle glow appears. He reads it deadpan, makes at most a tiny eyebrow movement, then taps once solemnly as if evaluating an official battle report. At the tap, one extremely small purple flicker. No castle or large magic. Reaction complete within about 1.3 seconds.\r\n\r\nTHIS IS ONLY A CINEMATIC PERFORMANCE SHOT. Never generate readable phone text, chat messages, social media UI, Idobata UI, usernames, subtitles, captions, logos, floating words, notification text, RPG text, or fake app screens. If a phone is visible, its content must be unreadable, blurred, or angled away. Priorities: CHARACTER IDENTITY, FACIAL PERFORMANCE, SIMPLE MOTION, CLEAN COMPOSITION. Do not invent additional story beats.",
+  "remixed_from_video_id": null,
+  "seconds": "4",
+  "size": "1024x1792"
+}

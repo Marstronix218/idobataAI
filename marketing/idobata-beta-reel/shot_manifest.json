@@ -1,0 +1,28 @@
+{
+  "project": "Idobata AI first public beta reel",
+  "version": 1,
+  "format": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "duration_seconds": 17.5,
+    "video_codec": "H.264",
+    "audio_codec": "AAC"
+  },
+  "message": "Finish a task, choose to share it, and distinct AI personas notice.",
+  "shots": [
+    {"id":"student-opening","start":0.0,"end":1.5,"duration":1.5,"kind":"sora","variant":"variant-02","trim_in":0.0,"source":"generated/trims/student-opening.mp4","status":"selected_verified"},
+    {"id":"task-complete","start":1.5,"end":3.1,"duration":1.6,"kind":"real_ui","source":"assets/ui-captures/task-complete.mp4","status":"blocked_browser_runtime"},
+    {"id":"post-win","start":3.1,"end":4.1,"duration":1.0,"kind":"real_ui","source":"assets/ui-captures/post-win.mp4","status":"blocked_browser_runtime"},
+    {"id":"rika-reaction","start":4.1,"end":5.3,"duration":1.2,"kind":"sora","variant":"variant-02","trim_in":1.1,"source":"generated/trims/rika-reaction.mp4","status":"selected_verified"},
+    {"id":"rika-reply","start":5.3,"end":6.3,"duration":1.0,"kind":"real_ui","source":"assets/ui-captures/rika-reply.mp4","status":"blocked_browser_runtime"},
+    {"id":"ren-reaction","start":6.3,"end":7.4,"duration":1.1,"kind":"sora","variant":"variant-01","trim_in":0.0,"source":"generated/trims/ren-reaction.mp4","status":"selected_verified"},
+    {"id":"ren-reply","start":7.4,"end":8.3,"duration":0.9,"kind":"real_ui","source":"assets/ui-captures/ren-reply.mp4","status":"blocked_browser_runtime"},
+    {"id":"hikari-reaction","start":8.3,"end":9.6,"duration":1.3,"kind":"sora","variant":"variant-01","trim_in":0.0,"source":"generated/trims/hikari-reaction.mp4","status":"selected_verified"},
+    {"id":"hikari-reply","start":9.6,"end":10.7,"duration":1.1,"kind":"real_ui","source":"assets/ui-captures/hikari-reply.mp4","status":"blocked_browser_runtime"},
+    {"id":"vex-reaction","start":10.7,"end":12.0,"duration":1.3,"kind":"sora","variant":"variant-01","trim_in":0.6,"source":"generated/trims/vex-reaction.mp4","status":"selected_verified"},
+    {"id":"vex-quote-repost","start":12.0,"end":13.2,"duration":1.2,"kind":"real_ui","source":"assets/ui-captures/vex-quote-repost.mp4","status":"blocked_browser_runtime"},
+    {"id":"student-ending","start":13.2,"end":14.8,"duration":1.6,"kind":"sora","variant":"variant-01","trim_in":1.5,"source":"generated/trims/student-ending.mp4","status":"selected_verified"},
+    {"id":"cta","start":14.8,"end":17.5,"duration":2.7,"kind":"real_ui","source":"assets/ui-captures/cta.mp4","status":"blocked_browser_runtime"}
+  ]
+}

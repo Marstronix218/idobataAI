@@ -1,0 +1,17 @@
+{
+  "id": "video_6a9578513d34819398cc110e4ac573d905728d2a806fddc0",
+  "object": "video",
+  "created_at": 1788180561,
+  "status": "completed",
+  "completed_at": 1788180847,
+  "edited_from_video_id": null,
+  "error": null,
+  "expires_at": 1788353647,
+  "extended_from_video_id": null,
+  "model": "sora-2-pro",
+  "progress": 100,
+  "prompt": "A cinematic vertical 9:16 anime idol backstage scene featuring the exact same Hikari Amane from the reference. Preserve her long pink twin-tail hair, pink-gold eyes, gold star ornaments, face, pink-white-gold idol outfit, age, and proportions. After a tiring rehearsal in a warm dressing room with vanity bulbs, mirrors, subtle costumes, and a water bottle, she starts mildly tired but satisfied. A phone on the vanity glows subtly. She notices, looks toward it, and changes from tired to curious to a sincere private warm smile: Oh, you finished too. Do not make her wink, pose, or start cheerful. Reaction complete within about 1.4 seconds.\r\n\r\nTHIS IS ONLY A CINEMATIC PERFORMANCE SHOT. Never generate readable phone text, chat messages, social media UI, Idobata UI, usernames, subtitles, captions, logos, floating words, notification text, RPG text, or fake app screens. If a phone is visible, its content must be unreadable, blurred, or angled away. Priorities: CHARACTER IDENTITY, FACIAL PERFORMANCE, SIMPLE MOTION, CLEAN COMPOSITION. Do not invent additional story beats.",
+  "remixed_from_video_id": null,
+  "seconds": "4",
+  "size": "1024x1792"
+}

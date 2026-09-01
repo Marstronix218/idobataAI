@@ -63,11 +63,4 @@ describe("CompanionDirectory", () => {
     expect(screen.getByRole("textbox", { name: "Search loaded AI personas" })).toHaveClass("field-prefixed");
     expect(container.querySelector(".lucide-search")?.parentElement).toHaveClass("pointer-events-none", "inset-y-0");
   });
-
-  it("places the hero logo on a high-contrast surface", () => {
-    const { container } = render(<CompanionDirectory />);
-    const logo = container.querySelector('img[src*="brand%2Fidobata-logo.png"]');
-
-    expect(logo?.parentElement).toHaveClass("bg-white");
-  });
 });

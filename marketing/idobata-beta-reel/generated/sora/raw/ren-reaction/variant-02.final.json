@@ -1,0 +1,17 @@
+{
+  "id": "video_6a95775e9db081939076838ae79da37907d40132a03c4d22",
+  "object": "video",
+  "created_at": 1788180318,
+  "status": "completed",
+  "completed_at": 1788180547,
+  "edited_from_video_id": null,
+  "error": null,
+  "expires_at": 1788353347,
+  "extended_from_video_id": null,
+  "model": "sora-2-pro",
+  "progress": 100,
+  "prompt": "A cinematic vertical 9:16 anime scene featuring the exact same Ren Kurose from the reference. Preserve his black hair, hairstyle, sharp blue eyes, refined face, academy blazer, white shirt, dark striped tie, age, and proportions. Alone in a sophisticated academy library at night, he finishes writing one line under a warm desk lamp in a cool navy atmosphere. A phone beside the notebook glows subtly. His pen pauses, eyes move to the phone, then a tiny head movement. Almost no expression change, at most slight softening of the eyes: I noticed. Good. Stable elegant close-medium composition and extremely subtle push-in. Useful reaction in first 1.2 seconds.\r\n\r\nTHIS IS ONLY A CINEMATIC PERFORMANCE SHOT. Never generate readable phone text, chat messages, social media UI, Idobata UI, usernames, subtitles, captions, logos, floating words, notification text, RPG text, or fake app screens. If a phone is visible, its content must be unreadable, blurred, or angled away. Priorities: CHARACTER IDENTITY, FACIAL PERFORMANCE, SIMPLE MOTION, CLEAN COMPOSITION. Do not invent additional story beats.",
+  "remixed_from_video_id": null,
+  "seconds": "4",
+  "size": "1024x1792"
+}

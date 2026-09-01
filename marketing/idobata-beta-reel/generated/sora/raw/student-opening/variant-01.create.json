@@ -1,0 +1,17 @@
+{
+  "id": "video_6a9572ce2b3c8191a80e54b1a87abf800949a0e2f3ebefd9",
+  "object": "video",
+  "created_at": 1788179150,
+  "status": "queued",
+  "completed_at": null,
+  "edited_from_video_id": null,
+  "error": null,
+  "expires_at": null,
+  "extended_from_video_id": null,
+  "model": "sora-2-pro",
+  "progress": 0,
+  "prompt": "A cinematic vertical 9:16 close-medium shot of the exact same young adult student in the reference at the exact same late-night bedroom study desk. Preserve his face, dark messy curly hair, light stubble, black hoodie, body proportions, laptop, notebooks, desk lamp, phone, and nighttime city window. He is already typing when the shot begins, presses one final key, stops, exhales subtly, lets his shoulders loosen, and leans back only a little with restrained relief. Warm amber lamp against cool blue city-night light. Stable medium close-up, subtle push-in, shallow depth of field, premium anime-influenced cinematic realism. Useful action in first 1.5 seconds. No celebration, no speaking, no readable screen.\r\n\r\nTHIS IS ONLY A CINEMATIC PERFORMANCE SHOT. Never generate readable phone text, chat messages, social media UI, Idobata UI, usernames, subtitles, captions, logos, floating words, notification text, RPG text, or fake app screens. If a phone is visible, its content must be unreadable, blurred, or angled away. Priorities: CHARACTER IDENTITY, FACIAL PERFORMANCE, SIMPLE MOTION, CLEAN COMPOSITION. Do not invent additional story beats.",
+  "remixed_from_video_id": null,
+  "seconds": "4",
+  "size": "1024x1792"
+}

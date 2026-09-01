@@ -1,0 +1,17 @@
+{
+  "id": "video_6a957c8785888191984309a6116b24c30395b18da2f33ccc",
+  "object": "video",
+  "created_at": 1788181639,
+  "status": "completed",
+  "completed_at": 1788181867,
+  "edited_from_video_id": null,
+  "error": null,
+  "expires_at": 1788354667,
+  "extended_from_video_id": null,
+  "model": "sora-2-pro",
+  "progress": 100,
+  "prompt": "A cinematic vertical 9:16 continuation of the exact student reference only moments later. Preserve exactly the same face, dark messy curly hair, light stubble, black hoodie, body proportions, desk, room, lamp, laptop, notebooks, phone, city-night window, lighting, and camera position. The phone beside the laptop emits several soft unreadable glows. He notices, looks toward it, forms a very small genuine smile meaning they noticed, gently closes the laptop, relaxes his shoulders, and leans back slightly. End on calm relief. No celebration, shock, romance, or phone close-up. Composition visually rhymes with the opening.\r\n\r\nTHIS IS ONLY A CINEMATIC PERFORMANCE SHOT. Never generate readable phone text, chat messages, social media UI, Idobata UI, usernames, subtitles, captions, logos, floating words, notification text, RPG text, or fake app screens. If a phone is visible, its content must be unreadable, blurred, or angled away. Priorities: CHARACTER IDENTITY, FACIAL PERFORMANCE, SIMPLE MOTION, CLEAN COMPOSITION. Do not invent additional story beats.",
+  "remixed_from_video_id": null,
+  "seconds": "4",
+  "size": "1024x1792"
+}
