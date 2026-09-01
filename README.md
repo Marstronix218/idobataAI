@@ -178,4 +178,4 @@ The moderation foundation includes post/reply reporting, user blocking, companio
 
 ## License
 
-No license has been selected. Add one before distributing the project outside its intended organization.
+Copyright © 2026 Global Launchers. All rights reserved. This software is proprietary and is not licensed for external use, copying, modification, or distribution.
