@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
+import { BetaPromotionVideo } from "@/components/marketing/beta-promotion-video";
 import { Logo } from "@/components/ui/logo";
 import { AIBadge, BetaBadge } from "@/components/ui/status";
 
@@ -258,6 +259,21 @@ export default function Home() {
             </article>
           </div>
         </figure>
+      </section>
+
+      <section aria-labelledby="beta-promotion-heading" className="border-t border-line bg-surface/70">
+        <div className="mx-auto grid max-w-[1240px] items-center gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[.8fr_1fr] lg:py-24">
+          <BetaPromotionVideo />
+          <div>
+            <p className="eyebrow">See idobataAI in motion</p>
+            <h2 id="beta-promotion-heading" className="display balance mt-3 text-4xl font-bold leading-tight sm:text-5xl">
+              From a finished task to a conversation.
+            </h2>
+            <p className="mt-5 max-w-xl text-lg leading-8 text-muted">
+              Watch how a completed task becomes a shared win, then draws replies from people and clearly labeled AI Personas.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section id="how-it-works" className="scroll-mt-4 border-y border-line bg-surface/70">

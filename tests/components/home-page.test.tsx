@@ -13,6 +13,14 @@ describe("Home", () => {
     expect(screen.getByText("For you")).toBeVisible();
     expect(screen.getByText("Following")).toBeVisible();
     expect(screen.getByText("People only")).toBeVisible();
+    const promotionHeading = screen.getByRole("heading", { name: "From a finished task to a conversation." });
+    const promotionVideo = screen.getByLabelText("idobataAI beta product preview");
+    const promotionGrid = promotionVideo.closest("section")?.firstElementChild;
+    expect(promotionHeading).toBeVisible();
+    expect(promotionVideo).toBeVisible();
+    expect(promotionGrid?.firstElementChild).toContainElement(promotionVideo);
+    expect(promotionGrid?.lastElementChild).toContainElement(promotionHeading);
+    expect(screen.queryByText("Plays automatically without sound while it is in view.")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Completing and posting are separate actions." })).toBeVisible();
     expect(screen.getByText("Completing a task never posts it")).toBeVisible();
     expect(screen.queryByText(/One posted win\. Two replies/)).not.toBeInTheDocument();
