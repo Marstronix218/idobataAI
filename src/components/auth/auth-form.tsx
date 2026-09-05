@@ -49,17 +49,6 @@ export function AuthForm({ mode, defaultEmail = "" }: { mode: "login" | "signup"
     finally { setBusy(false); }
   }
 
-  async function googleSignIn() {
-    if (isPreviewMode) { setStatus("Preview mode: Google sign-in requires Supabase environment variables."); return; }
-    setBusy(true); setStatus(""); setExistingEmail("");
-    try {
-      const { error } = await createClient().auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback?next=${signup ? "/onboarding" : "/feed"}` },
-      });
-      if (error) throw error;
-    } catch (error) { setStatus(errorMessage(error)); setBusy(false); }
-  }
   return (
     <form onSubmit={submit} className="mt-8 space-y-5">
       {isPreviewMode && <div role="note" className="rounded-2xl bg-sun-soft p-4 text-sm leading-6"><strong>Preview mode.</strong> Supabase is not configured, so sign-in is simulated and data stays in this browser session only.</div>}
@@ -69,8 +58,6 @@ export function AuthForm({ mode, defaultEmail = "" }: { mode: "login" | "signup"
       {signup && <label className="flex items-start gap-3 text-sm leading-5 text-muted"><input type="checkbox" required className="mt-1 h-4 w-4 accent-[var(--brand)]" /><span>I agree to the <Link href="/terms" className="font-bold text-ink underline">Terms</Link> and <Link href="/privacy" className="font-bold text-ink underline">Privacy Policy</Link>.</span></label>}
       <button className="btn btn-primary w-full py-3" type="submit" disabled={busy}>{busy ? "Connecting…" : signup ? "Create my private list" : "Open my feed"}<ArrowRight size={17} /></button>
       <p aria-live="polite" className="min-h-5 text-center text-sm font-bold text-muted">{status}</p>
-      <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[.12em] text-muted"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-      <button className="btn btn-secondary w-full" type="button" onClick={googleSignIn} disabled={busy}>Continue with Google</button>
       <p className="flex items-center justify-center gap-2 text-xs text-muted"><LockKeyhole size={14} /> New tasks always start private.</p>
       {signup && <p className="text-center text-sm text-muted">Already signed up? <Link href="/resend-confirmation" className="font-bold text-community hover:underline">Resend confirmation email</Link></p>}
       <p className="text-center text-sm text-muted">{signup ? "Already have a corner here?" : "New around here?"} <Link href={signup ? "/login" : "/sign-up"} className="font-bold text-community hover:underline">{signup ? "Log in" : "Create an account"}</Link></p>

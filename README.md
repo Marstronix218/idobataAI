@@ -150,6 +150,16 @@ On pushes to `main`, CI links the configured project, applies pending migrations
 6. Leave provider variables empty to launch with curated companion fallbacks, or configure an OpenAI-compatible provider and the purpose-specific chat and utility models for optional reply enhancement.
 7. Run a production deployment and confirm at [https://idobata-ai.com/](https://idobata-ai.com/) that signup, confirmation resend, password recovery, onboarding, task privacy, explicit sharing, owner audience/deletion controls, AI labels, the people-only feed, and account-deletion policy all behave correctly.
 
+### Google sign-in
+
+Google login is handled by Supabase Auth and the application callback at `/auth/callback`.
+
+1. In Google Cloud, create an OAuth 2.0 Client ID for a Web application. Add `https://<project-ref>.supabase.co/auth/v1/callback` as an authorized redirect URI. For local Supabase, also add `http://127.0.0.1:54321/auth/v1/callback`.
+2. Set `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` in the environment used by the Supabase CLI. Keep the secret out of browser and Vercel `NEXT_PUBLIC_*` variables.
+3. Run `supabase config push` to enable Google on the linked project. Alternatively, enable Google in Supabase Dashboard under Authentication > Providers using the same credentials.
+4. In Supabase Auth URL Configuration, keep the production Site URL and add the exact application redirect URL `https://idobata-ai.com/auth/callback`. Keep `http://localhost:3000/auth/callback` for local development.
+5. Verify both `/login` (returning accounts land on `/feed`) and `/sign-up` (new accounts land on `/onboarding`).
+
 Before enabling paid subscriptions, implement the billing cancellation adapter and verify it completes before auth-user deletion. The deletion workflow intentionally refuses to orphan an active subscription.
 
 ## Operational guarantees

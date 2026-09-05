@@ -28,4 +28,12 @@ describe("auth callback", () => {
     expect(safeDestination("https://evil.test/path")).toBe("/feed");
     expect(safeDestination("/\\evil.test/path")).toBe("/feed");
   });
+
+  it("returns to login when the provider callback cannot create a session", async () => {
+    exchangeCodeForSession.mockResolvedValue({ error: new Error("invalid code") });
+
+    const response = await GET(new NextRequest("https://idobata.test/auth/callback?code=expired&next=/feed"));
+
+    expect(response.headers.get("location")).toBe("https://idobata.test/login?error=auth_callback");
+  });
 });

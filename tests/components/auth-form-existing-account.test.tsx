@@ -5,7 +5,6 @@ const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.
 const auth = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
-  signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
 }));
 
 vi.mock("next/link", () => ({
