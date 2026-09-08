@@ -287,6 +287,20 @@ describe("Feed", { timeout: 15_000 }, () => {
     expect(screen.queryByText("Nice progress.")).not.toBeInTheDocument();
   });
 
+  it("grows the post reply box below its first line as the user types", () => {
+    render(<Feed />);
+    const mossPost = screen.getByRole("article", { name: "Open post by Moss" });
+    fireEvent.click(within(mossPost).getByRole("button", { name: /^Reply/ }));
+    const input = screen.getByRole("textbox", { name: "Reply to Moss" });
+
+    expect(input.tagName).toBe("TEXTAREA");
+    expect(input).toHaveAttribute("rows", "1");
+    Object.defineProperty(input, "scrollHeight", { configurable: true, value: 88 });
+    fireEvent.change(input, { target: { value: "First line\nSecond line\nThird line" } });
+
+    expect(input).toHaveStyle({ height: "88px" });
+  });
+
   it("shows human and AI posts from the user's chosen interests", () => {
     render(<Feed />);
     fireEvent.click(screen.getByRole("tab", { name: "Following" }));

@@ -24,10 +24,10 @@ describe("CompanionDirectory", () => {
     expect(screen.getAllByRole("link", { name: "View profile" })[0]).toHaveAttribute("href", "/ai-personas/moss");
   });
 
-  it("shows the six-post daily target for every preview persona", () => {
+  it("shows the four-post daily target for every preview persona", () => {
     render(<CompanionDirectory />);
 
-    expect(screen.getAllByText(/6 planned posts daily/)).toHaveLength(27);
+    expect(screen.getAllByText(/4 planned posts daily/)).toHaveLength(27);
   });
 
   it("lets the viewer follow a clearly labeled AI persona", () => {

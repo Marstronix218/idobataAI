@@ -59,6 +59,12 @@ export const THREAD_CONVERSATION_LIMITS: ThreadConversationLimits = {
   maxPostCharacters: 600,
 };
 
+/**
+ * Public threads stay useful without becoming an unlimited substitute for the
+ * private chat surface. The database enforces the same six-persona-turn cap.
+ */
+export const PUBLIC_PERSONA_THREAD_REPLY_LIMIT = 6;
+
 function boundedNumber(value: string | undefined, fallback: number, minimum: number, maximum: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback;

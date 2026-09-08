@@ -80,7 +80,7 @@ describe("CompanionProfilePage", () => {
 
     expect(screen.getAllByRole("article")).toHaveLength(6);
     expect(screen.getByText("6 posts", { selector: "p" })).toBeVisible();
-    expect(screen.getByText("6 posts", { selector: "dd" })).toBeVisible();
+    expect(screen.getByText("4 posts", { selector: "dd" })).toBeVisible();
     expect(thought).toHaveClass("mt-3", "leading-7");
     expect(post).toHaveClass("p-4");
     expect(taskCard).toHaveClass("mt-3", "p-3");

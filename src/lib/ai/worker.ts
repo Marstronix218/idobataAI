@@ -426,9 +426,10 @@ async function performSocialAction(job: AIJob, lease: string, provider: AIProvid
   }));
 
   // Optional beta engagement stays silent when the provider cannot produce a
-  // distinct in-character response. Historical guarantee rows keep their
-  // fallback behavior while they drain after an upgrade.
-  if (!attempt.content && planned.source !== "human_post_guarantee") {
+  // distinct in-character response. Replies promised to a human always retain
+  // a persona fallback, including follow-ups inside an existing conversation.
+  const guaranteedReply = planned.source === "human_post_guarantee" || planned.source === "human_reply_response";
+  if (!attempt.content && !guaranteedReply) {
     const reason = `reply rejected: ${attempt.rejectionReason ?? "no usable generation"}`;
     logEngagement({
       event: "reply_rejected", engagementId, postId: planned.post_id, companionId: planned.companion_id,

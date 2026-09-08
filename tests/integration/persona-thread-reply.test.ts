@@ -217,19 +217,19 @@ describe("persona thread follow-up", () => {
     expect(provider.generateReply).toHaveBeenCalledTimes(1);
   });
 
-  it("stays silent rather than publishing a canned line when generation fails", async () => {
+  it("publishes the persona fallback when a promised follow-up cannot be generated", async () => {
     stubDatabase();
     provider.generateThreadReply.mockRejectedValue(new Error("provider exploded"));
 
     const results = await drainAIJobs(1);
 
-    expect(rpc).not.toHaveBeenCalledWith("finalize_social_action", expect.anything());
-    expect(rpc).toHaveBeenCalledWith("cancel_social_action", expect.objectContaining({
+    expect(rpc).toHaveBeenCalledWith("finalize_social_action", {
       p_job_id: JOB,
       p_lease_token: LEASE,
-      p_reason: expect.stringContaining("provider exploded"),
-    }));
-    expect(results).toEqual([{ id: JOB, status: "reply_cancelled" }]);
+      p_content: "noted",
+    });
+    expect(rpc).not.toHaveBeenCalledWith("cancel_social_action", expect.anything());
+    expect(results).toEqual([{ id: JOB, status: "fallback" }]);
   });
 
   it("never publishes twice when the lease has already moved on", async () => {

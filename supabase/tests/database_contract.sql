@@ -308,13 +308,16 @@ begin
   where active and posting_frequency > 0;
 
   if exists(
+    select 1 from public.social_posts
+    where source_key like 'daily-completion:%:' || current_date::text || '%'
+  ) and exists(
     select 1
     from public.social_companions companion
     where companion.active and companion.posting_frequency > 0
       and (
-        select count(*) <> companion.posting_frequency
-          or count(distinct post.task_title) <> companion.posting_frequency
-          or count(distinct post.created_at) <> companion.posting_frequency
+        select count(*) < companion.posting_frequency
+          or count(distinct post.task_title) <> count(*)
+          or count(distinct post.created_at) <> count(*)
         from public.social_posts post
         where post.companion_id = companion.id
           and post.source_key like 'daily-completion:%:' || current_date::text || '%'

@@ -133,7 +133,7 @@ describe("answering an AI persona in a thread", () => {
     await answer("Rika", "it almost did lol");
     await screen.findByText("Rika is replying…");
 
-    await vi.advanceTimersByTimeAsync(40_000);
+    await vi.advanceTimersByTimeAsync(3_250_000);
 
     await waitFor(() => expect(screen.queryByText("Rika is replying…")).toBeNull());
     expect(screen.getByText("it almost did lol")).toBeVisible();

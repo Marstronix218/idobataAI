@@ -7,7 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { AIBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
-import { awaitsPersonaThreadReply } from "@/lib/domain/thread-conversation";
+import { awaitsPersonaThreadReply, PUBLIC_PERSONA_THREAD_REPLY_LIMIT } from "@/lib/domain/thread-conversation";
 import type { SocialReaction, ThreadReply } from "@/types";
 
 // `username` is carried alongside the display name because a reply row renders
@@ -30,9 +30,13 @@ const VISIBLE_WHEN_COLLAPSED = 2;
 
 // Answering a persona is expected to be answered back, and the reply is written
 // by a background job rather than by the request that posted it. The thread
-// refetches on this schedule so the response appears on its own, then gives up:
-// a persona that declined to answer must not leave a spinner running forever.
-const PERSONA_REPLY_POLL_DELAYS_MS = [2000, 3000, 4000, 6000, 8000, 10000];
+// refetches on this schedule so the response appears on its own, then gives up
+// just inside the one-hour deadline so infrastructure failures cannot leave a
+// spinner running forever.
+const PERSONA_REPLY_POLL_DELAYS_MS = [
+  2000, 3000, 5000, 10_000, 20_000, 30_000,
+  60_000, 120_000, 300_000, 600_000, 900_000, 1_200_000,
+];
 
 export type PendingPersonaReply = { replyId: string; name: string; avatarUrl: string | null };
 
@@ -142,7 +146,7 @@ function ReplyComposer({ label, placeholder, author, submitLabel = "Reply", busy
   const id = `reply-composer-${label.replace(/\W+/g, "-").toLowerCase()}`;
 
   return <form
-    className="mt-2 flex items-center gap-2"
+    className="mt-2 flex items-end gap-2"
     onSubmit={async (event: FormEvent) => {
       event.preventDefault();
       const content = value.trim();
@@ -153,11 +157,16 @@ function ReplyComposer({ label, placeholder, author, submitLabel = "Reply", busy
   >
     <Avatar size="sm" initials={initials(author?.name ?? "You")} avatarUrl={author?.avatarUrl} name={author?.name ?? "You"} />
     <label className="sr-only" htmlFor={id}>{label}</label>
-    <input
+    <textarea
       id={id}
-      className="field-bare min-h-11 min-w-0 flex-1 rounded-lg px-1 py-2 text-base placeholder:text-muted"
+      className="field-bare max-h-48 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg px-1 py-2 text-base leading-6 placeholder:text-muted"
+      rows={1}
       value={value}
-      onChange={(event) => setValue(event.target.value)}
+      onChange={(event) => {
+        setValue(event.target.value);
+        event.currentTarget.style.height = "auto";
+        event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
+      }}
       onKeyDown={(event) => { if (event.key === "Escape" && onCancel) onCancel(); }}
       maxLength={500}
       placeholder={placeholder}
@@ -182,6 +191,7 @@ type RowProps = {
   onSubmitReply: (parent: ThreadNode, content: string) => Promise<void>;
   onDelete: (reply: ThreadReply) => void;
   onReport: (reply: ThreadReply) => void;
+  ancestorPersonaTurns: number;
 };
 
 function ReplyRow(props: RowProps) {
@@ -189,6 +199,8 @@ function ReplyRow(props: RowProps) {
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { name, handle, avatarUrl, href, ai } = replyIdentity(node);
+  const personaTurns = props.ancestorPersonaTurns + Number(ai);
+  const publicConversationComplete = ai && personaTurns >= PUBLIC_PERSONA_THREAD_REPLY_LIMIT;
   const owned = Boolean(currentUserId && node.author_id === currentUserId);
   const busy = busyId === node.id;
   const composing = replyingTo === node.id;
@@ -238,12 +250,12 @@ function ReplyRow(props: RowProps) {
       <p className="mt-0.5 whitespace-pre-wrap text-[.94rem] leading-6">{node.content}</p>
 
       <div className="-ml-2 mt-0.5 flex items-center gap-1">
-        <button
+        {!publicConversationComplete && <button
           type="button" className="btn btn-ghost post-action min-h-9 gap-1.5 px-2 text-xs text-muted"
           aria-expanded={composing} onClick={() => setReplyingTo(composing ? null : node.id)}
         >
           <MessageCircle size={15} aria-hidden="true" /> Reply {node.reply_count > 0 && <span>{node.reply_count}</span>}
-        </button>
+        </button>}
         <button
           type="button" aria-pressed={node.viewer_liked} disabled={busy}
           className={`btn btn-ghost post-action min-h-9 gap-1.5 px-2 text-xs ${node.viewer_liked ? "bg-brand-soft text-brand" : "text-muted"}`}
@@ -263,8 +275,13 @@ function ReplyRow(props: RowProps) {
         onSubmit={(content) => onSubmitReply(node, content)}
       />}
 
+      {publicConversationComplete && <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-community-soft px-3 py-2 text-xs text-community">
+        <span>This public conversation has reached its reply limit.</span>
+        <Link href="/chat" className="font-bold underline underline-offset-2">Continue with {name} in DMs</Link>
+      </div>}
+
       {shownChildren.length > 0 && <div className="mt-2 space-y-3">
-        {shownChildren.map((child) => <ReplyRow key={child.id} {...props} node={child} />)}
+        {shownChildren.map((child) => <ReplyRow key={child.id} {...props} node={child} ancestorPersonaTurns={personaTurns} />)}
       </div>}
 
       {/* The answer is generated after the request that posted this reply has
@@ -417,6 +434,7 @@ export function ReplyThread({ postId, replies, currentUserId, replyAuthor, onCha
       onSubmitReply={submitReply}
       onDelete={(reply) => void deleteReply(reply)}
       onReport={(reply) => void reportReply(reply)}
+      ancestorPersonaTurns={0}
     />)}
   </div>;
 }

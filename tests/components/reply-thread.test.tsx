@@ -10,7 +10,7 @@ vi.mock("next/link", () => ({
 
 import { PostThread } from "@/components/social/post-thread";
 import { previewFeed } from "@/components/social/feed";
-import { buildReplyTree, replyIdentity } from "@/components/social/reply-thread";
+import { buildReplyTree, ReplyThread, replyIdentity } from "@/components/social/reply-thread";
 import type { ThreadReply } from "@/types";
 
 const mossPost = previewFeed.find((post) => post.social_companions?.slug === "moss")!;
@@ -170,11 +170,64 @@ describe("ReplyThread", () => {
     fireEvent.change(nested, { target: { value: "Thanks!" } });
     fireEvent.submit(nested.closest("form")!);
 
-    const answer = await within(parent).findByText("Thanks!");
+    const answer = (await within(parent).findAllByRole("article", { name: "Reply by Mina Mori" })).at(-1)!;
     // Nested inside the parent article, not a sibling of it.
-    expect(answer.closest("article")).not.toBe(parent);
+    expect(answer).not.toBe(parent);
     expect(parent).toContainElement(answer);
+    expect(within(answer).getByText("Thanks!")).toBeVisible();
     expect(within(parent).getByRole("button", { name: "Reply 1" })).toBeVisible();
+  });
+
+  it("grows a nested reply box below its first line as the user types", async () => {
+    render(<PostThread postId={mossPost.id} />);
+    await postReplyInThread("Great work.");
+    const parent = screen.getByRole("article", { name: "Reply by Mina Mori" });
+    fireEvent.click(within(parent).getByRole("button", { name: /^Reply/ }));
+    const input = within(parent).getByRole("textbox", { name: "Reply to Mina Mori" });
+
+    expect(input.tagName).toBe("TEXTAREA");
+    expect(input).toHaveAttribute("rows", "1");
+    Object.defineProperty(input, "scrollHeight", { configurable: true, value: 104 });
+    fireEvent.change(input, { target: { value: "First line\nSecond line\nThird line" } });
+
+    expect(input).toHaveStyle({ height: "104px" });
+  });
+
+  it("ends the public branch at the sixth persona turn and guides the user to DMs", () => {
+    const turns: ThreadReply[] = [];
+    let parentId: string | null = null;
+    for (let turn = 1; turn <= 6; turn += 1) {
+      const persona: ThreadReply = {
+        ...reply(`rika-${turn}`, parentId),
+        author_id: null,
+        companion_id: "companion-rika",
+        is_ai_generated: true,
+        user_profiles: null,
+        social_companions: { name: "Rika", slug: "rika", avatar_url: null },
+      };
+      turns.push(persona);
+      parentId = persona.id;
+      if (turn < 6) {
+        const human = reply(`mina-${turn}`, parentId);
+        turns.push(human);
+        parentId = human.id;
+      }
+    }
+
+    render(<ReplyThread
+      postId={mossPost.id}
+      replies={turns}
+      currentUserId="author-mina-1"
+      replyAuthor={{ name: "Mina Mori", username: "mina", avatarUrl: null }}
+      onChange={vi.fn()}
+      onNotice={vi.fn()}
+    />);
+
+    const personaRows = screen.getAllByRole("article", { name: "Reply by Rika" });
+    const finalTurn = personaRows.at(-1)!;
+    expect(within(finalTurn).getByText("This public conversation has reached its reply limit.")).toBeVisible();
+    expect(within(finalTurn).getByRole("link", { name: "Continue with Rika in DMs" })).toHaveAttribute("href", "/chat");
+    expect(within(finalTurn).queryByRole("button", { name: /^Reply/ })).not.toBeInTheDocument();
   });
 
   it("deleting a reply removes the answers underneath it", async () => {

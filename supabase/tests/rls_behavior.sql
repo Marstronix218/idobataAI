@@ -17,7 +17,7 @@ values
     '[{"task_title":"Test two A","category":"Test","content":"Two A"},{"task_title":"Test two B","category":"Test","content":"Two B"},{"task_title":"Test two C","category":"Test","content":"Two C"}]'::jsonb),
   ('10000000-0000-4000-8000-000000000003','test-three','Test Three','Thoughtful and warm.','Concise.','{}','No pressure.',array['A third safe fallback.'],array['A third safe daily note.'],true,3,
     '[{"task_title":"Test three A","category":"Test","content":"Three A"},{"task_title":"Test three B","category":"Test","content":"Three B"},{"task_title":"Test three C","category":"Test","content":"Three C"}]'::jsonb)
-on conflict (id) do nothing;
+on conflict (id) do update set active=excluded.active;
 
 insert into public.tasks(id,owner_id,title,recurrence_rule,visibility,status)
 values
@@ -113,10 +113,16 @@ begin
     select count(*) from public.ai_jobs
     where job_type='plan_post_engagement' and dedupe_key='plan-engagement:'||published_id::text
   ) <> 1 then raise exception 'private completion did not queue exactly one selective engagement plan'; end if;
-  if exists(select 1 from public.social_ai_engagements where post_id=progress_id and state='planned') then raise exception 'progress publishing planned persona engagement'; end if;
+  if not exists(
+    select 1 from public.social_ai_engagements
+    where post_id=progress_id and source='human_post_guarantee' and state='planned'
+  ) then raise exception 'active progress post did not receive its guaranteed persona reply'; end if;
   if exists(select 1 from public.social_replies where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reply'; end if;
   if exists(select 1 from public.social_reactions where post_id=progress_id and companion_id is not null) then raise exception 'progress publishing automatically created an AI reaction'; end if;
-  if exists(select 1 from public.ai_jobs where payload->>'postId'=progress_id::text) then raise exception 'progress publishing queued persona work'; end if;
+  if (
+    select count(*) from public.ai_jobs
+    where job_type='perform_social_action' and payload->>'postId'=progress_id::text and payload->>'kind'='reply'
+  ) <> 1 then raise exception 'progress publishing did not queue exactly one guaranteed persona reply'; end if;
   if (select count(*) from public.task_completion_awards where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion awarded twice in one occurrence'; end if;
   if (select count(*) from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion published twice in one occurrence'; end if;
   if not exists(select 1 from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004' and visibility='public') then raise exception 'completion publisher ignored the explicitly confirmed audience'; end if;
@@ -197,7 +203,7 @@ do $$ begin
   end;
 end $$;
 
--- A larger AI-follower set must not create guaranteed persona attention.
+-- Guarantees are capped per author regardless of how many personas they follow.
 select set_config('app.companion_follow_transition','allowed',true);
 insert into public.user_companion_relationships(
   user_id,companion_id,companion_follow_state,companion_follow_requested_at,companion_followed_at
@@ -224,10 +230,12 @@ do $$ begin
   if exists(select 1 from public.social_ai_engagements where post_id='aaaaaaaa-1000-4000-8000-000000000004') then
     raise exception 'AI-authored post recursively enqueued persona engagement';
   end if;
-  if exists(
-    select 1 from public.social_ai_engagements
-    where post_id='aaaaaaaa-1000-4000-8000-000000000002'
-  ) then raise exception 'progress post created persona engagement outside the completed-task loop'; end if;
+  if (
+    select count(*) from public.social_ai_engagements engagement
+    join public.social_posts post on post.id=engagement.post_id
+    where post.author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      and engagement.source='human_post_guarantee' and engagement.state<>'cancelled'
+  ) <> 4 then raise exception 'persona reply guarantee exceeded the four-post rolling-day cap'; end if;
 end $$;
 
 -- The completed-task planner and persona affinity tables share this classifier.
@@ -247,7 +255,7 @@ do $$ begin
 end $$;
 
 -- Public and private completed tasks enter selective persona planning; ordinary
--- progress posts remain outside it.
+-- progress posts receive the guarantee but remain outside selective planning.
 insert into public.social_posts(id,author_id,task_id,kind,visibility,content,task_title,category,idempotency_key)
 values('aaaaaaaa-1000-4000-8000-0000000000e1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   'aaaaaaaa-0000-4000-8000-000000000003','human_completion','public','Cleaned my entire apartment.',
@@ -262,10 +270,12 @@ do $$ begin
     select 1 from public.ai_jobs
     where job_type='plan_post_engagement' and dedupe_key='plan-engagement:aaaaaaaa-1000-4000-8000-000000000002'
   ) then raise exception 'a progress post queued selective persona engagement'; end if;
-  if exists(
-    select 1 from public.social_ai_engagements
-    where post_id='aaaaaaaa-1000-4000-8000-0000000000e1' and source='human_post_guarantee'
-  ) then raise exception 'completed-task post created guaranteed attention'; end if;
+  if (
+    select count(*) from public.social_ai_engagements engagement
+    join public.social_posts post on post.id=engagement.post_id
+    where post.author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      and engagement.source='human_post_guarantee' and engagement.state<>'cancelled'
+  ) <> 4 then raise exception 'later completion bypassed the four-post rolling-day guarantee cap'; end if;
 end $$;
 
 -- A persona quote repost is an authored post carrying the original, and it
@@ -498,9 +508,14 @@ end $$;
 do $$
 declare selected_job public.ai_jobs; token uuid := gen_random_uuid(); selected_action uuid; persona uuid;
 begin
+  perform public.enqueue_social_action(
+    'test:relationship-neutral-finalizer','human_post_engagement','reply',
+    'aaaaaaaa-1000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000014',null,now(),
+    '{"test":"relationship-neutral finalizer"}'::jsonb
+  );
   select j.* into selected_job from public.ai_jobs j
-  where j.job_type='perform_social_action' and j.payload->>'postId'='aaaaaaaa-1000-4000-8000-000000000002'
-    and j.payload->>'kind'='reply' limit 1;
+  where j.dedupe_key='social-action:test:relationship-neutral-finalizer';
   selected_action := (selected_job.payload->>'actionId')::uuid;
   persona := (selected_job.payload->>'companionId')::uuid;
   update public.ai_jobs set status='processing',lease_token=token,lease_expires_at=now()+interval '1 minute'

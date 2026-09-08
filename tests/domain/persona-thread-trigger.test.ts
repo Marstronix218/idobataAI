@@ -15,6 +15,14 @@ const migration = readFileSync(
   "utf8",
 );
 
+// The guarantee and public-conversation cap are the latest definitions of the
+// post and reply triggers, so contract assertions for the current policy read
+// the migration that replaces both functions.
+const guaranteedConversations = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260908010000_guaranteed_persona_conversations.sql"),
+  "utf8",
+);
+
 // `create_social_notification` was redefined again to hold the new kind behind a
 // flag, so its assertions read the later file: the last definition wins.
 const notificationRollout = readFileSync(
@@ -23,10 +31,75 @@ const notificationRollout = readFileSync(
 );
 
 function triggerBody() {
-  const start = migration.indexOf("create or replace function public.enqueue_human_reply_engagements()");
+  const start = guaranteedConversations.indexOf("create or replace function public.enqueue_human_reply_engagements()");
   expect(start).toBeGreaterThan(-1);
-  return migration.slice(start, migration.indexOf("$$;", start));
+  return guaranteedConversations.slice(start, guaranteedConversations.indexOf("$$;", start));
 }
+
+function latestFunctionBody(functionName: "enqueue_human_post_engagements" | "enqueue_human_reply_engagements" | "finalize_social_action") {
+  const declaration = functionName === "finalize_social_action"
+    ? "create or replace function public.finalize_social_action("
+    : `create or replace function public.${functionName}()`;
+  const start = guaranteedConversations.indexOf(declaration);
+  expect(start).toBeGreaterThan(-1);
+  return guaranteedConversations.slice(start, guaranteedConversations.indexOf("$$;", start));
+}
+
+describe("guaranteed persona conversations", () => {
+  it("guarantees one persona reply for up to four active human posts in a rolling 24-hour window", () => {
+    const body = latestFunctionBody("enqueue_human_post_engagements");
+
+    expect(body).toContain("if new.author_id is null or new.companion_id is not null or new.is_ai_generated then return new; end if;");
+    expect(body).toContain("if new.content_status <> 'active' then return new; end if;");
+    expect(body).toContain("engagement.source='human_post_guarantee'");
+    expect(body).toContain("engagement.created_at>=now()-interval '24 hours'");
+    expect(body).toContain("public.app_tuning_value('AI_POST_GUARANTEED_REPLIES_PER_USER_DAY',4)");
+    expect(body).toContain("pg_catalog.pg_advisory_xact_lock");
+    expect(body).toContain("'human-post:reply:'||new.id,'human_post_guarantee','reply'");
+    expect(body).toContain("jsonb_build_object('guaranteed',true,'reply_due_at',now()+interval '1 hour')");
+  });
+
+  it("does not treat notification preferences as permission to suppress a promised reply", () => {
+    const postBody = latestFunctionBody("enqueue_human_post_engagements");
+    const replyBody = latestFunctionBody("enqueue_human_reply_engagements");
+    const finalizerBody = latestFunctionBody("finalize_social_action");
+
+    expect(postBody).not.toContain("notification_preferences");
+    expect(replyBody).not.toContain("notification_preferences");
+    expect(finalizerBody).not.toContain("notification_preferences");
+    expect(postBody).toContain("public.muted_companions");
+    expect(replyBody).toContain("public.muted_companions");
+  });
+
+  it("guarantees every eligible direct human follow-up immediately with a one-hour due time", () => {
+    const body = latestFunctionBody("enqueue_human_reply_engagements");
+
+    expect(body).toContain("from public.social_replies reply where reply.id=new.parent_reply_id");
+    expect(body).toContain("from public.social_posts post where post.id=new.post_id");
+    expect(body).not.toContain("AI_THREAD_REPLY_PROBABILITY");
+    expect(body).toContain("'human-reply:response:'||new.id,'human_reply_response','reply'");
+    expect(body).toContain("new.post_id,target_companion,new.id,now()");
+    expect(body).toContain("'guaranteed',true");
+    expect(body).toContain("'reply_due_at',new.created_at+interval '1 hour'");
+  });
+
+  it("stops the public branch after six turns from the addressed persona", () => {
+    const body = latestFunctionBody("enqueue_human_reply_engagements");
+
+    expect(guaranteedConversations).toContain("('AI_THREAD_MAX_PERSONA_REPLIES', 6,");
+    expect(body).toContain("where reply.id<>new.id and reply.companion_id=target_companion");
+    expect(body).toContain("prior_persona_turns >= public.app_tuning_value('AI_THREAD_MAX_PERSONA_REPLIES',6)");
+    expect(body).toContain("skip_reason := 'public thread reply limit reached'");
+  });
+
+  it("finalizes replies without silently creating a persona relationship", () => {
+    const body = latestFunctionBody("finalize_social_action");
+
+    expect(body).toContain("insert into public.social_replies");
+    expect(body).not.toContain("insert into public.user_companion_relationships");
+    expect(body).not.toContain("kind='follow'");
+  });
+});
 
 describe("human reply engagement trigger", () => {
   it("refuses to act on anything a persona wrote, so AI cannot answer AI", () => {
@@ -47,29 +120,22 @@ describe("human reply engagement trigger", () => {
 
   it("keys the follow-up on the human reply, so one reply can only ever produce one response", () => {
     expect(triggerBody()).toContain("'human-reply:response:'||new.id");
-    expect(migration).toContain("-- One engagement row per human reply, keyed on that reply");
   });
 
-  it("rolls a probability that is deterministic in the reply id", () => {
-    const body = triggerBody();
-    expect(body).toContain("public.app_tuning_value('AI_THREAD_REPLY_PROBABILITY', 1.0)");
-    expect(body).toContain("hashtextextended(new.id::text || ':thread-reply', 0) & 1073741823::bigint");
-    expect(body).toContain("elsif roll >= probability then skip_reason := 'probability roll declined'");
-  });
-
-  it("honours the mute, the notification preference, and both kill switches", () => {
+  it("honours mutes and both kill switches without treating notification preferences as consent", () => {
     const body = triggerBody();
     expect(body).toContain("public.muted_companions");
-    expect(body).toContain("companion_activity");
+    expect(body).not.toContain("notification_preferences");
     expect(body).toContain("feature_flag_enabled('AI_PERSONA_THREAD_REPLIES')");
     expect(body).toContain("feature_flag_enabled('AI_PERSONA_REPLIES')");
   });
 
-  it("caps depth, per-conversation daily volume, and work in flight per user", () => {
+  it("caps thread depth and public persona turns", () => {
     const body = triggerBody();
-    expect(body).toContain("public.app_tuning_value('AI_THREAD_MAX_DEPTH', 40)");
-    expect(body).toContain("public.app_tuning_value('AI_THREAD_MAX_PERSONA_REPLIES_PER_DAY', 24)");
-    expect(body).toContain("public.app_tuning_value('AI_THREAD_MAX_ACTIVE_PER_USER', 8)");
+    expect(body).toContain("public.app_tuning_value('AI_THREAD_MAX_DEPTH',40)");
+    expect(body).toContain("public.app_tuning_value('AI_THREAD_MAX_PERSONA_REPLIES',6)");
+    expect(body).not.toContain("AI_THREAD_MAX_PERSONA_REPLIES_PER_DAY");
+    expect(body).not.toContain("AI_THREAD_MAX_ACTIVE_PER_USER");
   });
 
   it("records the funnel without recording what anyone wrote", () => {
