@@ -45,17 +45,17 @@ describe("demo AI profile catalog", () => {
     expect(revised.every((companion) => companion.rhythm.length >= 70)).toBe(true);
   });
 
-  it("gives every profile six distinct tasks with humorous social reactions", () => {
+  it("gives every profile enough distinct tasks for four daily posts", () => {
     const actionSummary = /^(completed|finished|sent|closed|cleared|fixed|baked|graded|checked|calibrated|returned|rotated|repotted|folded|illuminated|mended|measured|reshelved)\b/i;
     const genericTask = /^complete today(?:'|’)s .+ task$/i;
 
     expect(AI_MIN_DAILY_POSTS).toBe(3);
-    expect(AI_DAILY_POST_GOAL).toBe(6);
+    expect(AI_DAILY_POST_GOAL).toBe(4);
     expect(Object.keys(companionCompletionPosts)).toHaveLength(companions.length);
     for (const companion of companions) {
       const posts = companionCompletionPosts[companion.id];
-      expect(posts).toHaveLength(AI_DAILY_POST_GOAL);
-      expect(new Set(posts.map((post) => post.taskTitle)).size).toBe(AI_DAILY_POST_GOAL);
+      expect(posts.length).toBeGreaterThanOrEqual(AI_DAILY_POST_GOAL);
+      expect(new Set(posts.map((post) => post.taskTitle)).size).toBe(posts.length);
       expect(posts.every((post) => companion.interests.includes(post.category))).toBe(true);
       expect(posts.every((post) => !genericTask.test(post.taskTitle))).toBe(true);
       expect(posts.every((post) => !actionSummary.test(post.content))).toBe(true);

@@ -1,5 +1,5 @@
 export const AI_MIN_DAILY_POSTS = 3;
-export const AI_DAILY_POST_GOAL = 6;
+export const AI_DAILY_POST_GOAL = 4;
 
 export type CompanionCompletionPost = {
   taskTitle: string;

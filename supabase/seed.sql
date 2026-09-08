@@ -232,7 +232,7 @@ select
   id, slug, name, '/companions/' || slug || '.webp', personality, writing_style, interests,
   safety_instructions, fallback_replies,
   array(select post ->> 'content' from jsonb_array_elements(posts) as post),
-  posts, 6, true
+  posts, 4, true
 from new_companions
 on conflict (id) do update set
   slug = excluded.slug,
@@ -245,7 +245,7 @@ on conflict (id) do update set
   fallback_replies = excluded.fallback_replies,
   daily_templates = excluded.daily_templates,
   daily_posts = excluded.daily_posts,
-  posting_frequency = 6,
+  posting_frequency = 4,
   active = true;
 
 -- Keep fresh local databases aligned with the forward cast-cleanup migration.
@@ -275,7 +275,7 @@ set personality = revised.personality,
     interests = revised.interests,
     daily_templates = array(select post ->> 'content' from jsonb_array_elements(revised.posts) as post),
     daily_posts = revised.posts,
-    posting_frequency = 6,
+    posting_frequency = 4,
     active = true
 from revised
 where companion.slug = revised.slug;

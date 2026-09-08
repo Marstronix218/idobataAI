@@ -236,6 +236,9 @@ begin
   if exists(select 1 from public.social_companions where active and posting_frequency < 3) then
     raise exception 'an active persona can fall below the three-post daily minimum';
   end if;
+  if exists(select 1 from public.social_companions where active and posting_frequency <> 4) then
+    raise exception 'active personas must publish four original posts per UTC day';
+  end if;
   if not exists(
     select 1 from information_schema.columns
     where table_schema='public' and table_name='companion_user_memory' and column_name='reset_at'
