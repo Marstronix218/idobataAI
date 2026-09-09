@@ -1,7 +1,8 @@
 -- Human posts should never feel ignored, while public persona conversations
 -- should not become an unbounded substitute for DMs. Guarantee one persona
--- reply for the first four posts a user publishes in a rolling day, then answer
--- every direct human follow-up until the branch reaches six persona turns.
+-- reply plus a lightweight reaction for the first four posts a user publishes
+-- in a rolling day, then answer every direct human follow-up until the branch
+-- reaches six persona turns. Follow relationships are ranking hints, not gates.
 
 insert into public.app_tuning_values(key, value, description) values
   ('AI_POST_GUARANTEED_REPLIES_PER_USER_DAY', 4,
@@ -16,6 +17,7 @@ create or replace function public.enqueue_human_post_engagements()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
   selected_companion uuid;
+  reaction_companion uuid;
   task_category text;
   guaranteed_today integer;
 begin
@@ -32,6 +34,7 @@ begin
   from public.social_ai_engagements engagement
   join public.social_posts post on post.id=engagement.post_id
   where engagement.source='human_post_guarantee'
+    and engagement.kind='reply'
     and engagement.state<>'cancelled'
     and post.author_id=new.author_id
     and engagement.created_at>=now()-interval '24 hours';
@@ -62,6 +65,29 @@ begin
         new.id,selected_companion,null,now(),
         jsonb_build_object('guaranteed',true,'reply_due_at',now()+interval '1 hour')
       );
+
+      -- A second lightweight signal keeps a new user's feed from feeling empty
+      -- even when they have no persona relationship rows yet. Prefer a
+      -- different character, but let the responder also react when it is the
+      -- only eligible active persona.
+      if public.feature_flag_enabled('AI_PERSONA_LIKES') then
+        select companion.id into reaction_companion
+        from public.social_companions companion
+        where companion.active
+          and companion.id<>selected_companion
+          and not exists(select 1 from public.muted_companions muted
+            where muted.user_id=new.author_id and muted.companion_id=companion.id)
+        order by (((hashtextextended(new.id::text||':reaction:'||companion.id::text,0)%1000+1000)%1000)) desc,
+          companion.id
+        limit 1;
+
+        reaction_companion := coalesce(reaction_companion,selected_companion);
+        perform public.enqueue_social_action(
+          'human-post:reaction:'||new.id,'human_post_guarantee','reaction',
+          new.id,reaction_companion,null,now()+interval '1 minute',
+          jsonb_build_object('guaranteed_presence',true)
+        );
+      end if;
     end if;
   end if;
 
@@ -284,7 +310,7 @@ revoke all on function
 grant execute on function public.finalize_social_action(uuid,uuid,text) to service_role;
 
 comment on function public.enqueue_human_post_engagements() is
-  'Guarantees one persona reply for up to four active human posts per rolling day, while retaining selective completion engagement.';
+  'Guarantees a persona reply and lightweight reaction for up to four active human posts per rolling day without requiring a follow relationship.';
 comment on function public.enqueue_human_reply_engagements() is
   'Guarantees the addressed persona follows up immediately until six persona turns, after which the UI guides the user to DMs.';
 comment on function public.finalize_social_action(uuid,uuid,text) is

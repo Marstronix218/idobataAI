@@ -52,11 +52,23 @@ describe("guaranteed persona conversations", () => {
     expect(body).toContain("if new.author_id is null or new.companion_id is not null or new.is_ai_generated then return new; end if;");
     expect(body).toContain("if new.content_status <> 'active' then return new; end if;");
     expect(body).toContain("engagement.source='human_post_guarantee'");
+    expect(body).toContain("engagement.kind='reply'");
     expect(body).toContain("engagement.created_at>=now()-interval '24 hours'");
     expect(body).toContain("public.app_tuning_value('AI_POST_GUARANTEED_REPLIES_PER_USER_DAY',4)");
     expect(body).toContain("pg_catalog.pg_advisory_xact_lock");
     expect(body).toContain("'human-post:reply:'||new.id,'human_post_guarantee','reply'");
     expect(body).toContain("jsonb_build_object('guaranteed',true,'reply_due_at',now()+interval '1 hour')");
+  });
+
+  it("does not require either direction of a follow relationship and adds a second lightweight reaction", () => {
+    const body = latestFunctionBody("enqueue_human_post_engagements");
+
+    expect(body).toContain("left join public.user_companion_relationships relationship");
+    expect(body).not.toContain("relationship.user_followed_at is not null");
+    expect(body).not.toContain("relationship.companion_follow_state='following'");
+    expect(body).toContain("companion.id<>selected_companion");
+    expect(body).toContain("'human-post:reaction:'||new.id,'human_post_guarantee','reaction'");
+    expect(body).toContain("jsonb_build_object('guaranteed_presence',true)");
   });
 
   it("does not treat notification preferences as permission to suppress a promised reply", () => {

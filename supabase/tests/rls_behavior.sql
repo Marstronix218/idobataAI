@@ -123,6 +123,10 @@ begin
     select count(*) from public.ai_jobs
     where job_type='perform_social_action' and payload->>'postId'=progress_id::text and payload->>'kind'='reply'
   ) <> 1 then raise exception 'progress publishing did not queue exactly one guaranteed persona reply'; end if;
+  if (
+    select count(*) from public.ai_jobs
+    where job_type='perform_social_action' and payload->>'postId'=progress_id::text and payload->>'kind'='reaction'
+  ) <> 1 then raise exception 'progress publishing did not queue exactly one guaranteed persona reaction'; end if;
   if (select count(*) from public.task_completion_awards where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion awarded twice in one occurrence'; end if;
   if (select count(*) from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004') <> 1 then raise exception 'recurring completion published twice in one occurrence'; end if;
   if not exists(select 1 from public.social_posts where task_id='aaaaaaaa-0000-4000-8000-000000000004' and visibility='public') then raise exception 'completion publisher ignored the explicitly confirmed audience'; end if;
@@ -203,19 +207,11 @@ do $$ begin
   end;
 end $$;
 
--- Guarantees are capped per author regardless of how many personas they follow.
-select set_config('app.companion_follow_transition','allowed',true);
-insert into public.user_companion_relationships(
-  user_id,companion_id,companion_follow_state,companion_follow_requested_at,companion_followed_at
-)
-select 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',companion.id,'following',now(),now()
-from public.social_companions companion
-where companion.id in (
-  '10000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000002',
-  '10000000-0000-4000-8000-000000000003'
-);
-select set_config('app.companion_follow_transition','',true);
+-- Persona presence must not depend on either direction of a follow. Clear every
+-- relationship row before publishing the fixtures so this contract covers a
+-- brand-new user as well as an established one.
+delete from public.user_companion_relationships
+where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 insert into public.social_posts(id,author_id,kind,visibility,content,idempotency_key)
 values
@@ -235,7 +231,19 @@ do $$ begin
     join public.social_posts post on post.id=engagement.post_id
     where post.author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
       and engagement.source='human_post_guarantee' and engagement.state<>'cancelled'
+      and engagement.kind='reply'
   ) <> 4 then raise exception 'persona reply guarantee exceeded the four-post rolling-day cap'; end if;
+  if (
+    select count(*) from public.social_ai_engagements engagement
+    join public.social_posts post on post.id=engagement.post_id
+    where post.author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      and engagement.source='human_post_guarantee' and engagement.state<>'cancelled'
+      and engagement.kind='reaction'
+  ) <> 4 then raise exception 'unfollowed user did not receive one lightweight persona reaction per guaranteed post'; end if;
+  if exists(
+    select 1 from public.user_companion_relationships
+    where user_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  ) then raise exception 'persona engagement silently created a follow relationship'; end if;
 end $$;
 
 -- The completed-task planner and persona affinity tables share this classifier.
@@ -275,6 +283,7 @@ do $$ begin
     join public.social_posts post on post.id=engagement.post_id
     where post.author_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
       and engagement.source='human_post_guarantee' and engagement.state<>'cancelled'
+      and engagement.kind='reply'
   ) <> 4 then raise exception 'later completion bypassed the four-post rolling-day guarantee cap'; end if;
 end $$;
 
