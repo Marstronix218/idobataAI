@@ -30,7 +30,10 @@ if (requestedShots && jobs.length !== requestedShots.size) {
 }
 
 const plannedClips = jobs.length * variants;
-const plannedSeconds = plannedClips * Number(config.defaults.seconds);
+const plannedSeconds = jobs.reduce(
+  (total, job) => total + variants * Number(job.seconds ?? config.defaults.seconds),
+  0,
+);
 const plannedProCost = plannedSeconds * 0.5;
 
 console.log(JSON.stringify({
@@ -78,9 +81,12 @@ for (const job of jobs) {
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    const prompt = `${job.prompt}\n\n${config.universal_negative}`;
+    const prompt = `${job.prompt}\n\n${job.negative ?? config.universal_negative}`;
     const referencePath = resolve(projectDir, job.reference);
-    const models = [config.defaults.model, config.defaults.fallback_model];
+    const models = [
+      job.model ?? config.defaults.model,
+      job.fallback_model ?? config.defaults.fallback_model,
+    ];
     let created = force ? null : await readJsonIfPresent(`${outputBase}.create.json`);
     let usedModel = created?.model;
 
@@ -93,7 +99,13 @@ for (const job of jobs) {
     if (!created) {
       for (const model of models) {
         try {
-          created = await createVideo({ model, prompt, referencePath });
+          created = await createVideo({
+            model,
+            prompt,
+            referencePath,
+            seconds: job.seconds ?? config.defaults.seconds,
+            size: job.size ?? config.defaults.size,
+          });
           usedModel = model;
           break;
         } catch (error) {
@@ -112,13 +124,13 @@ for (const job of jobs) {
   }
 }
 
-async function createVideo({ model, prompt, referencePath }) {
+async function createVideo({ model, prompt, referencePath, seconds, size }) {
   const bytes = await readFile(referencePath);
   const form = new FormData();
   form.append("model", model);
   form.append("prompt", prompt);
-  form.append("seconds", config.defaults.seconds);
-  form.append("size", config.defaults.size);
+  form.append("seconds", seconds);
+  form.append("size", size);
   form.append("input_reference", new Blob([bytes], { type: mediaType(referencePath) }), basename(referencePath));
 
   return requestJson("https://api.openai.com/v1/videos", {
