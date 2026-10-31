@@ -113,6 +113,13 @@ describe("the reaction user message", () => {
     expect(text).toMatch(/Moment: .*back/);
     expect(text).toMatch(/do not mention the gap, missed days or streaks/);
   });
+
+  it("says a chapter opened, and forbids describing or inventing the story", () => {
+    const text = buildReactionUserMessage(context({ eventType: "finished", moment: "chapter_unlocked", streak: 3 }));
+    expect(text).toContain("Event: the user just finished this task.");
+    expect(text).toMatch(/Moment: .*unlocked a new chapter/);
+    expect(text).toMatch(/never describe, summarize or make up anything about the story/);
+  });
 });
 
 describe("buildReactionRequest", () => {

@@ -48,7 +48,7 @@ describe("GET /api/characters", () => {
     const db = useDatabase(
       // RLS already hides inactive rows; packs the user does not own still come back.
       { data: [launch, ownedPack, otherPack], error: null },
-      { data: [{ product: "pack:owned-pack" }], error: null },
+      { data: [{ product: "pack:owned-pack", status: "active", trial_ends_at: null, current_period_end: null }], error: null },
     );
 
     const response = await GET(request());
@@ -60,10 +60,21 @@ describe("GET /api/characters", () => {
     expect(selected).not.toContain("sheet");
     expect(selected).not.toContain("*");
     expect(db.characters.eq).toHaveBeenCalledWith("active", true);
-    expect(db.entitlements.select).toHaveBeenCalledWith("product");
+    expect(db.entitlements.select).toHaveBeenCalledWith("product, status, trial_ends_at, current_period_end");
     expect(db.entitlements.eq).toHaveBeenCalledWith("user_id", userId);
     expect(db.entitlements.like).toHaveBeenCalledWith("product", "pack:%");
-    expect(db.entitlements.in).toHaveBeenCalledWith("status", ["active", "trialing"]);
+  });
+
+  it("counts only an active pack as owned, the same rule as the story (packs have no trial)", async () => {
+    const pack = (product: string, status: string) => ({ product, status, trial_ends_at: null, current_period_end: null });
+    useDatabase(
+      { data: [launch, ownedPack, otherPack], error: null },
+      { data: [pack("pack:owned-pack", "trialing"), pack("pack:other-pack", "refunded")], error: null },
+    );
+
+    const response = await GET(request());
+
+    expect(await response.json()).toEqual({ data: { items: [launch] } });
   });
 
   it("returns an empty list when nothing is selectable", async () => {

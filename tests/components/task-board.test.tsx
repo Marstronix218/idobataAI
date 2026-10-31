@@ -7,6 +7,9 @@ vi.mock("next/link", () => ({
     <a href={href} {...props}>{children}</a>
   ),
 }));
+// The Pivot A board refreshes the server components after a finish.
+const { router } = vi.hoisted(() => ({ router: { refresh: vi.fn() } }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 import { TaskBoard } from "@/components/tasks/task-board";
 

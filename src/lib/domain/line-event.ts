@@ -25,6 +25,11 @@ export interface LineEventInput {
   currentStreak: number;
   /** Local days since the user's last activity before this event (any task event or reaction); null without any. */
   daysSinceLastActivity: number | null;
+  /**
+   * This finish's new consistency day opened a story chapter the user did not
+   * have before (see chapterUnlockedByLatestDay in ./story-unlock.ts).
+   */
+  unlocksChapter?: boolean;
 }
 
 export const plainLineEvent = (eventType: TaskEventType): CharacterEvent =>
@@ -33,19 +38,32 @@ export const plainLineEvent = (eventType: TaskEventType): CharacterEvent =>
 /**
  * 1. comeback: the first reaction of the day after a gap of 2+ days since the
  *    last activity. Welcoming, with no guilt.
- * 2. streak: the first finish of a local day while the streak is 2 or more.
- * 3. first_of_day: a start that is the first reaction of the local day.
- * 4. Otherwise task_started or task_finished.
+ * 2. chapter_unlocked: the first finish of a local day, when that new
+ *    consistency day opened a story chapter (SPEC Phase 4).
+ * 3. streak: the first finish of a local day while the streak is 2 or more.
+ * 4. first_of_day: a start that is the first reaction of the local day.
+ * 5. Otherwise task_started or task_finished.
  *
- * The caller falls back to the plain event when the chosen one has no line
- * (see selectLineWithFallback).
+ * The caller falls back to the next event down when the chosen one has no
+ * line (see lineEventFallbacks and selectLineWithFallback).
  */
 export function chooseLineEvent(input: LineEventInput): CharacterEvent {
   const afterGap = input.daysSinceLastActivity !== null && input.daysSinceLastActivity >= COMEBACK_GAP_DAYS;
   if (afterGap && input.isFirstReactionOfLocalDay) return "comeback";
-  if (input.eventType === "finished" && input.isFirstFinishOfLocalDay && input.currentStreak >= STREAK_LINE_MIN) return "streak";
+  const firstFinish = input.eventType === "finished" && input.isFirstFinishOfLocalDay;
+  if (firstFinish && input.unlocksChapter) return "chapter_unlocked";
+  if (firstFinish && input.currentStreak >= STREAK_LINE_MIN) return "streak";
   if (input.eventType === "started" && input.isFirstReactionOfLocalDay) return "first_of_day";
   return plainLineEvent(input.eventType);
+}
+
+/**
+ * The events to try in order: the chosen one, then what would be chosen
+ * without the chapter unlock (so a character without chapter_unlocked lines
+ * still celebrates a streak), then the plain event.
+ */
+export function lineEventFallbacks(input: LineEventInput): CharacterEvent[] {
+  return [...new Set([chooseLineEvent(input), chooseLineEvent({ ...input, unlocksChapter: false }), plainLineEvent(input.eventType)])];
 }
 
 /**

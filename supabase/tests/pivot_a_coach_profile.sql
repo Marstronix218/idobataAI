@@ -4,6 +4,7 @@ create extension if not exists pgtap with schema extensions;
 select extensions.plan(1);
 
 -- Fixtures: A owns one active pack and one cancelled pack; B owns nothing.
+-- A trialing pack row is added below, once the constraint refusing it is checked.
 insert into auth.users(id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
   ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','authenticated','authenticated','coach-a@example.test',crypt('test-password',gen_salt('bf')),now(),'{}','{"username":"coach_a"}',now(),now()),
@@ -22,8 +23,29 @@ insert into public.entitlements(user_id, product, status, source)
 values
   ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','pack:cp-pack','active','stripe'),
   ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','pack:cp-lapsed','canceled','stripe'),
-  ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','pack:cp-trial','trialing','app_store'),
   ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','pack:cp-retired-pack','active','stripe');
+
+-- Packs are one-time purchases: only Plus can be trialing.
+do $$
+declare state text;
+begin
+  begin
+    insert into public.entitlements(user_id, product, status, source)
+    values ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','pack:cp-trial','trialing','app_store');
+  exception when others then get stacked diagnostics state = returned_sqlstate;
+  end;
+  if state is distinct from '23514' then raise exception 'a trialing pack entitlement was accepted (got %)', state; end if;
+
+  insert into public.entitlements(user_id, product, status, source)
+  values ('bbbbbbbb-3333-4333-8333-bbbbbbbbbbbb','plus','trialing','stripe');
+  delete from public.entitlements where user_id='bbbbbbbb-3333-4333-8333-bbbbbbbbbbbb';
+end $$;
+
+-- set_coach_profile also refuses a trialing pack on its own, so the rule does
+-- not rest on the constraint alone. Dropped only inside this test transaction.
+alter table public.entitlements drop constraint entitlements_trialing_plus_only;
+insert into public.entitlements(user_id, product, status, source)
+values ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa','pack:cp-trial','trialing','app_store');
 
 -- ---------------------------------------------------------------------------
 -- Structure: a definer function with an empty search_path that only signed-in
@@ -169,10 +191,11 @@ declare
   state text;
   msg text;
 begin
-  -- Inactive launch, cancelled pack, inactive owned pack, missing id.
+  -- Inactive launch, cancelled pack, trialing pack, inactive owned pack, missing id.
   foreach refused in array array[
     'c1000000-0000-4000-8000-000000000002',
     'c1000000-0000-4000-8000-000000000004',
+    'c1000000-0000-4000-8000-000000000005',
     'c1000000-0000-4000-8000-000000000006',
     'c1000000-0000-4000-8000-0000000000ff'
   ]::uuid[] loop
@@ -190,13 +213,10 @@ begin
     is distinct from row('c1000000-0000-4000-8000-000000000001'::uuid, 'America/New_York'::text)::text
   then raise exception 'a refused character changed the profile'; end if;
 
-  -- An active owned pack, then a trialing one.
+  -- An active owned pack.
   if (public.set_coach_profile('c1000000-0000-4000-8000-000000000003', null)).selected_character_id
     <> 'c1000000-0000-4000-8000-000000000003'
   then raise exception 'an owned active pack could not be selected'; end if;
-  if (public.set_coach_profile('c1000000-0000-4000-8000-000000000005', null)).selected_character_id
-    <> 'c1000000-0000-4000-8000-000000000005'
-  then raise exception 'a trialing pack could not be selected'; end if;
 end $$;
 
 -- B does not own A's pack.
@@ -240,12 +260,12 @@ begin
   end loop;
 
   saved := public.set_coach_profile(null, null);
-  if saved.selected_character_id <> 'c1000000-0000-4000-8000-000000000005' or saved.timezone <> 'America/New_York' then
+  if saved.selected_character_id <> 'c1000000-0000-4000-8000-000000000003' or saved.timezone <> 'America/New_York' then
     raise exception 'null arguments or a refused time zone changed the profile: %', row_to_json(saved);
   end if;
 
   saved := public.set_coach_profile(p_timezone => 'Asia/Tokyo');
-  if saved.selected_character_id <> 'c1000000-0000-4000-8000-000000000005' or saved.timezone <> 'Asia/Tokyo' then
+  if saved.selected_character_id <> 'c1000000-0000-4000-8000-000000000003' or saved.timezone <> 'Asia/Tokyo' then
     raise exception 'saving only the time zone changed the character: %', row_to_json(saved);
   end if;
 

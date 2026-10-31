@@ -739,3 +739,186 @@ describe("getReaction: final review batch", () => {
     expect(usageRow(db)).toMatchObject({ reaction_attempts: 1, reactions: 0 });
   });
 });
+
+describe("getReaction: story chapters (Phase 4)", () => {
+  const profile = (arm: "ai" | "prewritten" = "prewritten") => [{ user_id: USER_ID, selected_character_id: CHARACTER_ID, timezone: "America/Chicago", ai_arm: arm }];
+  const finishToday = { id: EVENT_ID, user_id: USER_ID, task_id: TASK_ID, type: "finished", occurred_at: NOW.toISOString(), local_date: TODAY, occurrence_key: "single" };
+  const finishOn = (id: string, date: string) => ({ id, user_id: USER_ID, task_id: `t-${id}`, type: "finished", occurred_at: `${date}T15:00:00.000Z`, local_date: date, occurrence_key: "single" });
+  const chapter = (number: number) => ({
+    id: `ch-${number}`, character_id: CHARACTER_ID, number, title: `Secret title ${number}`, body: `Secret body ${number}`,
+    unlock_rule: { consistency_days: number }, active: true,
+  });
+  const arc = (count: number) => Array.from({ length: count }, (_, index) => chapter(index + 1));
+  /** The finish trigger has counted today: consistency_days now includes it. */
+  const progress = (consistencyDays: number, unlockedThrough: number, last = TODAY, userId = USER_ID) =>
+    ({ user_id: userId, character_id: CHARACTER_ID, consistency_days: consistencyDays, unlocked_through: unlockedThrough, last_consistency_date: last });
+  const storedProgress = () => db.tables.story_progress.find((row) => row.user_id === USER_ID);
+
+  function storyTables(overrides: Partial<Record<string, Row[]>> = {}) {
+    return baseTables({
+      user_coach_profiles: profile(),
+      // Yesterday's finish makes today's a 2-day streak, so a streak line would otherwise apply.
+      task_events: [finishToday, finishOn("f-yesterday", "2026-10-30")],
+      // A reaction yesterday, so today is neither a comeback nor anyone's first ever.
+      character_reactions: [{ id: "r-y", user_id: USER_ID, task_event_id: "f-yesterday", event: "task_finished", line_id: null, text: "Nice.", created_at: "2026-10-30T15:00:00.000Z", disclosure_shown: true }],
+      story_progress: [progress(2, 1)],
+      story_chapters: arc(3),
+      ...overrides,
+    });
+  }
+
+  it("uses a chapter_unlocked line, ahead of the streak, on the day's first finish that opens a chapter, and records it", async () => {
+    useDatabase(storyTables());
+
+    const result = await getReaction(USER_ID, EVENT_ID);
+
+    expect(result).toMatchObject({ kind: "reaction", source: "prewritten" });
+    const stored = db.inserted.character_reactions[0];
+    expect(stored.event).toBe("chapter_unlocked");
+    expect(linesFor("chapter_unlocked")).toContain(stored.line_id);
+    expect(result).toMatchObject({ text: lineText(String(stored.line_id)) });
+    expect(storedProgress()).toMatchObject({ unlocked_through: 2, consistency_days: 2 });
+    // Nothing about any chapter's title or body goes into the reaction.
+    expect(JSON.stringify(result)).not.toMatch(/Secret/);
+  });
+
+  it("still welcomes the user back with a comeback after a gap, and records the chapter", async () => {
+    useDatabase(storyTables({
+      task_events: [finishToday, finishOn("f-old", "2026-10-26")],
+      character_reactions: [],
+    }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("comeback");
+    expect(storedProgress()).toMatchObject({ unlocked_through: 2 });
+  });
+
+  it("announces nothing on a later finish the same day", async () => {
+    useDatabase(storyTables({ task_events: [finishToday, finishOn("f-earlier", TODAY), finishOn("f-yesterday", "2026-10-30")] }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("task_finished");
+  });
+
+  it("announces nothing when the free plan stops at chapter 3: the streak line instead", async () => {
+    useDatabase(storyTables({ entitlements: [], story_progress: [progress(4, 3)], story_chapters: arc(5) }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("streak");
+    expect(db.updated.story_progress ?? []).toEqual([]);
+  });
+
+  it("opens the pack's full arc for its owner on the free plan", async () => {
+    useDatabase(storyTables({
+      entitlements: [{ user_id: USER_ID, product: "pack:sample-coach", status: "active", source: "stripe", trial_ends_at: null, current_period_end: null }],
+      story_progress: [progress(4, 3)],
+      story_chapters: arc(5),
+    }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("chapter_unlocked");
+    expect(storedProgress()).toMatchObject({ unlocked_through: 4 });
+  });
+
+  it("announces nothing when this finish's day was not counted toward the story", async () => {
+    useDatabase(storyTables({ story_progress: [progress(2, 1, "2026-10-30")] }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("streak");
+  });
+
+  it("announces a chapter only once: one already recorded is not announced again", async () => {
+    useDatabase(storyTables({ story_progress: [progress(2, 2)] }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("streak");
+    expect(db.updated.story_progress ?? []).toEqual([]);
+  });
+
+  it("falls back to the streak line when the character has no chapter_unlocked lines", async () => {
+    useDatabase(storyTables({ character_lines: baseTables().character_lines.filter((line) => line.event !== "chapter_unlocked") }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("streak");
+  });
+
+  it("never uses another user's story progress", async () => {
+    useDatabase(storyTables({ story_progress: [progress(2, 0, TODAY, OTHER_USER_ID)] }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("streak");
+    expect(db.tables.story_progress[0]).toMatchObject({ user_id: OTHER_USER_ID, unlocked_through: 0 });
+  });
+
+  it("still reacts when the story cannot be read", async () => {
+    useDatabase(storyTables(), { story_chapters: { message: "boom", code: "XX000" } });
+
+    expect(await getReaction(USER_ID, EVENT_ID)).toMatchObject({ kind: "reaction" });
+    expect(db.inserted.character_reactions[0].event).toBe("streak");
+  });
+
+  it("does not read the story for a start", async () => {
+    useDatabase(storyTables({ task_events: [{ ...finishToday, type: "started", occurrence_key: null }] }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    const tablesRead = db.from.mock.calls.map(([table]) => table);
+    expect(tablesRead).not.toContain("story_progress");
+    expect(tablesRead).not.toContain("story_chapters");
+  });
+
+  it("tells the AI a chapter opened, without any story content, and stores the AI line as chapter_unlocked", async () => {
+    useDatabase(storyTables({ user_coach_profiles: profile("ai") }));
+
+    const result = await getReaction(USER_ID, EVENT_ID);
+
+    expect(result).toMatchObject({ kind: "reaction", source: "ai" });
+    const content = String(reactionCalls()[0][0].messages[0].content);
+    expect(content).toContain("unlocked a new chapter");
+    expect(content).toMatch(/never describe, summarize or make up anything about the story/);
+    expect(JSON.stringify(reactionCalls()[0][0])).not.toMatch(/Secret/);
+    expect(db.inserted.character_reactions[0]).toMatchObject({ event: "chapter_unlocked", source: "ai" });
+    expect(storedProgress()).toMatchObject({ unlocked_through: 2 });
+  });
+
+  it("keeps the crisis card first: no chapter line and no story write for distress text", async () => {
+    useDatabase(storyTables({ tasks: [{ id: TASK_ID, owner_id: USER_ID, title: "I want to die", description: null, created_at: "2026-10-28T15:00:00.000Z" }] }));
+
+    expect(await getReaction(USER_ID, EVENT_ID)).toEqual({ kind: "crisis" });
+    expect(db.inserted.character_reactions ?? []).toEqual([]);
+    expect(db.updated.story_progress ?? []).toEqual([]);
+  });
+
+  it("answers within 3 s with the chapter line when the AI never replies", async () => {
+    useDatabase(storyTables({ user_coach_profiles: profile("ai") }));
+    reactionReply = () => never();
+    const startedAt = Date.now();
+
+    const pending = getReaction(USER_ID, EVENT_ID, { startedAt });
+    await vi.advanceTimersByTimeAsync(2600);
+    const result = await pending;
+
+    expect(Date.now() - startedAt).toBeLessThan(3000);
+    expect(result).toMatchObject({ source: "prewritten" });
+    expect(db.inserted.character_reactions[0].event).toBe("chapter_unlocked");
+  });
+
+  it("does not let a session nudge end the day's first reaction or the comeback gap", async () => {
+    useDatabase(baseTables({
+      user_coach_profiles: profile(),
+      character_reactions: [{ id: "nudge", user_id: USER_ID, task_event_id: null, event: "session_nudge", line_id: "sample-coach.session_nudge.001", text: "Close the app.", created_at: "2026-10-31T14:00:00.000Z", disclosure_shown: false }],
+    }));
+
+    await getReaction(USER_ID, EVENT_ID);
+
+    expect(db.inserted.character_reactions[0].event).toBe("first_of_day");
+  });
+});

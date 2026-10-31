@@ -548,6 +548,12 @@ export interface StoryProgress {
   updated_at: string;
 }
 
+/** One row per user and local date with a finished task; outlives deleted tasks (20261031160000). */
+export interface CoachConsistencyDate {
+  user_id: string;
+  local_date: string;
+}
+
 export interface Entitlement {
   id: string;
   user_id: string;
@@ -611,6 +617,7 @@ export interface Database {
       character_reactions: Table<CharacterReaction, Partial<CharacterReaction> & Pick<CharacterReaction, "user_id" | "character_id" | "event" | "source" | "text">>;
       ai_usage_daily: Table<AIUsageDaily, Partial<AIUsageDaily> & Pick<AIUsageDaily, "user_id" | "date">>;
       story_progress: Table<StoryProgress, Partial<StoryProgress> & Pick<StoryProgress, "user_id" | "character_id">>;
+      coach_consistency_dates: Table<CoachConsistencyDate, CoachConsistencyDate>;
       entitlements: Table<Entitlement, Partial<Entitlement> & Pick<Entitlement, "user_id" | "product" | "status" | "source">>;
       safety_counters: Table<SafetyCounter, Partial<SafetyCounter> & Pick<SafetyCounter, "date" | "kind">>;
     };
@@ -760,6 +767,7 @@ export interface Database {
       submit_feedback: { Args: { p_category: FeedbackType; p_message: string }; Returns: string };
       pivot_flag_enabled: { Args: { p_key: string }; Returns: boolean };
       coach_local_date: { Args: { p_user_id: string; p_at?: string }; Returns: string };
+      coach_consistency_total_days: { Args: { p_user_id: string }; Returns: number };
       start_task: { Args: { p_task_id: string }; Returns: TaskEvent };
       set_coach_profile: { Args: { p_character_id?: string | null; p_timezone?: string | null }; Returns: UserCoachProfile };
       record_ai_usage: {

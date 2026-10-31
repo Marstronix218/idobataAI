@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { drainAfterHumanEngagement } from "@/lib/ai";
 import { publishSchema } from "@/lib/server/schemas";
+import { getFlags } from "@/lib/flags";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { removePostMedia, validateStoredPostMedia } from "@/lib/server/post-media";
@@ -20,6 +21,9 @@ export async function POST(request: Request, { params }: Context) {
     const taskId = z.uuid().parse((await params).id);
     const input = await parseJson(request, publishSchema);
     const imagePaths = input.imagePaths ?? [];
+    // Pivot A shows only positive progress, so wins never carry the legacy
+    // resetting streak, whatever the client sends.
+    const { sharePeopleOnly } = await getFlags();
     const admin = createAdminClient();
 
     try {
@@ -38,7 +42,7 @@ export async function POST(request: Request, { params }: Context) {
           visibility: input.visibility,
           image_paths: imagePaths,
           ...(input.showCategoryTag === false ? { category: null } : {}),
-          ...(input.showStreakTag === false ? { streak: null } : {}),
+          ...(input.showStreakTag === false || sharePeopleOnly ? { streak: null } : {}),
         })
         .eq("id", post.id)
         .eq("author_id", user.id)

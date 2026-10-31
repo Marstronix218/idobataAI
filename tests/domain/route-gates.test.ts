@@ -183,10 +183,14 @@ describe("gateForRoute", () => {
     ["(app)/settings", "always"],
     ["api/characters", "pivot_a"],
     ["api/coach/profile", "pivot_a"],
+    ["api/coach/nudge", "pivot_a"],
+    ["api/story", "pivot_a"],
+    ["api/story/[number]", "pivot_a"],
     ["api/tasks/[id]/start", "pivot_a"],
     ["api/tasks/[id]/finish", "pivot_a"],
     ["api/tasks/[id]/split", "pivot_a"],
     ["(app)/characters/[slug]", "pivot_a"],
+    ["(app)/story", "pivot_a"],
   ] satisfies Array<[string, RouteGate]>)("maps %s to %s", (folder, gate) => {
     expect(gateForRoute(folder)).toBe(gate);
   });

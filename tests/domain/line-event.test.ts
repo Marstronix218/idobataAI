@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseLineEvent, consecutiveDayStreak, daysSinceLatest, type LineEventInput } from "@/lib/domain/line-event";
+import { chooseLineEvent, consecutiveDayStreak, daysSinceLatest, lineEventFallbacks, type LineEventInput } from "@/lib/domain/line-event";
 import { findBannedContent } from "@/lib/characters/banned-content";
 import { sampleLines } from "../helpers/pivot-fixtures";
 
@@ -27,6 +27,36 @@ describe("chooseLineEvent", () => {
     expect(chooseLineEvent(input({ eventType: "finished", isFirstFinishOfLocalDay: true, currentStreak: 1 }))).toBe("task_finished");
     expect(chooseLineEvent(input({ eventType: "finished", isFirstFinishOfLocalDay: false, currentStreak: 5 }))).toBe("task_finished");
     expect(chooseLineEvent(input({ eventType: "finished", isFirstReactionOfLocalDay: true, isFirstFinishOfLocalDay: true, currentStreak: 3 }))).toBe("streak");
+  });
+
+  describe("chapter_unlocked", () => {
+    const unlockingFinish = (overrides: Partial<LineEventInput> = {}) =>
+      input({ eventType: "finished", isFirstFinishOfLocalDay: true, unlocksChapter: true, ...overrides });
+
+    it("announces a chapter on the day's first finish that opened one", () => {
+      expect(chooseLineEvent(unlockingFinish())).toBe("chapter_unlocked");
+    });
+
+    it("takes precedence over a streak", () => {
+      expect(chooseLineEvent(unlockingFinish({ currentStreak: 5 }))).toBe("chapter_unlocked");
+      expect(chooseLineEvent(unlockingFinish({ currentStreak: 5, isFirstReactionOfLocalDay: true }))).toBe("chapter_unlocked");
+    });
+
+    it("gives way to a comeback after a gap", () => {
+      expect(chooseLineEvent(unlockingFinish({ isFirstReactionOfLocalDay: true, daysSinceLastActivity: 3 }))).toBe("comeback");
+    });
+
+    it("needs a finish that is the first of the local day", () => {
+      expect(chooseLineEvent(unlockingFinish({ isFirstFinishOfLocalDay: false }))).toBe("task_finished");
+      expect(chooseLineEvent(unlockingFinish({ eventType: "started", isFirstFinishOfLocalDay: false }))).toBe("task_started");
+    });
+
+    it("falls back to the streak, then the plain finish, when the character has no chapter_unlocked line", () => {
+      expect(lineEventFallbacks(unlockingFinish({ currentStreak: 3 }))).toEqual(["chapter_unlocked", "streak", "task_finished"]);
+      expect(lineEventFallbacks(unlockingFinish({ currentStreak: 1 }))).toEqual(["chapter_unlocked", "task_finished"]);
+      expect(lineEventFallbacks(input({ isFirstReactionOfLocalDay: true, daysSinceLastActivity: 4 }))).toEqual(["comeback", "task_started"]);
+      expect(lineEventFallbacks(input())).toEqual(["task_started"]);
+    });
   });
 
   describe("the no-guilt comeback", () => {

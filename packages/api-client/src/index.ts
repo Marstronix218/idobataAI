@@ -1,6 +1,9 @@
 import {
   characterListSchema,
   coachProfileSchema,
+  sessionNudgeSchema,
+  storyChapterContentSchema,
+  storyOverviewSchema,
   taskFinishResultSchema,
   taskSchema,
   taskSplitResultSchema,
@@ -270,6 +273,25 @@ export function createApiClient(options: ApiClientOptions) {
       .then(validated(taskSplitResultSchema, "task split"));
   }
 
+  /** Pivot A: the selected character's chapters with their lock state (locked chapters carry no body). */
+  function getStory() {
+    return request<unknown>("/api/story").then(validated(storyOverviewSchema, "story"));
+  }
+
+  /** Pivot A: one unlocked chapter. A locked or missing chapter fails with ApiClientError 404 `not_found`. */
+  function getStoryChapter(number: number) {
+    return request<unknown>(`/api/story/${encodeURIComponent(String(number))}`).then(validated(storyChapterContentSchema, "story chapter"));
+  }
+
+  /**
+   * Pivot A: a prewritten line suggesting the user close the app, or null.
+   * `disclosure` is the daily AI reminder to show with it, or null. Fails
+   * with ApiClientError 429 `rate_limited` when asked too often.
+   */
+  function getSessionNudge() {
+    return request<unknown>("/api/coach/nudge").then(validated(sessionNudgeSchema, "session nudge"));
+  }
+
   return {
     request,
     listTasks,
@@ -281,6 +303,9 @@ export function createApiClient(options: ApiClientOptions) {
     startTask,
     finishTask,
     splitTask,
+    getStory,
+    getStoryChapter,
+    getSessionNudge,
   };
 }
 

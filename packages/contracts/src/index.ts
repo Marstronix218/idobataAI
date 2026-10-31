@@ -190,6 +190,64 @@ export const TASK_SPLIT_ERROR_CODES = {
   unavailable: "split_unavailable",
 } as const;
 
+// Pivot A: the story, and the session nudge.
+
+/**
+ * Why a chapter is still locked. `days`: `daysNeeded` more consistency days
+ * (local days with a finished task) will open it; never time in the app.
+ * `plan`: the user's plan does not include it (free users read chapters 1-3;
+ * Plus, a trial or the character's pack opens the whole arc).
+ */
+export const storyChapterLockSchema = z.discriminatedUnion("reason", [
+  z.object({ reason: z.literal("days"), daysNeeded: z.number().int().min(1) }),
+  z.object({ reason: z.literal("plan") }),
+]);
+
+/** One chapter in the list. A locked chapter shows its title, never its body. `lock` is null exactly when `unlocked`. */
+export const storyChapterSummarySchema = z.object({
+  number: z.number().int().min(1),
+  title: z.string(),
+  unlocked: z.boolean(),
+  lock: storyChapterLockSchema.nullable(),
+});
+
+/**
+ * GET /api/story: the selected character's chapters, in order. `character` is
+ * null (and `chapters` empty, `consistencyDays` 0) when no character is
+ * selected. `consistencyDays` counts only up.
+ */
+export const storyOverviewSchema = z.object({
+  character: reactionCharacterSchema.nullable(),
+  consistencyDays: z.number().int().min(0),
+  chapters: z.array(storyChapterSummarySchema),
+});
+
+/** GET /api/story/[number]: an unlocked chapter. A locked, missing or retired chapter answers 404 `not_found`. */
+export const storyChapterContentSchema = z.object({
+  number: z.number().int().min(1),
+  title: z.string(),
+  body: z.string(),
+});
+
+/**
+ * GET /api/coach/nudge: a prewritten line suggesting the user close the app,
+ * shown after 10 minutes of foreground time in one session; null when no
+ * character is selected or it has no nudge lines. `disclosure` is the AI
+ * reminder when this is the first character line of the user's local day,
+ * as on a reaction. Rate limited (429 `rate_limited`).
+ */
+export const sessionNudgeSchema = z.object({
+  text: z.string().min(1),
+  character: reactionCharacterSchema,
+  disclosure: z.string().nullable(),
+}).nullable();
+
+export type StoryChapterLock = z.infer<typeof storyChapterLockSchema>;
+export type StoryChapterSummary = z.infer<typeof storyChapterSummarySchema>;
+export type StoryOverview = z.infer<typeof storyOverviewSchema>;
+export type StoryChapterContent = z.infer<typeof storyChapterContentSchema>;
+export type SessionNudge = z.infer<typeof sessionNudgeSchema>;
+
 export type ReactionCharacter = z.infer<typeof reactionCharacterSchema>;
 export type ReactionPayload = z.infer<typeof reactionPayloadSchema>;
 export type TaskStartResult = z.infer<typeof taskStartResultSchema>;

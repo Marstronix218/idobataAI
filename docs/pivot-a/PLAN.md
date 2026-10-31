@@ -10,7 +10,7 @@
 - [x] Phase 1: data model and flags
 - [x] Phase 2: character content, character pick, profile disclosure
 - [x] Phase 3: reaction engine, splitter, plan resolution, crisis routing
-- [ ] Phase 4: story, session nudge, no-guilt streaks
+- [x] Phase 4: story, session nudge, no-guilt streaks
 - [ ] Phase 5: age gate, create/edit distress check, `/safety`
 - [ ] Phase 6: billing and entitlements
 - [ ] Phase 7: metrics, experiment, cost guardrail
@@ -384,6 +384,17 @@ Naming follows the existing schema:
 - `tests/integration/task-split.test.ts`
 
 ### Phase 4: story, session nudge, no-guilt streaks
+
+**Phase 4 results and caveats carried forward**
+- **Contract** (in `packages/contracts`):
+  - `GET /api/story` returns `{ character, consistencyDays, chapters[{ number, title, unlocked, lock }] }`. `lock.daysNeeded` is the number of days still to go. When both the plan and the days block a chapter, the lock says `plan`.
+  - `GET /api/story/[number]` returns 404 for a locked, missing or inactive chapter.
+  - `GET /api/coach/nudge` returns a prewritten line, at most 6 an hour.
+- **Consistency days:** `getConsistencySummary` counts the distinct local days with a finished task, through the service-role-only function `coach_consistency_total_days` (migration `20261031160000`). Under Pivot A, the badges in the task board, the shell and the rail show this count. A count of zero shows nothing.
+- **Chapter announcement:** a reaction announces a chapter only when that day's first finish unlocks it. Precedence is comeback, then `chapter_unlocked`, then streak.
+  - Chapters unlocked by a plan change are never announced.
+  - Neither are chapters unlocked on a finish whose reaction is suppressed (a crisis, the rate limit, or a character switch partway through the day). They still appear on the story page.
+- **The shell and rail counts can lag a day**, because layouts don't re-render on client navigation. The task board count is fresh on every visit.
 
 **Pure logic**
 - `src/lib/domain/story-unlock.ts`: chapter n needs n consistency days. Free users get chapters 1–3, Plus users get all, and a pack unlocks that character's full arc.

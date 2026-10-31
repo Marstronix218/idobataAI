@@ -2,9 +2,10 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveFlags } from "@/lib/domain/feature-flags";
 
-const { connection, createClient, getFlags, redirect, request } = vi.hoisted(() => ({
+const { connection, createClient, getConsistencySummary, getFlags, redirect, request } = vi.hoisted(() => ({
   connection: vi.fn(async () => undefined),
   createClient: vi.fn(),
+  getConsistencySummary: vi.fn(),
   getFlags: vi.fn(),
   redirect: vi.fn((path: string) => { throw new Error(`NEXT_REDIRECT;${path}`); }),
   // The pathname src/proxy.ts forwards to the layout.
@@ -14,6 +15,7 @@ const { connection, createClient, getFlags, redirect, request } = vi.hoisted(() 
 vi.mock("@/lib/flags", () => ({ getFlags }));
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection }));
 vi.mock("@/lib/supabase/server", () => ({ createClient }));
+vi.mock("@/lib/coach/consistency", () => ({ getConsistencySummary }));
 vi.mock("next/navigation", () => ({ redirect, notFound: vi.fn() }));
 vi.mock("next/headers", () => ({
   headers: async () => new Headers(request.pathname === null ? {} : { "x-idobata-pathname": request.pathname }),
@@ -83,6 +85,7 @@ async function landing() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getConsistencySummary.mockResolvedValue({ totalDays: 4, characterDays: 2 });
   request.pathname = "/tasks";
   vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "false");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.co");
@@ -192,6 +195,18 @@ describe("the app layout under Pivot A", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
+  // AppShell is mocked, so the layout's element holds the props it was given.
+  it("gives the shell the user's total consistency days, or none when they can't be read", async () => {
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ row: complete });
+
+    expect((await AuthenticatedLayout({ children })).props.consistencyDays).toBe(4);
+    expect(getConsistencySummary).toHaveBeenCalledWith(userId);
+
+    getConsistencySummary.mockRejectedValue(new Error("consistency total unavailable"));
+    expect((await AuthenticatedLayout({ children })).props.consistencyDays).toBeNull();
+  });
+
   it("lets the user in when the profile cannot be read", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     getFlags.mockResolvedValue(PIVOT);
@@ -205,9 +220,12 @@ describe("the app layout under Pivot A", () => {
     getFlags.mockResolvedValue(LEGACY);
     const client = useSession({ row: null });
 
-    await expect(AuthenticatedLayout({ children })).resolves.toBeTruthy();
+    const layout = await AuthenticatedLayout({ children });
+    expect(layout).toBeTruthy();
     expect(client.from).not.toHaveBeenCalled();
     expect(redirect).not.toHaveBeenCalled();
+    expect(getConsistencySummary).not.toHaveBeenCalled();
+    expect(layout.props.consistencyDays).toBeNull();
   });
 
   it("still sends a signed-out visitor to log in", async () => {
@@ -289,6 +307,9 @@ describe("the tasks page under Pivot A", () => {
 
     expect(props.coach).toEqual({ character: { id: characterId, slug: "sample-coach", name: "Sample Coach", artUrl: "/characters/sample-coach.webp" } });
     expect(props.pivotA).toBe(true);
+    // The count comes from the layout, the one source for every surface.
+    expect(props).not.toHaveProperty("consistencyDays");
+    expect(getConsistencySummary).not.toHaveBeenCalled();
     expect(characters.select).toHaveBeenCalledWith("id, slug, name, art_url");
   });
 

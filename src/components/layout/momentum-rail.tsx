@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, Circle, Flame, ListChecks, Trophy } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, CalendarCheck, Check, Circle, Flame, ListChecks, Trophy } from "lucide-react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { CONSISTENCY_DAYS_DESCRIPTION, ConsistencyDaysContext, consistencyDaysLabel, hasConsistencyDays } from "@/components/coach/consistency-days";
 import { tasks as demoTasks } from "@/data/demo";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
 import type { Task, UserProfile } from "@/types";
@@ -47,6 +48,9 @@ export function MomentumRail() {
   const [profile, setProfile] = useState<Pick<UserProfile, "daily_goal" | "current_streak"> | null>(isPreviewMode ? previewProfile : null);
   const [loading, setLoading] = useState(!isPreviewMode);
   const [status, setStatus] = useState("");
+  // Set by the app shell under Pivot A: consistency days replace the streak.
+  const consistency = useContext(ConsistencyDaysContext);
+  const consistencyDays = consistency && hasConsistencyDays(consistency.days) ? consistency.days : null;
 
   useEffect(() => {
     if (isPreviewMode) return;
@@ -86,8 +90,11 @@ export function MomentumRail() {
         <div className="mt-4 flex items-end justify-between gap-3"><div><p className="display text-3xl font-bold">{completedCount}<span className="text-base text-muted">/{dailyGoal}</span></p><p className="mt-1 text-xs text-muted">wins today</p></div><p className="text-sm font-bold text-brand">{progress}%</p></div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Daily goal progress" aria-valuemin={0} aria-valuemax={dailyGoal} aria-valuenow={Math.min(completedCount, dailyGoal)} aria-valuetext={`${completedCount} of ${dailyGoal} wins today`}><div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${progress}%` }} /></div>
         <p className="mt-3 text-xs leading-5 text-muted">Daily goals start at 3. <Link href="/settings#preferences" aria-label="Change your daily goal in Settings" className="font-bold text-brand hover:underline">Change yours in Settings.</Link></p>
-        <dl className="mt-4 grid grid-cols-2 divide-x divide-line border-t border-line pt-4 text-center">
-          <div><dt className="flex items-center justify-center gap-1 text-xs text-muted"><Flame size={13} className="text-sun" /> Current streak</dt><dd className="mt-1 text-sm font-bold">{profile?.current_streak ?? 0} days</dd></div>
+        {/* Pivot A shows consistency days, or nothing while there are none. TODO(founder): copy ("Consistency"). */}
+        <dl className={`mt-4 grid ${consistency && consistencyDays === null ? "grid-cols-1" : "grid-cols-2 divide-x divide-line"} border-t border-line pt-4 text-center`}>
+          {!consistency
+            ? <div><dt className="flex items-center justify-center gap-1 text-xs text-muted"><Flame size={13} className="text-sun" /> Current streak</dt><dd className="mt-1 text-sm font-bold">{profile?.current_streak ?? 0} days</dd></div>
+            : consistencyDays !== null && <div><dt className="flex items-center justify-center gap-1 text-xs text-muted"><CalendarCheck aria-hidden="true" size={13} className="text-success" /> Consistency</dt><dd className="mt-1 text-sm font-bold">{consistencyDaysLabel(consistencyDays)}<span className="sr-only"> {CONSISTENCY_DAYS_DESCRIPTION}</span></dd></div>}
           <div><dt className="text-xs text-muted">Completed today</dt><dd className="mt-1 text-sm font-bold">{completedCount} task{completedCount === 1 ? "" : "s"}</dd></div>
         </dl>
       </section>

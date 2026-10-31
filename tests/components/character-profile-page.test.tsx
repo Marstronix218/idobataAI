@@ -31,7 +31,7 @@ function useDatabase({ character = null as object | null, packs = [] as string[]
   };
   const tables = {
     characters: chain({ data: character, error: null }),
-    entitlements: chain({ data: packs.map((product) => ({ product })), error: null }),
+    entitlements: chain({ data: packs.map((product) => ({ product, status: "active", trial_ends_at: null, current_period_end: null })), error: null }),
     user_coach_profiles: chain({ data: { selected_character_id: selected, timezone: "America/Chicago", age_verified_at: null }, error: null }),
   };
   createClient.mockResolvedValue({

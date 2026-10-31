@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  CalendarCheck,
   CalendarDays,
   Check,
   ChevronDown,
@@ -21,9 +22,11 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ReactionCharacter, ReactionPayload, TaskFinishResult, TaskSplitResult, TaskStartResult } from "@idobata/contracts";
 import { tasks as demoTasks } from "@/data/demo";
+import { CONSISTENCY_DAYS_DESCRIPTION, ConsistencyDaysContext, hasConsistencyDays } from "@/components/coach/consistency-days";
 import { ReactionBubble } from "@/components/coach/reaction-bubble";
 import { SplitSteps } from "@/components/coach/split-steps";
 import { TaskCategoryManager } from "@/components/tasks/task-category-manager";
@@ -187,18 +190,40 @@ function groupsFor(filter: Filter, tasks: Task[], now: number): TaskGroup[] {
   }].filter((group) => group.tasks.length);
 }
 
+/** Quiet time after the last finish before the server components re-render. */
+const FINISH_REFRESH_DELAY_MS = 1_500;
+
+/**
+ * Pivot A: a finish may add a consistency day, so once finishing pauses the
+ * server components re-render and the layout reads the count again; every
+ * surface updates from that one read. Rendered only under Pivot A, so the
+ * legacy board never touches the router.
+ */
+function RefreshAfterFinish({ finishes }: { finishes: number }) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!finishes) return;
+    const timer = window.setTimeout(() => router.refresh(), FINISH_REFRESH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [finishes, router]);
+  return null;
+}
+
 /**
  * `shareWin`: the share_win flag; while it is off nothing offers to post a win.
  * `pivotA`: the pivot_a.enabled flag; the first-run steps drop the persona copy.
  * `coach`: passed by the server page only under Pivot A. It adds Start and
  * split controls, finishes through the finish route, and shows the coach panel.
  * Without it the board behaves exactly as before.
+ * Under Pivot A the streak badge shows the consistency days the app shell
+ * provides (one source for every surface); zero or unknown shows no badge.
  */
 export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
   shareWin?: boolean;
   pivotA?: boolean;
   coach?: { character: ReactionCharacter | null };
 } = {}) {
+  const consistencyDays = useContext(ConsistencyDaysContext)?.days ?? null;
   const [items, setItems] = useState<Task[]>(isPreviewMode ? previewTasks : []);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(isPreviewMode ? previewCategories : []);
   const [profile, setProfile] = useState<Pick<UserProfile, "daily_goal" | "current_streak" | "default_task_visibility"> | null>(isPreviewMode ? previewProfile : null);
@@ -229,6 +254,8 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
   const [split, setSplit] = useState<{ taskId: string; request: Promise<TaskSplitResult> } | null>(null);
   // Finished tasks whose reaction was the crisis card: the board stops offering to post them.
   const [crisisIds, setCrisisIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Pivot A: successful finishes this session; each one may add a consistency day.
+  const [finishes, setFinishes] = useState(0);
   const splitCache = useRef(new Map<string, Promise<TaskSplitResult>>());
   const editDialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -391,6 +418,7 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
   async function finish(task: Task): Promise<Task> {
     const result = await react(apiRequest<TaskFinishResult>(`/api/tasks/${task.id}/finish`, { method: "POST" }));
     if (result.reaction?.kind === "crisis") setCrisisIds((current) => new Set(current).add(task.id));
+    setFinishes((count) => count + 1);
     return result.task;
   }
 
@@ -623,11 +651,17 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
             <div className="flex items-center justify-between gap-3 text-xs font-bold text-muted"><span>Today</span><span>{completedToday}/{dailyGoal}</span></div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Daily task goal" aria-valuemin={0} aria-valuemax={dailyGoal} aria-valuenow={Math.min(completedToday, dailyGoal)} aria-valuetext={`${completedToday} of ${dailyGoal} tasks completed today`}><div className="h-full rounded-full bg-success" style={{ width: `${dailyProgress}%` }} /></div>
           </div>
-          <div
-            aria-label={`${profile?.current_streak ?? 0}-day streak. A streak counts consecutive days with at least one completed task.`}
-            className="flex min-h-[58px] items-center gap-2 rounded-2xl border border-line bg-surface px-4"
-            title="A streak counts consecutive days with at least one completed task."
-          ><Flame size={18} className="text-sun" /><div><p className="text-lg font-bold leading-none">{profile?.current_streak ?? 0}</p><p className="mt-1 text-xs text-muted">day streak</p></div></div>
+          {pivotA
+            // Positive-only progress: a count that never goes down, and no badge before the first day.
+            ? hasConsistencyDays(consistencyDays) && <div
+              className="flex min-h-[58px] items-center gap-2 rounded-2xl border border-line bg-surface px-4"
+              title={`Days ${CONSISTENCY_DAYS_DESCRIPTION}`}
+            ><CalendarCheck aria-hidden="true" size={18} className="text-success" /><div><p className="text-lg font-bold leading-none">{consistencyDays}</p><p className="mt-1 text-xs text-muted">{consistencyDays === 1 ? "day" : "days"}<span className="sr-only"> {CONSISTENCY_DAYS_DESCRIPTION}</span></p></div></div>
+            : <div
+              aria-label={`${profile?.current_streak ?? 0}-day streak. A streak counts consecutive days with at least one completed task.`}
+              className="flex min-h-[58px] items-center gap-2 rounded-2xl border border-line bg-surface px-4"
+              title="A streak counts consecutive days with at least one completed task."
+            ><Flame size={18} className="text-sun" /><div><p className="text-lg font-bold leading-none">{profile?.current_streak ?? 0}</p><p className="mt-1 text-xs text-muted">day streak</p></div></div>}
           <button className="icon-btn" aria-label="Refresh tasks" onClick={() => void load()} disabled={loading}><RefreshCw size={19} className={loading ? "animate-spin" : ""} /></button>
         </div>
       </header>
@@ -671,6 +705,7 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
         <label className="relative min-w-44"><span className="sr-only">Filter by category</span><SlidersHorizontal aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-12 appearance-none py-2 text-sm font-bold" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value} value={value}>{value === "All" ? "All categories" : value}</option>)}</select><ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
       </div>
 
+      {coach && <RefreshAfterFinish finishes={finishes} />}
       {/* Pivot A: one coach panel for the latest reaction, not chatter per row. */}
       {coach && <ReactionBubble request={reactionRequest} character={coach.character} className="mt-5" />}
 

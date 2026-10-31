@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,6 +37,7 @@ describe("ShareComposer audience under Pivot A", () => {
         completion_visibility: "public", xp: 0, current_streak: 2, last_completion_date: null,
         created_at: "2026-11-01T08:00:00.000Z", updated_at: "2026-11-01T08:00:00.000Z",
       });
+      if (path === `/api/tasks/${taskId}/publish`) return Promise.resolve({ id: "post-1" });
       return Promise.reject(new Error(`Unexpected path: ${path}`));
     });
   });
@@ -55,5 +56,30 @@ describe("ShareComposer audience under Pivot A", () => {
 
     expect(await screen.findByRole("button", { name: "Post to Community" })).toBeVisible();
     expect(screen.getByRole("button", { name: /^Community/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  const publishBody = () => {
+    const call = apiRequest.mock.calls.find(([path]) => path === `/api/tasks/${taskId}/publish`);
+    return JSON.parse(String((call?.[1] as RequestInit | undefined)?.body ?? "null"));
+  };
+
+  it("never offers or sends the legacy streak tag when sharing is people-only", async () => {
+    render(<ShareComposer taskId={taskId} peopleOnly />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Post privately" }));
+
+    await waitFor(() => expect(publishBody()).toMatchObject({ showStreakTag: false }));
+    expect(screen.queryByText(/streak/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove streak tag" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the streak tag on by default with today's flags", async () => {
+    render(<ShareComposer taskId={taskId} />);
+
+    expect(await screen.findByText(/2-day streak/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Remove streak tag" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Post to Community" }));
+
+    await waitFor(() => expect(publishBody()).toMatchObject({ showStreakTag: true }));
   });
 });

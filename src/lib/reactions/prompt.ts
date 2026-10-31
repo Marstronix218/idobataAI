@@ -90,6 +90,8 @@ const MOMENTS: Partial<Record<CharacterEvent, string>> = {
   comeback: "they are back after a few days away. Welcome them warmly; do not mention the gap, missed days or streaks.",
   streak: "this is their first finish today and continues a run of days with a finished task.",
   first_of_day: "this is their first task of the day.",
+  // The model knows a chapter opened but nothing about it, so it cannot invent story content.
+  chapter_unlocked: "this finish completed another day with a finished task, which unlocked a new chapter of your story. You may say a new chapter is ready for whenever they like; never describe, summarize or make up anything about the story.",
 };
 
 /**

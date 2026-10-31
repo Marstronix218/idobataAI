@@ -10,16 +10,18 @@ import {
   type AiCallMeter,
   type AiMessageResult,
 } from "@/lib/ai/anthropic";
-import { CHARACTER_EVENTS, type CharacterEvent } from "@/lib/characters/content-schema";
+import { CHARACTER_EVENTS } from "@/lib/characters/content-schema";
+import { recordUnlockedThrough } from "@/lib/coach/story";
 import { assignAiArm, type AiArm } from "@/lib/domain/ai-arm";
 import { AI_DISCLOSURE } from "@/lib/domain/ai-disclosure";
 import { readDisclosureMaxGapHours, shouldShowDisclosure } from "@/lib/domain/disclosure-cadence";
-import { chooseLineEvent, consecutiveDayStreak, daysSinceLatest, plainLineEvent } from "@/lib/domain/line-event";
+import { chooseLineEvent, consecutiveDayStreak, daysSinceLatest, lineEventFallbacks, type LineEventInput } from "@/lib/domain/line-event";
 import { fillTaskToken, selectLineWithFallback, taskAgeBucket, taskAgeDays, RECENT_LINE_WINDOW, type SelectableLine } from "@/lib/domain/line-selection";
 import { localDate, resolveTimeZone, timeOfDay } from "@/lib/domain/local-day";
-import { resolvePlan, type EntitlementRow } from "@/lib/domain/plan";
+import { resolvePlan, type EntitlementRow, type ResolvedPlan } from "@/lib/domain/plan";
 import { reactionReservation, readAiCaps } from "@/lib/domain/reaction-caps";
 import { validateAiReaction } from "@/lib/domain/reaction-validator";
+import { chapterUnlockedByLatestDay, highestUnlockedChapter, type ChapterRule } from "@/lib/domain/story-unlock";
 import { recordCrisisShown } from "@/lib/safety/counters";
 import {
   DISTRESS_MAX_SLICE_MS,
@@ -51,6 +53,12 @@ import { PROMPT_RECENT_TEXTS, buildReactionRequest, buildReactionSystemPrompt, p
 //    the local day carries the AI reminder.
 // 7. Store the reaction (one per event; a lost race returns null), meter every
 //    model call, and give back the reserved slot unless the AI line was delivered.
+//
+// Story (SPEC Phase 4): when the day's first finish is the consistency day
+// that opens a chapter the user did not have, the line is a chapter_unlocked
+// one (a comeback after a gap still wins; it beats a streak), and the AI is
+// told only that a chapter opened. story_progress.unlocked_through is raised
+// to the highest open chapter with the stored reaction.
 
 /** Starting an AI call with less time left than this would only ever be aborted. */
 const MIN_AI_WINDOW_MS = 300;
@@ -63,7 +71,7 @@ const HARD_CEILING_MS = 2900;
 /** Finished events read to work out the streak. */
 const FINISH_HISTORY_LIMIT = 400;
 const REACTION_EVENTS = CHARACTER_EVENTS.filter((event) =>
-  ["task_started", "task_finished", "first_of_day", "streak", "comeback"].includes(event));
+  ["task_started", "task_finished", "first_of_day", "streak", "comeback", "chapter_unlocked"].includes(event));
 const UNIQUE_VIOLATION = "23505";
 
 const detector = createDistressDetector();
@@ -93,7 +101,35 @@ function logEngine(level: "warn" | "error", message: string, fields: Record<stri
   logAiEvent(level, "reactions", { message, ...fields });
 }
 
-const uniqueEvents = (events: CharacterEvent[]) => [...new Set(events)];
+/** For reads the reaction can do without: the data, or null with a warning. */
+function optionalRows<T>(result: QueryResult<T>, what: string): T | null {
+  if (!result.error) return result.data;
+  logEngine("warn", `${what} unavailable`, { code: result.error.code ?? null });
+  return null;
+}
+
+interface StoryProgressRow {
+  consistency_days: number;
+  unlocked_through: number;
+  last_consistency_date: string | null;
+}
+
+/**
+ * What a finish means for the character's story: the chapter its consistency
+ * day opened, if any, and the highest chapter now open. Only a finish whose
+ * local day the finish trigger counted (last_consistency_date moved to it)
+ * can open a chapter; a plan change alone never announces one.
+ */
+function storyAfterFinish(progress: StoryProgressRow | null, chapters: readonly ChapterRule[], plan: ResolvedPlan, characterSlug: string, eventDate: string) {
+  if (!progress || chapters.length === 0) return null;
+  const access = { consistencyDays: progress.consistency_days, tier: plan.tier, packs: plan.packs, characterSlug };
+  return {
+    opened: progress.last_consistency_date === eventDate ? chapterUnlockedByLatestDay(chapters, access, progress.unlocked_through) : null,
+    highest: highestUnlockedChapter(chapters, access),
+    unlockedThrough: progress.unlocked_through,
+  };
+}
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const none = <T>(data: T) => Promise.resolve({ data, error: null });
 
@@ -123,7 +159,9 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
     admin.from("user_coach_profiles").select("selected_character_id, timezone, ai_arm").eq("user_id", userId).maybeSingle(),
     admin.from("character_reactions").select("id").eq("task_event_id", taskEventId).eq("user_id", userId).limit(1),
     admin.from("entitlements").select("product, status, trial_ends_at, current_period_end").eq("user_id", userId),
-    admin.from("character_reactions").select("text, created_at").eq("user_id", userId)
+    // Reactions to tasks only: a session nudge is not one, so it neither ends
+    // "first of the day" nor goes into the prompt.
+    admin.from("character_reactions").select("text, created_at").eq("user_id", userId).neq("event", "session_nudge")
       .order("created_at", { ascending: false }).limit(PROMPT_RECENT_TEXTS),
     // The last 20 prewritten lines shown; AI reactions have no line id.
     admin.from("character_reactions").select("line_id").eq("user_id", userId).not("line_id", "is", null)
@@ -149,7 +187,8 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
   const arm: AiArm = profile?.ai_arm ?? assignAiArm(userId);
 
   // Round 2: what depends on the event or the profile.
-  const [taskResult, characterResult, linesResult, finishResult, activityResult] = await Promise.all([
+  const storyCharacterId = event.type === "finished" ? characterId : null;
+  const [taskResult, characterResult, linesResult, finishResult, activityResult, progressResult, chaptersResult] = await Promise.all([
     admin.from("tasks").select("id, title, description, created_at").eq("id", event.task_id).eq("owner_id", userId).maybeSingle(),
     characterId
       ? admin.from("characters").select("id, slug, name, role, art_url, sheet, active").eq("id", characterId).maybeSingle()
@@ -163,6 +202,14 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
     // The user's last activity before this event, for the comeback gap.
     admin.from("task_events").select("local_date").eq("user_id", userId).neq("id", event.id)
       .order("occurred_at", { ascending: false }).limit(1),
+    // A finish may open a story chapter. Titles and bodies are never read here.
+    storyCharacterId
+      ? admin.from("story_progress").select("consistency_days, unlocked_through, last_consistency_date")
+        .eq("user_id", userId).eq("character_id", storyCharacterId).maybeSingle()
+      : none(null),
+    storyCharacterId
+      ? admin.from("story_chapters").select("number, unlock_rule").eq("character_id", storyCharacterId).eq("active", true)
+      : none([]),
     // D1: the arm is sticky; store it the first time it is needed.
     profile && !profile.ai_arm ? persistArm(admin, userId, arm) : null,
   ]);
@@ -173,6 +220,9 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
   const lines = (rows(linesResult, "lines") ?? []) as SelectableLine[];
   const finishes = rows(finishResult, "finishes") ?? [];
   const lastActivity = (rows(activityResult, "last activity") ?? [])[0];
+  // The story is extra: if it can't be read, the reaction goes ahead without a chapter line.
+  const progress = optionalRows(progressResult, "story progress") as StoryProgressRow | null;
+  const chapters = (optionalRows(chaptersResult, "story chapters") ?? []) as ChapterRule[];
 
   // Safety first, on the title and the note, whether or not there is a
   // character to react with (D3).
@@ -212,18 +262,22 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
     const lastReactionDate = recent[0] ? localDate(new Date(recent[0].created_at), timeZone) : null;
     const ageDays = taskAgeDays(task.created_at, now);
     const ageBucket = taskAgeBucket(ageDays);
-    const lineEvent = chooseLineEvent({
+    const plan = resolvePlan(entitlements, now);
+    const story = isFinish && character ? storyAfterFinish(progress, chapters, plan, character.slug, event.local_date) : null;
+    const lineInput: LineEventInput = {
       eventType: event.type,
       isFirstReactionOfLocalDay: lastReactionDate !== today,
       isFirstFinishOfLocalDay: isFinish && !priorFinishDates.includes(today),
       currentStreak: streak,
       daysSinceLastActivity: daysSinceLatest([lastActivity?.local_date, lastReactionDate], today),
-    });
+      unlocksChapter: story?.opened != null,
+    };
+    const lineEvent = chooseLineEvent(lineInput);
 
     const canReact = !safetyOnly && Boolean(character?.active);
     // The prewritten line comes first, so a slow or failed AI call costs nothing.
     const prewritten = canReact
-      ? selectLineWithFallback(lines, uniqueEvents([lineEvent, plainLineEvent(event.type)]), { streak, ageBucket, recentLineIds, seed: event.id })
+      ? selectLineWithFallback(lines, lineEventFallbacks(lineInput), { streak, ageBucket, recentLineIds, seed: event.id })
       : null;
 
     const aiController = new AbortController();
@@ -232,7 +286,7 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
     const promptCharacter = character && sheet ? { name: character.name, role: character.role, sheet } : null;
     let aiPromise: Promise<AiMessageResult> | null = null;
     const reservation = canReact
-      ? reactionReservation({ arm, tier: resolvePlan(entitlements, now).tier, aiConfigured: isReactionAiConfigured() && sheet !== null, caps: readAiCaps() })
+      ? reactionReservation({ arm, tier: plan.tier, aiConfigured: isReactionAiConfigured() && sheet !== null, caps: readAiCaps() })
       : null;
     // Reserve only when the call will be made, so every reservation (and the
     // attempt it counts) corresponds to a real model call.
@@ -332,6 +386,7 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
       distress.pendingWrites,
       // A prewritten line means the reserved AI slot was not used.
       chosen.source === "ai" ? null : release(),
+      story && story.highest > story.unlockedThrough ? recordUnlockedThrough(admin, userId, character.id, story.highest) : null,
     ]);
     // Another request reacted to this event first (one reaction per event).
     if (insert.error?.code === UNIQUE_VIOLATION) return null;

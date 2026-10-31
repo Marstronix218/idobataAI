@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, CheckSquare2, LayoutList, MessageCircle, Plus, Settings, UserRound, type LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, BookOpen, Bot, CheckSquare2, LayoutList, MessageCircle, Plus, Settings, UserRound, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Logo } from "@/components/ui/logo";
 import { Avatar } from "@/components/ui/avatar";
 import { BetaBadge } from "@/components/ui/status";
 import { apiRequest, isPreviewMode } from "@/lib/client/api";
 import { LEGACY_FLAGS, isGateOpen, type PivotFlags, type RouteGate } from "@/lib/domain/feature-flags";
 import { BetaActivityTracker } from "@/components/analytics/beta-activity-tracker";
+import { CONSISTENCY_DAYS_DESCRIPTION, ConsistencyDaysContext, consistencyDaysLabel, hasConsistencyDays } from "@/components/coach/consistency-days";
+import { SessionNudge } from "@/components/coach/session-nudge";
 import type { UserProfile } from "@/types";
 
 // `shortLabel` is what the mobile bar renders. The full labels overflow their
@@ -18,6 +20,7 @@ import type { UserProfile } from "@/types";
 const nav: Array<{ href: string; label: string; shortLabel: string; icon: LucideIcon; gate: RouteGate }> = [
   { href: "/feed", label: "Feed", shortLabel: "Feed", icon: LayoutList, gate: "wins" },
   { href: "/tasks", label: "Your Tasks", shortLabel: "Tasks", icon: CheckSquare2, gate: "always" },
+  { href: "/story", label: "Story", shortLabel: "Story", icon: BookOpen, gate: "pivot_a" },
   { href: "/chat", label: "Chat", shortLabel: "Chat", icon: MessageCircle, gate: "chat" },
   { href: "/ai-personas", label: "AI Personas", shortLabel: "AI", icon: Bot, gate: "persona_chat" },
   { href: "/notifications", label: "Notifications", shortLabel: "Notifs", icon: Bell, gate: "social_feed" },
@@ -40,8 +43,14 @@ const MOBILE_NAV_COLUMNS: Record<number, string> = {
 
 const UNREAD_POLL_MS = 60_000;
 
-export function AppShell({ children, flags = LEGACY_FLAGS }: { children: React.ReactNode; flags?: PivotFlags }) {
+/**
+ * `consistencyDays`: Pivot A only. The user's consistency days, read by the
+ * (app) layout on the server, or null when unknown; shown in place of the streak.
+ */
+export function AppShell({ children, flags = LEGACY_FLAGS, consistencyDays = null }: { children: React.ReactNode; flags?: PivotFlags; consistencyDays?: number | null }) {
   const pathname = usePathname();
+  const pivotA = flags.pivotA;
+  const consistency = useMemo(() => pivotA ? { days: consistencyDays } : null, [pivotA, consistencyDays]);
   const visibleNav = nav.filter((item) => isGateOpen(flags, item.gate));
   const socialFeedOpen = isGateOpen(flags, "social_feed");
   const feedOpen = isGateOpen(flags, "wins");
@@ -109,10 +118,13 @@ export function AppShell({ children, flags = LEGACY_FLAGS }: { children: React.R
         <Link href="/tasks" aria-label="Add task" className="btn btn-primary mx-auto mt-5 h-14 w-14 rounded-full p-0 shadow-sm xl:w-full xl:px-5"><Plus size={22} /><span className="hidden xl:inline">Add task</span></Link>
         <Link href={profileHref} aria-label="Open your profile" className="mt-auto flex items-center justify-center gap-3 border-t border-line pt-4 transition-colors hover:bg-surface/55 xl:justify-start xl:px-2">
           <Avatar initials={initials} avatarUrl={isPreviewMode ? null : profile?.avatar_url} name={username ?? "Your profile"} />
-          <div className="hidden min-w-0 xl:block"><p className="truncate text-sm font-bold">{username ? `@${username}` : "Your profile"}</p><p className="text-xs text-muted">{isPreviewMode ? 6 : profile?.current_streak ?? 0}-day streak</p></div>
+          <div className="hidden min-w-0 xl:block"><p className="truncate text-sm font-bold">{username ? `@${username}` : "Your profile"}</p>{pivotA
+            ? hasConsistencyDays(consistencyDays) && <p className="text-xs text-muted" title={`Days ${CONSISTENCY_DAYS_DESCRIPTION}`}>{consistencyDaysLabel(consistencyDays)}</p>
+            : <p className="text-xs text-muted">{isPreviewMode ? 6 : profile?.current_streak ?? 0}-day streak</p>}</div>
         </Link>
       </aside>
-      <main id="main-content" className="min-w-0 lg:ml-[88px] xl:ml-[280px]">{children}</main>
+      <main id="main-content" className="min-w-0 lg:ml-[88px] xl:ml-[280px]"><ConsistencyDaysContext value={consistency}>{children}</ConsistencyDaysContext></main>
+      {pivotA && <SessionNudge />}
       <nav className={`fixed inset-x-0 bottom-0 z-40 grid ${MOBILE_NAV_COLUMNS[visibleNav.length]} border-t border-line bg-surface/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur lg:hidden`} aria-label="Primary navigation">
         {visibleNav.map(({ href, label, shortLabel, icon: Icon }) => {
           const destination = label === "Profile" ? profileHref : href;

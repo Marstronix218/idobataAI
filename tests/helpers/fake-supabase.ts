@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 // A small in-memory stand-in for the PostgREST query builder, enough for the
-// Pivot A reaction engine, splitter and routes: select with eq/neq/gte/lte/in/
+// Pivot A reaction engine, splitter and routes: select with eq/neq/gte/lte/lt/in/
 // is/like filters, order, limit, maybeSingle/single, insert and update, plus
 // rpc. Column lists in select() are ignored; whole rows come back.
 
@@ -94,6 +94,7 @@ export function createFakeSupabase(initial: Record<string, Row[]> = {}, options:
       }),
       gte: vi.fn((column: string, value: unknown) => { filters.push((row) => compare(row[column], value) >= 0); return builder; }),
       lte: vi.fn((column: string, value: unknown) => { filters.push((row) => compare(row[column], value) <= 0); return builder; }),
+      lt: vi.fn((column: string, value: unknown) => { filters.push((row) => compare(row[column], value) < 0); return builder; }),
       in: vi.fn((column: string, values: unknown[]) => { filters.push((row) => values.includes(row[column])); return builder; }),
       is: vi.fn((column: string, value: unknown) => { filters.push((row) => (row[column] ?? null) === value); return builder; }),
       like: vi.fn((column: string, pattern: string) => {

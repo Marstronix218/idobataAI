@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactionCharacter, ReactionPayload, TaskSplitResult } from "@idobata/contracts";
 import type { Task } from "@/types";
 
-const { apiRequest } = vi.hoisted(() => ({ apiRequest: vi.fn() }));
+const { apiRequest, router } = vi.hoisted(() => ({ apiRequest: vi.fn(), router: { refresh: vi.fn() } }));
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.ComponentProps<"a">) => <a href={href} {...props}>{children}</a>,
 }));
+// Only the Pivot A board uses the router; the legacy tests below run without it.
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/lib/client/api", () => ({
   apiRequest,
   errorMessage: (error: unknown) => error instanceof Error ? error.message : "Request failed.",
@@ -140,6 +142,44 @@ describe("TaskBoard under Pivot A", () => {
     expect(apiRequest).toHaveBeenCalledWith("/api/tasks/t1", { method: "PATCH", body: JSON.stringify({ status: "pending" }) });
     expect(calls().filter((call) => call.endsWith("/finish"))).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Complete: Fold the laundry" })).toBeVisible();
+  });
+
+  it("refreshes the server components once finishing pauses, so the consistency days update everywhere", async () => {
+    serve({
+      "POST /api/tasks/t1/finish": () => Promise.resolve({ task: { ...laundry, status: "completed", completed_at: now }, reaction: null }),
+      "POST /api/tasks/t2/finish": () => Promise.resolve({ task: { ...email, status: "completed", completed_at: now }, reaction: null }),
+    });
+    await renderCoachBoard();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // Each click settles inside act, so the finish lands at that moment.
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Complete: Fold the laundry" })); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Complete: Reply to the landlord" })); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+      expect(router.refresh).not.toHaveBeenCalled();
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+
+      expect(router.refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not refresh after a failed finish", async () => {
+    serve({ "POST /api/tasks/t1/finish": () => Promise.reject(apiError("internal_error", 500)) });
+    await renderCoachBoard();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Complete: Fold the laundry" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+
+      expect(screen.getByRole("alert")).toBeVisible();
+      expect(router.refresh).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rolls a failed finish back like any completion, with no reaction", async () => {

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CharacterSummary } from "@idobata/contracts";
+import { resolvePlan, type EntitlementRow } from "@/lib/domain/plan";
 import { assertDatabase } from "@/lib/server/http";
 import type { Database } from "@/types";
 
@@ -12,21 +13,22 @@ import type { Database } from "@/types";
  */
 export const CHARACTER_SUMMARY_COLUMNS = "id, slug, name, role, art_url, is_launch, pack_sku";
 
-const PACK_STATUSES = ["active", "trialing"] as const;
-
 /** Mirrors `public.set_coach_profile`: a launch character, or one whose pack the user owns. */
 function isSelectable(character: CharacterSummary, ownedPacks: ReadonlySet<string>) {
-  return character.is_launch || ownedPacks.has(`pack:${character.slug}`);
+  return character.is_launch || ownedPacks.has(character.slug);
 }
 
+/**
+ * Slugs of the characters whose pack the user owns, by the one rule the story
+ * and the reaction engine use too (resolvePlan: an `active` pack entitlement).
+ */
 async function ownedPacks(supabase: SupabaseClient<Database>, userId: string) {
   const rows = assertDatabase(await supabase
     .from("entitlements")
-    .select("product")
+    .select("product, status, trial_ends_at, current_period_end")
     .eq("user_id", userId)
-    .like("product", "pack:%")
-    .in("status", [...PACK_STATUSES])) ?? [];
-  return new Set<string>(rows.map((row) => row.product));
+    .like("product", "pack:%")) ?? [];
+  return new Set<string>(resolvePlan(rows as EntitlementRow[], new Date()).packs);
 }
 
 /**

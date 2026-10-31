@@ -33,7 +33,11 @@ const previewTask = (taskId: string): Task => ({
   updated_at: "2026-08-12T12:14:00.000Z",
 });
 
-/** `peopleOnly`: sharing under Pivot A starts at "Only me" whatever the saved default (D9, D10). */
+/**
+ * `peopleOnly`: sharing under Pivot A starts at "Only me" whatever the saved
+ * default (D9, D10), and never offers or sends the legacy streak tag: that
+ * streak resets after a missed day, and Pivot A shows only positive progress.
+ */
 export function ShareComposer({ taskId, peopleOnly = false }: { taskId: string; peopleOnly?: boolean }) {
   const [message, setMessage] = useState("");
   const [task, setTask] = useState<Task | null>(() => isPreviewMode ? previewTask(taskId) : null);
@@ -42,6 +46,7 @@ export function ShareComposer({ taskId, peopleOnly = false }: { taskId: string; 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [showCategoryTag, setShowCategoryTag] = useState(true);
   const [showStreakTag, setShowStreakTag] = useState(true);
+  const streakTag = showStreakTag && !peopleOnly;
   const [showCompletedAtTag, setShowCompletedAtTag] = useState(true);
   const [posted, setPosted] = useState(false);
   const [busy, setBusy] = useState(!isPreviewMode);
@@ -151,7 +156,7 @@ export function ShareComposer({ taskId, peopleOnly = false }: { taskId: string; 
             visibility: audience,
             recurrenceInstanceId: task.recurrence_instance_id,
             showCategoryTag,
-            showStreakTag,
+            showStreakTag: streakTag,
             ...(uploadedPaths.length ? { imagePaths: uploadedPaths } : {}),
           }),
         });
@@ -235,7 +240,7 @@ export function ShareComposer({ taskId, peopleOnly = false }: { taskId: string; 
                     {task.category}
                     <button type="button" className="grid h-5 w-5 place-items-center rounded-full hover:bg-black/10" onClick={() => setShowCategoryTag(false)} disabled={busy} aria-label={`Remove ${task.category} tag`}><X size={12} aria-hidden="true" /></button>
                   </span>}
-                  {profile && showStreakTag && <span className="badge badge-streak gap-1 pr-1">
+                  {profile && streakTag && <span className="badge badge-streak gap-1 pr-1">
                     🔥 {profile.current_streak}-day streak
                     <button type="button" className="grid h-5 w-5 place-items-center rounded-full hover:bg-black/10" onClick={() => setShowStreakTag(false)} disabled={busy} aria-label="Remove streak tag"><X size={12} aria-hidden="true" /></button>
                   </span>}

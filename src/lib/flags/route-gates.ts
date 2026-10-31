@@ -36,6 +36,7 @@ export const ROUTE_GATES = {
   // Character Coach: only exist while Pivot A is on.
   "api/characters": "pivot_a",
   "api/coach": "pivot_a",
+  "api/story": "pivot_a",
   "api/tasks/[id]/finish": "pivot_a",
   "api/tasks/[id]/split": "pivot_a",
   "api/tasks/[id]/start": "pivot_a",
@@ -84,6 +85,7 @@ export const ROUTE_GATES = {
   // Redirects to /u/{username}, or to /settings while social_feed is off.
   "(app)/profile": "always",
   "(app)/settings": "always",
+  "(app)/story": "pivot_a",
   "(app)/tasks": "always",
   "(app)/tasks/[taskId]/share": "share_win",
   "(app)/u": "social_feed",
