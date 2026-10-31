@@ -10,6 +10,7 @@ import {
   postMediaExtension,
   removePostMedia,
 } from "@/lib/server/post-media";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,6 +28,7 @@ const cleanupRequestSchema = z.object({
 
 export async function POST(request: Request) {
   return withApi(async () => {
+    await requireApiGate("share_win");
     const { user } = await authed(request);
     // Each ticket is a signed URL for a 5MB object. Unlimited tickets meant
     // unbounded storage cost from uploads that never reach a published post.
@@ -49,6 +51,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   return withApi(async () => {
+    await requireApiGate("share_win");
     const { user } = await authed(request);
     const input = await parseJson(request, cleanupRequestSchema);
     input.paths.forEach((path) => assertOwnedPostMediaPath(path, user.id));

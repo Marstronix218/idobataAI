@@ -1,3 +1,4 @@
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
 import type { DirectoryPersona, DirectoryUser } from "@/types";
@@ -10,6 +11,7 @@ const PER_KIND_LIMIT = 10;
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { user, supabase } = await authed(request);
     const query = new URL(request.url).searchParams.get("query")?.trim() ?? "";
     if (query.length > MAX_QUERY_LENGTH) {

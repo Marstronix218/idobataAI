@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 import type { ChatMessage, ChatPeer, ChatThread, SocialCompanion, UserProfile } from "@/types";
 
@@ -6,9 +7,11 @@ type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("chat");
     const { user, supabase } = await authed(request);
     const id = z.uuid().parse((await params).id);
     const thread = assertDatabase(await supabase.from("chat_threads").select("*").eq("id", id).single(), true) as ChatThread;
+    await requireApiGate(thread.companion_id ? "persona_chat" : "social_feed");
     const messages = assertDatabase(await supabase.from("chat_messages")
       .select("*")
       .eq("thread_id", id)

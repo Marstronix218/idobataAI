@@ -77,6 +77,8 @@ const RAISED_MESSAGES: Array<{ match: RegExp; status: number; code: string; mess
   { match: /rate limit exceeded/i, status: 429, code: "rate_limited", message: "You are doing that a little too quickly. Try again shortly." },
   { match: /cannot message yourself/i, status: 400, code: "invalid_recipient", message: "You cannot start a chat with yourself." },
   { match: /message must be between/i, status: 400, code: "invalid_message", message: "A message must be between 1 and 2000 characters." },
+  // Database guards for flagged-off features answer like a closed route gate.
+  { match: /feature disabled/i, status: 404, code: "not_found", message: "Resource not found." },
 ];
 
 // Connectivity and timeout classes are a server-side outage, not a client

@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import type { FeedPost, ProfileFollowPersona, QuotedFeedPost, SocialReply, UserProfile } from "@/types";
+import { requirePageGate } from "@/lib/flags/route-gates";
 
 type ProfileTab = "posts" | "replies" | "likes";
 
@@ -317,6 +318,7 @@ export default async function ProfilePage({
   params: Promise<{ username: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
+  await requirePageGate("social_feed");
   const requestedUsername = decodeURIComponent((await params).username);
   const requestedTab = (await searchParams).tab;
   const selectedTab: ProfileTab = requestedTab === "replies" || requestedTab === "likes"

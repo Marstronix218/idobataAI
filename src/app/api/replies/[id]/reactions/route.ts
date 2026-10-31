@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { reactionSchema } from "@/lib/server/schemas";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function PUT(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { supabase } = await authed(request);
     const replyId = z.uuid().parse((await params).id);
     const input = await parseJson(request, reactionSchema);
@@ -18,6 +20,7 @@ export async function PUT(request: Request, { params }: Context) {
 
 export async function DELETE(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { user, supabase } = await authed(request);
     const replyId = z.uuid().parse((await params).id);
     assertDatabase(await supabase.from("social_reactions").delete().eq("reply_id", replyId).eq("actor_id", user.id));

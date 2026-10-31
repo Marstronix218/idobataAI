@@ -1,3 +1,4 @@
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 import type { ChatContact, SocialCompanion, UserProfile } from "@/types";
 
@@ -6,6 +7,7 @@ const COMPANION_RESULT_LIMIT = 200;
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    const flags = await requireApiGate("chat");
     const { user, supabase } = await authed(request);
     const query = new URL(request.url).searchParams.get("query")?.trim() ?? "";
     if (query.length > 50) throw new ApiError(400, "Search must be 50 characters or fewer.");
@@ -26,9 +28,10 @@ export async function GET(request: Request) {
       companionsQuery = companionsQuery.or(`name.ilike.${pattern},slug.ilike.${pattern}`);
     }
 
+    // A contact is offered only when its thread kind is open.
     const [profileResult, companionResult, relationshipResult] = await Promise.all([
-      profilesQuery,
-      companionsQuery,
+      flags.socialFeed ? profilesQuery : Promise.resolve({ data: [], error: null }),
+      flags.personaChat ? companionsQuery : Promise.resolve({ data: [], error: null }),
       supabase.from("user_companion_relationships").select("companion_id, user_followed_at, is_favorite").eq("user_id", user.id),
     ]);
     const profiles = assertDatabase(profileResult) as Array<Pick<UserProfile, "id" | "username" | "display_name" | "avatar_url" | "bio">>;

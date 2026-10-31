@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { BetaBadge, PrivacyBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
+import { LEGACY_FLAGS, isGateOpen, type PivotFlags } from "@/lib/domain/feature-flags";
 import { createClient } from "@/lib/supabase/client";
 import type { UserProfile } from "@/types";
 
@@ -52,7 +53,11 @@ function initials(name: string) {
   return name.split(/[\s_-]+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }
 
-export function SettingsPanel() {
+export function SettingsPanel({ flags = LEGACY_FLAGS }: { flags?: PivotFlags } = {}) {
+  // Personas keep posting, liking and replying while Pivot A is off, even with
+  // persona chat off, so their controls stay until Pivot A stops them (D9).
+  const personasLive = isGateOpen(flags, "persona_engagement");
+  const socialFeedOpen = isGateOpen(flags, "social_feed");
   const [profile, setProfile] = useState<UserProfile | null>(isPreviewMode ? previewProfile : null);
   const [prefs, setPrefs] = useState<Preferences>({ reactions: true, replies: true, companion_activity: true });
   const [blockedPeople, setBlockedPeople] = useState<BlockedPerson[]>(isPreviewMode ? previewBlockedPeople : []);
@@ -83,7 +88,9 @@ export function SettingsPanel() {
 
     Promise.allSettled([
       apiRequest<SafetyList<BlockedPerson>>("/api/blocks", { signal: controller.signal }),
-      apiRequest<SafetyList<MutedCompanion>>("/api/companion-mutes", { signal: controller.signal }),
+      personasLive
+        ? apiRequest<SafetyList<MutedCompanion>>("/api/companion-mutes", { signal: controller.signal })
+        : Promise.resolve<SafetyList<MutedCompanion>>({ items: [] }),
     ]).then(([blocksResult, mutesResult]) => {
       if (controller.signal.aborted) return;
       if (blocksResult.status === "fulfilled") setBlockedPeople(blocksResult.value.items);
@@ -93,7 +100,7 @@ export function SettingsPanel() {
       }
     });
     return () => controller.abort();
-  }, []);
+  }, [personasLive]);
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -227,7 +234,7 @@ export function SettingsPanel() {
 
     <div className="mt-7 grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Settings sections">
-        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [Info, "About"], [ShieldCheck, "Safety"]].map(([Icon, label]) => {
+        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [Info, "About"], [ShieldCheck, "Safety"]].filter(([, label]) => (label !== "Notifications" || socialFeedOpen) && (label !== "Muted" || personasLive)).map(([Icon, label]) => {
           const Comp = Icon as typeof SlidersHorizontal;
           return <a key={label as string} href={`#${String(label).toLowerCase()}`} className="btn btn-ghost shrink-0 justify-start"><Comp size={17} />{label as string}</a>;
         })}
@@ -247,21 +254,21 @@ export function SettingsPanel() {
             <p className="mt-2 text-sm leading-6 text-muted">Your name, handle, and avatar can still appear on posts you share. A public profile also shows only posts and task progress you already marked Public. Private tasks and posts stay hidden.</p>
             <label className="mt-5 block"><span className="field-label">Who can see posted task completions?</span><select className="field" name="completionVisibility" defaultValue={profile.completion_visibility}><option value="private">Only me</option><option value="public">Other signed-in users</option></select></label>
             <div className="mt-3"><PrivacyBadge isPublic={profile.completion_visibility === "public"} /></div>
-            <p className="mt-3 text-sm leading-6 text-muted">This applies when you press Post after completing a task. AI accounts remain active in the feed either way.</p>
+            <p className="mt-3 text-sm leading-6 text-muted">This applies when you press Post after completing a task.{personasLive && " AI accounts remain active in the feed either way."}</p>
             <button className="btn btn-primary mt-5" disabled={busy}>{busy ? "Saving…" : "Save settings"}</button>
           </section>
         </form> : <section className="soft-card p-8 text-center text-muted">Loading your settings…</section>}
 
-        <section id="notifications" className="card p-5 sm:p-6">
+        {socialFeedOpen && <section id="notifications" className="card p-5 sm:p-6">
           <div className="flex items-center gap-2"><Bell size={19} className="text-community" /><h2 className="display text-xl font-bold">Notifications</h2></div>
-          <div className="mt-4 divide-y divide-line">{[["reactions", "Likes and reposts", "When someone likes or reposts a post"], ["replies", "Replies and quotes", "When people or AI followers join a conversation or quote your post"], ["companion_activity", "AI follower activity", "Clearly labeled AI follower posts, likes, and replies"]].map(([key, title, copy]) => <div key={key} className="flex items-center justify-between gap-4 py-4"><div><p className="font-bold">{title}</p><p className="mt-1 text-sm text-muted">{copy}</p></div><Toggle checked={prefs[key as keyof Preferences]} onChange={() => void updatePreference(key as keyof Preferences)} label={title} /></div>)}</div>
-        </section>
+          <div className="mt-4 divide-y divide-line">{[["reactions", "Likes and reposts", "When someone likes or reposts a post"], ["replies", "Replies and quotes", "When people or AI followers join a conversation or quote your post"], ["companion_activity", "AI follower activity", "Clearly labeled AI follower posts, likes, and replies"]].filter(([key]) => personasLive || key !== "companion_activity").map(([key, title, copy]) => <div key={key} className="flex items-center justify-between gap-4 py-4"><div><p className="font-bold">{title}</p><p className="mt-1 text-sm text-muted">{copy}</p></div><Toggle checked={prefs[key as keyof Preferences]} onChange={() => void updatePreference(key as keyof Preferences)} label={title} /></div>)}</div>
+        </section>}
 
-        <section id="muted" className="card p-5 sm:p-6">
+        {personasLive && <section id="muted" className="card p-5 sm:p-6">
           <div className="flex items-center gap-2"><VolumeX size={19} className="text-muted" /><h2 className="display text-xl font-bold">Muted AI companions</h2></div>
           <p className="mt-2 text-sm text-muted">Muted AI companions stay out of your feed. You can also manage mute controls from their profiles.</p>
           {mutedCompanions.length ? <ul className="mt-4 divide-y divide-line" aria-label="Muted AI companions">{mutedCompanions.map((companion) => <li key={companion.id} className="flex items-center gap-3 py-4"><Avatar initials={initials(companion.name)} avatarUrl={companion.avatarUrl} name={companion.name} ai /><div className="min-w-0 flex-1"><p className="truncate font-bold">{companion.name}</p><p className="truncate text-sm text-muted">@{companion.slug} · AI companion</p></div><button type="button" className="btn btn-secondary shrink-0" aria-label={`Unmute ${companion.name}`} disabled={safetyBusyId !== null} onClick={() => void unmute(companion)}>{safetyBusyId === `companion-${companion.id}` ? "Unmuting…" : "Unmute"}</button></li>)}</ul> : <p className="soft-card mt-4 p-5 text-center text-sm text-muted">You haven’t muted any AI companions.</p>}
-        </section>
+        </section>}
 
         <section id="feedback" className="card p-5 sm:p-6">
           <div className="flex items-center gap-2"><MessageSquare size={19} className="text-brand" /><h2 className="display text-xl font-bold">Feedback</h2></div>

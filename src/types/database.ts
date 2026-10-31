@@ -424,6 +424,145 @@ export interface FeedbackSubmission {
   created_at: string;
 }
 
+// Pivot A ("Character Coach"). Text columns constrained by CHECK in
+// 20261031120100_pivot_a_core_schema.sql are typed as their allowed values.
+export type CharacterRole = "coach" | "rival" | "cheerleader" | "deadpan";
+export type CharacterEvent =
+  | "task_started" | "task_finished" | "first_of_day" | "streak" | "comeback"
+  | "session_nudge" | "split_intro" | "chapter_unlocked";
+/** fresh < 1 day, days 1-6, weeks 7-29, stale >= 30. Null on a line matches any age. */
+export type TaskAgeBucket = "fresh" | "days" | "weeks" | "stale";
+export type TaskEventType = "started" | "finished";
+export type ReactionSource = "prewritten" | "ai";
+export type AIArm = "ai" | "prewritten";
+/** `plus`, or `pack:<character slug>`. */
+export type EntitlementProduct = "plus" | `pack:${string}`;
+export type EntitlementStatus = "trialing" | "active" | "past_due" | "canceled" | "expired" | "refunded";
+export type EntitlementSource = "stripe" | "app_store";
+export type SafetyCounterKind = "crisis_card_shown" | "distress_check_unavailable";
+
+export interface Character {
+  id: string;
+  slug: string;
+  name: string;
+  role: CharacterRole;
+  art_url: string | null;
+  is_launch: boolean;
+  pack_sku: string | null;
+  companion_id: string | null;
+  /** Prompt material. Service role only: signed-in clients have no SELECT on this column, so never select `*`. */
+  sheet: Json;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CharacterLine {
+  id: string;
+  character_id: string;
+  event: CharacterEvent;
+  text: string;
+  min_streak: number | null;
+  max_streak: number | null;
+  task_age_bucket: TaskAgeBucket | null;
+  tags: string[];
+  active: boolean;
+  updated_at: string;
+}
+
+export interface StoryChapter {
+  id: string;
+  character_id: string;
+  number: number;
+  title: string;
+  body: string;
+  unlock_rule: Json;
+  active: boolean;
+}
+
+/** Pivot A profile fields, kept off the publicly readable user_profiles. */
+export interface UserCoachProfile {
+  user_id: string;
+  selected_character_id: string | null;
+  /** IANA zone; null means UTC. */
+  timezone: string | null;
+  age_verified_at: string | null;
+  age_verification_method: string | null;
+  ai_arm: AIArm | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskEvent {
+  id: string;
+  user_id: string;
+  task_id: string;
+  type: TaskEventType;
+  occurred_at: string;
+  /** The user's local date at `occurred_at`. */
+  local_date: string;
+  /** Finished events only: `single`, or the recurrence instance (date or ISO week). Unique per task. */
+  occurrence_key: string | null;
+}
+
+export interface CharacterReaction {
+  id: string;
+  user_id: string;
+  task_event_id: string | null;
+  character_id: string;
+  event: CharacterEvent;
+  source: ReactionSource;
+  line_id: string | null;
+  text: string;
+  disclosure_shown: boolean;
+  created_at: string;
+}
+
+export interface AIUsageDaily {
+  user_id: string;
+  /** The user's local date. */
+  date: string;
+  reactions: number;
+  splits: number;
+  safety_checks: number;
+  aborted_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  est_cost_usd: number;
+  updated_at: string;
+}
+
+export interface StoryProgress {
+  user_id: string;
+  character_id: string;
+  consistency_days: number;
+  unlocked_through: number;
+  last_consistency_date: string | null;
+  updated_at: string;
+}
+
+export interface Entitlement {
+  id: string;
+  user_id: string;
+  product: EntitlementProduct;
+  status: EntitlementStatus;
+  source: EntitlementSource;
+  external_id: string | null;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Aggregate only: no user id and no text. */
+export interface SafetyCounter {
+  date: string;
+  kind: SafetyCounterKind;
+  count: number;
+}
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>;
   Insert: Insert & Record<string, unknown>;
@@ -459,6 +598,16 @@ export interface Database {
       chat_threads: Table<ChatThread, Partial<ChatThread> & Pick<ChatThread, "user_one_id" | "created_by">>;
       chat_messages: Table<ChatMessage, Partial<ChatMessage> & Pick<ChatMessage, "thread_id" | "content">>;
       feedback_submissions: Table<FeedbackSubmission, Partial<FeedbackSubmission> & Pick<FeedbackSubmission, "user_id" | "category" | "message">>;
+      characters: Table<Character, Partial<Character> & Pick<Character, "slug" | "name" | "role">>;
+      character_lines: Table<CharacterLine, Partial<CharacterLine> & Pick<CharacterLine, "id" | "character_id" | "event" | "text">>;
+      story_chapters: Table<StoryChapter, Partial<StoryChapter> & Pick<StoryChapter, "character_id" | "number" | "title" | "body">>;
+      user_coach_profiles: Table<UserCoachProfile, Partial<UserCoachProfile> & Pick<UserCoachProfile, "user_id">>;
+      task_events: Table<TaskEvent, Partial<TaskEvent> & Pick<TaskEvent, "user_id" | "task_id" | "type" | "local_date">>;
+      character_reactions: Table<CharacterReaction, Partial<CharacterReaction> & Pick<CharacterReaction, "user_id" | "character_id" | "event" | "source" | "text">>;
+      ai_usage_daily: Table<AIUsageDaily, Partial<AIUsageDaily> & Pick<AIUsageDaily, "user_id" | "date">>;
+      story_progress: Table<StoryProgress, Partial<StoryProgress> & Pick<StoryProgress, "user_id" | "character_id">>;
+      entitlements: Table<Entitlement, Partial<Entitlement> & Pick<Entitlement, "user_id" | "product" | "status" | "source">>;
+      safety_counters: Table<SafetyCounter, Partial<SafetyCounter> & Pick<SafetyCounter, "date" | "kind">>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -604,6 +753,26 @@ export interface Database {
         Returns: ChatMessage;
       };
       submit_feedback: { Args: { p_category: FeedbackType; p_message: string }; Returns: string };
+      pivot_flag_enabled: { Args: { p_key: string }; Returns: boolean };
+      coach_local_date: { Args: { p_user_id: string; p_at?: string }; Returns: string };
+      start_task: { Args: { p_task_id: string }; Returns: TaskEvent };
+      record_ai_usage: {
+        Args: {
+          p_user_id: string;
+          p_date: string;
+          p_reactions: number;
+          p_splits: number;
+          p_safety_checks: number;
+          p_aborted_calls: number;
+          p_input_tokens: number;
+          p_output_tokens: number;
+          p_cache_read: number;
+          p_cache_creation: number;
+          p_cost: number;
+        };
+        Returns: undefined;
+      };
+      increment_safety_counter: { Args: { p_kind: SafetyCounterKind; p_date?: string }; Returns: undefined };
     };
     Enums: {
       task_visibility: TaskVisibility;

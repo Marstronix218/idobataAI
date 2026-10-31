@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 
 const followRequestResponseSchema = z.object({
@@ -8,6 +9,7 @@ const followRequestResponseSchema = z.object({
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { supabase } = await authed(request);
     const requests = assertDatabase(await supabase.rpc("get_follow_requests", { p_limit: 50 }));
     return ok({ requests });
@@ -16,6 +18,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { supabase } = await authed(request);
     const input = await parseJson(request, followRequestResponseSchema);
     // Accepting inserts the follow edge and clears the request in one

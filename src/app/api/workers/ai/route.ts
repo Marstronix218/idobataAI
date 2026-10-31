@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { drainAIJobs } from "@/lib/ai";
+import { getFlags } from "@/lib/flags";
+import { isGateOpen } from "@/lib/flags/route-gates";
 import { assertPrivilegedRequest } from "@/lib/server/privileged";
 import { ok, withApi } from "@/lib/server/http";
 
@@ -12,6 +14,9 @@ const limitSchema = z.coerce.number().int().min(1).max(200).catch(25);
 async function run(request: Request) {
   return withApi(async () => {
     assertPrivilegedRequest(request);
+    // Every queued job type is persona work. Rows stay queued, and SQL
+    // finalization re-checks the flags when they are drained later.
+    if (!isGateOpen(await getFlags(), "persona_engagement")) return ok({ skipped: "persona_engagement disabled" });
     const limit = limitSchema.parse(new URL(request.url).searchParams.get("limit") ?? 25);
     return ok({ jobs: await drainAIJobs(limit) });
   });

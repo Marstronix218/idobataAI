@@ -1,3 +1,4 @@
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, makeCursor, ok, parseCursor, withApi } from "@/lib/server/http";
 import { signPostMediaByPath } from "@/lib/server/post-media";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,10 +24,14 @@ const feedSelect = `
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    const flags = await requireApiGate("wins");
     const { user, supabase } = await authed(request);
     const url = new URL(request.url);
     const scope = url.searchParams.get("scope") ?? "for-you";
     if (!new Set(["for-you", "following", "people", "community", "mine"]).has(scope)) throw new ApiError(400, "Invalid feed scope.");
+    // D10: with the full feed off, this serves the Wins view -- people's shared
+    // wins only, with no persona posts, likes or reposts, and no follow graph.
+    const winsOnly = !flags.socialFeed;
     const category = url.searchParams.get("category")?.trim() ?? "";
     if (category.length > 48) throw new ApiError(400, "Category must be 48 characters or fewer.");
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? 20) || 20));
@@ -37,9 +42,10 @@ export async function GET(request: Request) {
       .is("social_reactions.reply_id", null)
       .lte("created_at", new Date().toISOString())
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
+    if (winsOnly) query = query.is("companion_id", null).eq("kind", "human_completion");
     if (scope === "mine") query = query.eq("author_id", user.id);
     if (scope === "people") query = query.is("companion_id", null);
-    if (scope === "following") {
+    if (scope === "following" && !winsOnly) {
       const followedPosts = assertDatabase(await supabase.rpc("get_following_post_ids", {
         p_category: category || null,
         p_before: cursor?.created_at ?? null,
@@ -66,7 +72,8 @@ export async function GET(request: Request) {
       // Always an array so consumers never read `.length` of undefined; the
       // list feed shows `reply_count` and the detail route supplies the bodies.
       social_replies: [],
-      social_reposts: post.social_reposts ?? [],
+      social_reactions: winsOnly ? post.social_reactions.filter((reaction) => !reaction.companion_id) : post.social_reactions,
+      social_reposts: (post.social_reposts ?? []).filter((repost) => !winsOnly || !repost.companion_id),
       image_urls: (post.image_paths ?? []).map((path) => imageUrlByPath.get(path)).filter((url): url is string => Boolean(url)),
       quoted_post: post.quoted_post ? {
         ...post.quoted_post,

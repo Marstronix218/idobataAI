@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { redirect } from "next/navigation";
+import { getFlags } from "@/lib/flags";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,5 +10,5 @@ export default async function AuthenticatedLayout({ children }: { children: Reac
     const { data: { user } } = await (await createClient()).auth.getUser();
     if (!user) redirect("/login");
   }
-  return <AppShell>{children}</AppShell>;
+  return <AppShell flags={await getFlags()}>{children}</AppShell>;
 }

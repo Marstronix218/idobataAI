@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { drainAfterHumanEngagement } from "@/lib/ai";
 import { publishSchema } from "@/lib/server/schemas";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { removePostMedia, validateStoredPostMedia } from "@/lib/server/post-media";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -14,6 +15,7 @@ export const maxDuration = 30;
 
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("share_win");
     const { user, supabase } = await authed(request);
     const taskId = z.uuid().parse((await params).id);
     const input = await parseJson(request, publishSchema);

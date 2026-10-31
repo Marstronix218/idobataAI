@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 
 type Context = { params: Promise<{ userId: string }> };
@@ -28,6 +29,7 @@ const querySchema = z.object({
  */
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const userId = z.uuid().parse((await params).userId);
     const url = new URL(request.url);
     const { kind, offset } = querySchema.parse({

@@ -14,8 +14,8 @@ describe("legacy companion page routes", () => {
     navigation.permanentRedirect.mockClear();
   });
 
-  it("permanently redirects the directory to AI Personas", () => {
-    LegacyCompanionsPage();
+  it("permanently redirects the directory to AI Personas", async () => {
+    await LegacyCompanionsPage();
 
     expect(navigation.permanentRedirect).toHaveBeenCalledWith("/ai-personas");
   });

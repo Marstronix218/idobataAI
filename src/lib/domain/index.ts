@@ -1,6 +1,7 @@
 export * from "./activity-groups";
 export * from "./completion-key";
 export * from "./engagement-plan";
+export * from "./feature-flags";
 export * from "./job-lease";
 export * from "./provider-fallback";
 export * from "./social-visibility";

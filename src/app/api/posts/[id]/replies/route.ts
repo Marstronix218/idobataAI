@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { drainAfterHumanEngagement } from "@/lib/ai";
 import { replySchema } from "@/lib/server/schemas";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { loadThreadReplies } from "@/lib/server/reply-thread";
 
@@ -12,6 +13,7 @@ export const maxDuration = 30;
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { user, supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
     return ok(await loadThreadReplies(supabase, postId, user.id));
@@ -20,6 +22,7 @@ export async function GET(request: Request, { params }: Context) {
 
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
     const input = await parseJson(request, replySchema);

@@ -1,7 +1,9 @@
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const { user, supabase } = await authed(request);
     const url = new URL(request.url);
     const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);

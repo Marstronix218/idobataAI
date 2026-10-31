@@ -103,7 +103,12 @@ create trigger user_companion_relationships_guard_follow_transition
 -- Wait for any legacy relationship write already in flight. Calls queued behind
 -- this lock resume after commit, see the guard above, and retry through the new
 -- neutral finalizer instead of creating another automatic follow edge.
-lock table public.user_companion_relationships in access exclusive mode;
+-- The DO block lets a fresh `supabase db reset`, which applies statements
+-- outside a transaction block, run this too; inside a migration transaction the
+-- lock is still held until commit.
+do $$ begin
+  lock table public.user_companion_relationships in access exclusive mode;
+end $$;
 
 create or replace function public.finalize_social_action(
   p_job_id uuid, p_lease_token uuid, p_content text default null

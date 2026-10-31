@@ -12,6 +12,7 @@ import { companions as previewCatalog } from "@/data/demo";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import type { QuotedFeedPost, SocialCompanion, SocialPost } from "@/types";
+import { requirePageGate } from "@/lib/flags/route-gates";
 
 type CompanionPost = Pick<SocialPost, "id" | "content" | "task_title" | "category" | "created_at" | "kind"> & {
   reaction_count: number;
@@ -43,6 +44,7 @@ export default async function CompanionProfilePage({
   params: Promise<{ companionId: string }>;
   searchParams?: Promise<{ tab?: string }>;
 }) {
+  await requirePageGate("persona_chat");
   const slug = decodeURIComponent((await params).companionId);
   const selectedTab = (await searchParams).tab === "about" ? "about" : "posts";
   const useDatabase = hasPublicSupabaseEnv();

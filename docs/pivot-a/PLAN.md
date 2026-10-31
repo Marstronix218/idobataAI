@@ -7,7 +7,7 @@
 ## Progress
 
 - [x] Phase 0: baseline and guard rails
-- [ ] Phase 1: data model and flags
+- [x] Phase 1: data model and flags
 - [ ] Phase 2: character content, character pick, profile disclosure
 - [ ] Phase 3: reaction engine, splitter, plan resolution, crisis routing
 - [ ] Phase 4: story, session nudge, no-guilt streaks
@@ -81,7 +81,7 @@ I'll use the default unless you tell me otherwise. Each one is needed by the pha
 | D2 | 3 | Can free users use the splitter? | No. Splitting is Plus or trial only. Free users see the paywall, with "continue free" clearly visible. |
 | D3 | 3 | How do start and finish reactions stay safe on a task whose text suggests distress? | **Nothing is stored, as the spec says.** Every reaction re-runs the keyword prefilter (instant) and the model distress check, alongside reaction generation and inside the same 2.5 s budget. Either one flagging shows the crisis card and suppresses the banter. This also covers task text edited through the Supabase API directly, since users have column grants on `tasks`. It costs at most about $0.03 per Plus user per month. *Alternative:* a stored `tasks.safety_hold` flag. That is cheaper, but it stores a health-related inference about the user, so counsel would need to approve it. |
 | D4 | 3, 5 | How does the distress check behave? | A keyword hit shows the card straight away, with no model call. Otherwise one structured check runs on Haiku. If the model fails or times out, the keyword result stands and a `distress_check_unavailable` counter goes up. Safety checks are never capped or behind the paywall. They are metered for cost but don't count toward the reaction or split caps. TODO(founder): clinical review, including what happens when the check fails. |
-| D5 | 5 | How do we block under-18 sign-ups on every path, not just the web form? | The other paths are the mobile app and direct calls to the Supabase API with the public key. Google OAuth is configured in `supabase/config.toml` but no app code uses it.<br>1. `POST /api/auth/age-check` runs `AgeVerifier`. On a pass it returns a single-use token that expires in 15 minutes. The date of birth is never stored.<br>2. The client passes the token in `signUp({ options: { data: { age_token } } })`.<br>3. A Supabase `before_user_created` hook looks up the token's hash in `age_verification_tokens`, rejects if it is missing, expired or used, and otherwise marks it used.<br>4. `handle_new_user` copies `age_verified_at` and the method onto the profile, and removes the token from the user's metadata.<br>The hook runs as `supabase_auth_admin`, which gets grants on the token table and nothing else. **With `pivot_a.enabled` off the hook lets every sign-up through**, so turning it on early is harmless. It must be enabled in each Supabase environment (TODO(founder)). The launch check asks you to confirm that by hand, because no script can verify it. |
+| D5 | 5 | How do we block under-18 sign-ups on every path, not just the web form? | The other paths are the mobile app and direct calls to the Supabase API with the public key. Google OAuth is configured in `supabase/config.toml` but no app code uses it.<br>1. `POST /api/auth/age-check` runs `AgeVerifier`. On a pass it returns a single-use token that expires in 15 minutes. The date of birth is never stored.<br>2. The client passes the token in `signUp({ options: { data: { age_token } } })`.<br>3. A Supabase `before_user_created` hook looks up the token's hash in `age_verification_tokens`, rejects if it is missing, expired or used, and otherwise marks it used.<br>4. `handle_new_user` copies `age_verified_at` and the method into `user_coach_profiles`, and removes the token from the user's metadata.<br>The hook runs as `supabase_auth_admin`, which gets grants on the token table and nothing else. **With `pivot_a.enabled` off the hook lets every sign-up through**, so turning it on early is harmless. It must be enabled in each Supabase environment (TODO(founder)). The launch check asks you to confirm that by hand, because no script can verify it. |
 | D6 | 5 | Existing beta accounts have no age verification. What happens to them? | Under Pivot A they see a one-time date-of-birth step before entering the app. An under-18 result blocks the app. What happens to that account needs a human decision, marked TODO(founder). |
 | D7 | all | How much of this goes into the mobile app? | Pivot A screens ship on the web only. Mobile gets three things. First, shared contracts and API-client methods for the new endpoints. Second, a sign-up that calls the age-check route first, without which the D5 hook breaks mobile sign-up. Third, a written StoreKit/RevenueCat entitlement interface. Nothing native is built, because `ios/` is not tracked and no purchase code exists. |
 | D8 | 8 | How do we run the end-to-end test without Playwright? | Playwright is not installed. Instead, a Vitest flow test runs against the **local Supabase stack**, so the real triggers, RLS and the age hook are exercised. Anthropic and Stripe are mocked. It walks through the age gate, character pick, first task, start, finish, reaction and paywall. It runs as `npm run test:e2e`, plus a new CI job (see §2). Playwright is a follow-up. |
@@ -99,7 +99,7 @@ I'll use the default unless you tell me otherwise. Each one is needed by the pha
 | Area | What exists today | Plan |
 |---|---|---|
 | Auth | Supabase email/password. Google OAuth is configured in `supabase/config.toml` but no app code uses it. The browser calls `signUp` directly in `src/components/auth/auth-form.tsx`. `src/proxy.ts` refreshes sessions and protects routes, and `src/app/(app)/layout.tsx` checks again. API routes use bearer auth via `authed()`, `withApi`, `parseJson` and `enforceRateLimit` in `src/lib/server/`. | Reuse all of it. Add a date-of-birth step, the age-check route and the hook (D5). |
-| Profiles | `user_profiles`, created by the `handle_new_user` trigger. Users can only write some columns. | Add the Pivot A columns. Only `selected_character_id` and `timezone` are writable, through the profile route, which checks them. |
+| Profiles | `user_profiles`, created by the `handle_new_user` trigger. Users can only write some columns, but every column is readable on visible profiles. | Pivot A fields go in a separate owner-only `user_coach_profiles` table. Only `selected_character_id` and `timezone` are writable, through the profile route, which checks them. |
 | Onboarding | A three-step flow in `src/components/onboarding/onboarding-flow.tsx`: username and avatar, interests, visibility. Nothing records whether it was completed. | With Pivot A on, a new flow: age, character, timezone and the first task, then the paywall. The old flow stays as it is. |
 | Tasks | The `tasks` table: `pending` or `completed`, private by default, recurring, with a `description` column that serves as the note. The `apply_task_completion` trigger sets XP and the streak. A rollover cron resets recurring tasks. The UI is `task-board.tsx`, backed by `/api/tasks` and `/api/tasks/[id]`. There is no concept of starting a task. | Reuse the table and the PATCH completion. Add start, finish and split routes. The finish trigger writes the event, so completions from mobile and the old PATCH count too. |
 | Sharing | A post is only created when the user explicitly calls `publish_task_completion`, via `share-composer.tsx`. The feed has a "People only" mode. | Keep both behind `share_win`, people-only under Pivot A (D9, D10). |
@@ -131,15 +131,25 @@ All flag logic lives in one pure function, `resolveFlags()` in `src/lib/domain/f
 
 **Route gate map.** Phase 1 adds `src/lib/flags/route-gates.ts`, which assigns every route folder to exactly one flag, or to "always on". A test fails if any route under `src/app/api/**` or `src/app/(app)/**` is unassigned, so routes added later can't slip through.
 
+This is the map as built in Phase 1. `src/lib/flags/route-gates.ts` is the source of truth; longest prefix wins.
+
 - **`social_feed`**
-  - Pages: `feed`, `posts/[postId]`, `activity`, `u/*`, `notifications`, `follow-requests`.
-  - APIs: `feed`, `posts` (except publish), `replies`, `users`, `directory`, `progress`, `notifications`, `notification-preferences`, human DM threads in `chat`.
+  - Pages: `posts/*`, `activity`, `u/*`, `notifications`, `follow-requests`.
+  - APIs: `posts`, `posts/[id]/{reactions,replies,repost}`, `replies`, `users`, `directory`, `follow-requests`, `progress`, `notifications`.
+- **`wins`** (`social_feed` or `share_win`)
+  - Page: `feed`, which runs people-only when `social_feed` is off.
+  - APIs: `feed` and `posts/[id]`. The owner can make a win private or delete it from the Wins view; reading a post's detail page still needs `social_feed`.
+- **`chat`** (`social_feed` or `persona_chat`)
+  - Page and API: `chat`.
+  - Each thread is checked separately: persona threads need `persona_chat`, human DMs need `social_feed`.
 - **`persona_chat`**
-  - Pages: `chat` (persona threads), `ai-personas`, `companions`.
-  - APIs: `companions`, `companion-mutes`, and persona threads, messages and retry in `chat`.
-- **`persona_autopost`**: `cron/companions`, and persona jobs in `workers/ai`. Under Pivot A, jobs already queued are cancelled.
-- **`share_win`**: `tasks/[id]/publish`, the share page, `uploads/completion-images`, and the people-only Wins view.
-- **Always on**: `tasks`, `task-categories`, `profile`, `settings`, `account`, `feedback`, `health`, `analytics`, `blocks`, reporting, and the remaining cron routes. Safety tools stay reachable.
+  - Pages: `ai-personas`, `companions`.
+  - APIs: `companions`, `chat/[id]/messages/retry`.
+- **`persona_autopost`**: `cron/companions` and `workers`. Under Pivot A these return `skipped`, and jobs already queued stay queued; SQL finalization re-checks the flags.
+- **`share_win`**: `tasks/[id]/publish`, the share page, and `uploads/completion-images`.
+- **Always on**: `tasks`, `task-categories`, `profile`, `settings`, `account`, `feedback`, `health`, `analytics`, `blocks`, `reports`, `cron/rollover`, `companion-mutes` and `notification-preferences`.
+  - `companion-mutes` stays on because muting is a safety control.
+  - `notification-preferences` stays on because Settings loads it together with the profile; gating it would break Settings, including account deletion.
 
 A route that is switched off returns 404, and its nav entry is hidden. Nothing is deleted.
 
@@ -160,7 +170,7 @@ Naming follows the existing schema:
 | `characters` | `id`, `slug` (unique), `name`, `role` (coach, rival, cheerleader or deadpan), `art_url`, `is_launch`, `pack_sku` (nullable), `companion_id` (nullable, for persona art), `sheet` (jsonb, used to build the prompt), `active` | Signed-in users can read active rows. Only the service role can write. |
 | `character_lines` | `id` (stable text, e.g. `sample-coach.task_started.001`), `character_id`, `event` (the 8 events), `text`, `min_streak`, `max_streak`, `task_age_bucket`, `tags`, `active` | RLS on, no client policy. The server picks lines. |
 | `story_chapters` | `id`, `character_id`, `number` (unique per character), `title`, `body`, `unlock_rule` (jsonb) | RLS on, no client policy. The server only returns a body after checking it is unlocked. |
-| `user_profiles` (new columns) | `selected_character_id`, `timezone` (must be a valid IANA zone; code treats null as UTC), `age_verified_at`, `age_verification_method`, `ai_arm` (`ai`, `prewritten` or null) | Users can't write any of these directly. The profile route checks and sets `selected_character_id` (must be active, and either a launch character or one whose pack the user owns) and `timezone`. |
+| `user_coach_profiles` (the spec's "profile additions") | `user_id` (primary key, references `user_profiles`), `selected_character_id`, `timezone` (must be a valid IANA zone; code treats null as UTC), `age_verified_at`, `age_verification_method`, `ai_arm` (`ai`, `prewritten` or null) | Users read only their own row and can't write it directly. The profile route checks and sets `selected_character_id` (must be active, and either a launch character or one whose pack the user owns) and `timezone`. These fields are kept off `user_profiles` because that table grants `SELECT` on every column, which would expose them on public profiles. |
 | `task_events` | `id`, `user_id`, `task_id`, `type` (started or finished), `occurred_at`, `local_date` | Users read their own. Rows are written by `start_task()` and the finish trigger. |
 | `character_reactions` | `id`, `user_id`, `task_event_id`, `character_id`, `source` (prewritten or ai), `line_id`, `text`, `disclosure_shown`, `created_at` | Users read their own. The server writes them. They are purged at 30 days. |
 | `ai_usage_daily` | Primary key (`user_id`, `date`), where `date` is the user's local date. Columns: `reactions`, `splits`, `safety_checks`, `aborted_calls`, `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `est_cost_usd` | Users read their own. Upserted through `record_ai_usage()`, service role only. |
@@ -212,9 +222,31 @@ Naming follows the existing schema:
 
 ### Phase 1: data model and flags
 
+**Phase 1 results and caveats carried forward**
+- **Finish events:** a task gets at most one `finished` event per occurrence, keyed like XP awards. Marking a task done, undone and done again writes nothing more.
+  - For date-only recurring tasks, the existing completion trigger keys occurrences by the database's UTC date. A daily task finished twice in one local day that crosses UTC midnight can therefore record two finishes. Consistency days still use the user's local date.
+- **Deleting a task** cascades its events and reactions. This is privacy-first, but it lowers past metric counts.
+- **Consistency days** only move forward from `last_consistency_date`. A finish dated earlier, for example after a time-zone change, isn't counted.
+- **`start_task`** is limited to 60 calls a minute.
+- **Phase 2 must fix the post-login landing page.** After login, users go to `/feed`. Under Pivot A with sharing off, that is a 404.
+- **Copy needing review:** task-board's first-run copy still says "AI personas and other members can react". Phase 2 needs Pivot A copy here, marked TODO(founder).
+- **Switched-off pages may return status 200.** They render the not-found page, but `(app)/loading.tsx` streams the response, so the page can return 200 with a noindex tag instead of a real 404. The APIs return real 404s.
+- **Flag changes** take up to 30 seconds to reach each server instance.
+- **Do not turn on `pivot_a.enabled` in any environment before Phase 8.** The 30-day purge of reaction text arrives in Phase 8; until then, reaction text would outlive the spec's retention limit.
+- **The database enforces the persona guardrails itself**, so a failed flag read or a direct Supabase API call can't get around them (`20261031120200_pivot_a_persona_guards.sql`). Insert triggers:
+  - silently skip AI-authored posts when `persona_autopost` is off, and AI-authored replies under Pivot A;
+  - reject persona chat threads and messages when `persona_chat` is off.
+  The TypeScript flag reader also fails closed for those two flags.
+- **The cold-start fail-safe is a deliberate trade-off.** If a server instance has never read the flags and the read fails, it closes persona chat and autoposting but otherwise uses today's values for up to 5 seconds. For that window, Pivot A users could see the full feed, and persona jobs queued before the switch could start draining; the database guards still block persona output.
+- **Known minor issues, deferred:**
+  - With Pivot A off and `persona_autopost.enabled` explicitly false, a persona quote is still generated and then dropped by the guard, wasting one AI call.
+  - Persona jobs queued before Pivot A drain all at once if Pivot A is later turned off.
+  - The finish trigger's failures only go to the database log as warnings.
+- **`characters.sheet` is service-role only.** Signed-in reads of `characters` must name their columns, because `select("*")` fails. Phase 2 must follow this.
+
 **Migrations**
-- `supabase/migrations/20261101000000_pivot_a_core_schema.sql`
-- `supabase/migrations/20261101000100_pivot_a_feature_flags.sql`
+- `supabase/migrations/20261031120000_pivot_a_feature_flags.sql`
+- `supabase/migrations/20261031120100_pivot_a_core_schema.sql`
 
 **Types and flag code**
 - Hand-edit `src/types/database.ts` in its current style. Regenerating it needs the linked project.
@@ -489,8 +521,7 @@ Naming follows the existing schema:
 15. **Chat transcripts already exist.** The spec says there are none, but `chat_messages` is already in the database. See D14.
 
 16. **A fresh database rebuild fails (found in Phase 0).** `supabase db reset` stops at `20260821012000_neutral_ai_follow_relationships.sql` with `LOCK TABLE can only be used in transaction blocks`, on both CLI 2.75 and CI's 2.115. The remote project already has this migration, so it is unaffected. But a clean local stack, which the planned CI `database-contract` job needs, cannot be built from scratch.
-    - **Proposed smallest fix:** wrap that one `lock table` statement in a `do $$ begin … end $$;` block. Behaviour is unchanged, and remote history only records version numbers.
-    - That edits a migration that has already been applied, so it needs your approval. The alternative is a local bootstrap script that applies this file inside a transaction.
+    - **Resolved (founder approved, Phase 1):** that one `lock table` statement is now wrapped in a `do $$ begin … end $$;` block. Behaviour is unchanged, and remote history only records version numbers. A fresh `supabase db reset` now completes and all pgTAP files pass.
 
 ---
 

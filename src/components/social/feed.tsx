@@ -62,7 +62,7 @@ function postType(kind: FeedPost["kind"]) { return isQuote(kind) ? "Quote repost
 
 const postControlSelector = "a, button, input, textarea, select, form, label, [role='menu'], [role='menuitem']";
 
-export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete, onNotice, onQuoteCreated, onRepostChange, repostAttribution, detail = false, onOpen }: { post: FeedPost; currentUserId: string | null; replyAuthor?: ReplyAuthor | null; onChange: (post: FeedPost) => void; onDelete?: (postId: string) => void; onNotice: (message: string) => void; onQuoteCreated?: (post: FeedPost) => void; onRepostChange?: (reposted: boolean) => void; repostAttribution?: { name: string }; detail?: boolean; onOpen?: (postId: string) => void }) {
+export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete, onNotice, onQuoteCreated, onRepostChange, repostAttribution, detail = false, onOpen, winsOnly = false }: { post: FeedPost; currentUserId: string | null; replyAuthor?: ReplyAuthor | null; onChange: (post: FeedPost) => void; onDelete?: (postId: string) => void; onNotice: (message: string) => void; onQuoteCreated?: (post: FeedPost) => void; onRepostChange?: (reposted: boolean) => void; repostAttribution?: { name: string }; detail?: boolean; onOpen?: (postId: string) => void; winsOnly?: boolean }) {
   const [replying, setReplying] = useState(false); const [menuOpen, setMenuOpen] = useState(false); const [repostMenuOpen, setRepostMenuOpen] = useState(false); const [quoteOpen, setQuoteOpen] = useState(false); const [quoteIdempotencyKey, setQuoteIdempotencyKey] = useState(""); const [quoteError, setQuoteError] = useState(""); const [reply, setReply] = useState(""); const [busy, setBusy] = useState(false);
   const repostTriggerRef = useRef<HTMLButtonElement>(null);
   const repostMenuRef = useRef<HTMLDivElement>(null);
@@ -70,7 +70,8 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
   const ai = Boolean(post.companion_id); const name = post.social_companions?.name ?? post.user_profiles?.display_name ?? post.user_profiles?.username ?? "Community member";
   const owned = Boolean(currentUserId && post.author_id === currentUserId);
   const avatarUrl = post.social_companions?.avatar_url ?? post.user_profiles?.avatar_url ?? null;
-  const profileHref = post.social_companions?.slug ? `/ai-personas/${post.social_companions.slug}` : post.user_profiles?.username ? `/u/${post.user_profiles.username}` : null;
+  // Profiles, likes, replies and reposts belong to the full feed, not the Wins view.
+  const profileHref = winsOnly ? null : post.social_companions?.slug ? `/ai-personas/${post.social_companions.slug}` : post.user_profiles?.username ? `/u/${post.user_profiles.username}` : null;
   // The list feed carries `reply_count` and omits reply bodies; only the post
   // detail route populates `social_replies`.
   const replies = post.social_replies ?? [];
@@ -316,7 +317,7 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
       <PostMediaGrid urls={post.image_urls ?? []} alt={`Photo attached to ${post.task_title ?? `${name}'s progress update`}`} className="mt-3" />
       {post.task_title && <div className="mt-3 rounded-2xl border border-line bg-canvas/65 p-3"><p className="text-xs font-bold uppercase tracking-[.1em] text-muted">{post.kind.includes("completion") ? "Completed" : "Working on"}</p><p className="mt-0.5 font-bold">{post.task_title}</p><div className="mt-2 flex flex-wrap gap-2">{post.category && <span className="badge badge-category">{post.category}</span>}{post.streak != null && <span className="badge badge-streak">🔥 {post.streak}-day streak</span>}</div></div>}
       {isQuote(post.kind) && (post.quoted_post ? <QuotedPostCard post={post.quoted_post} /> : <div className="mt-3 rounded-2xl border border-line bg-surface/55 p-4 text-sm text-muted">The quoted post is no longer available.</div>)}
-      <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Post actions">
+      {!winsOnly && <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Post actions">
         <button type="button" aria-pressed={selected === "like"} onClick={() => void toggleLike()} className={`btn btn-ghost post-action ${selected === "like" ? "bg-brand-soft text-brand" : "text-muted"}`}><Heart size={17} fill={selected === "like" ? "currentColor" : "none"} /> Like <span>{likeCount}</span>{aiLikeCount > 0 && <span className="hidden text-xs text-community sm:inline">{aiLikeCount} AI</span>}</button>
         <button type="button" onClick={() => setReplying(!replying)} className="btn btn-ghost post-action text-muted"><MessageCircle size={17} /> Reply <span>{replyCount}</span></button>
         <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setRepostMenuOpen(false); }} onKeyDown={handleRepostMenuKeyDown}>
@@ -326,7 +327,7 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
             <button type="button" role="menuitem" tabIndex={-1} disabled={post.visibility !== "public"} className="btn btn-ghost w-full justify-start px-3 text-sm" onClick={() => { repostTriggerRef.current?.focus(); setRepostMenuOpen(false); setQuoteIdempotencyKey(crypto.randomUUID()); setQuoteError(""); setQuoteOpen(true); }}>Quote repost</button>
           </div>}
         </div>
-      </div>
+      </div>}
       {detail && <ReplyThread postId={post.id} replies={replies} currentUserId={currentUserId} replyAuthor={replyAuthor ?? null} onChange={changeReplies} onNotice={onNotice} />}
       {replying && <form className="mt-3 flex items-end gap-3 border-t border-line pt-3" onSubmit={submitReply}><Avatar initials={initials(replyAuthor?.name ?? "You")} avatarUrl={replyAuthor?.avatarUrl} name={replyAuthor?.name ?? "You"} /><label className="sr-only" htmlFor={`reply-${post.id}`}>Reply to {name}</label><textarea id={`reply-${post.id}`} className="field-bare max-h-48 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg px-1 py-2 text-base leading-6 placeholder:text-muted" rows={1} value={reply} onChange={(event) => { setReply(event.target.value); event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`; }} maxLength={500} placeholder="Post your reply" autoFocus /><button type="submit" className="btn btn-community shrink-0 rounded-full px-4 text-sm" disabled={busy || !reply.trim()}>{busy ? "Replying…" : "Reply"}</button></form>}
     </div>
@@ -334,9 +335,10 @@ export function PostCard({ post, currentUserId, replyAuthor, onChange, onDelete,
   </article>;
 }
 
-export function Feed() {
+/** `winsOnly`: the people-only Wins view shown while the full social feed is off (D10). */
+export function Feed({ winsOnly = false }: { winsOnly?: boolean } = {}) {
   const router = useRouter();
-  const [tab, setTab] = useState<FeedTab>("for-you"); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [replyAuthor, setReplyAuthor] = useState<ReplyAuthor | null>(isPreviewMode ? previewReplyAuthor : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : ""); const [loadError, setLoadError] = useState("");
+  const [tab, setTab] = useState<FeedTab>(winsOnly ? "people" : "for-you"); const [items, setItems] = useState<FeedPost[]>(isPreviewMode ? previewFeed : []); const [cursor, setCursor] = useState<string | null>(null); const [currentUserId, setCurrentUserId] = useState<string | null>(isPreviewMode ? "preview-user" : null); const [replyAuthor, setReplyAuthor] = useState<ReplyAuthor | null>(isPreviewMode ? previewReplyAuthor : null); const [loading, setLoading] = useState(!isPreviewMode); const [status, setStatus] = useState(isPreviewMode ? "Preview data · changes do not persist" : ""); const [loadError, setLoadError] = useState("");
   async function load({ append = false, signal }: { append?: boolean; signal?: AbortSignal } = {}) {
     if (isPreviewMode) { setStatus("Preview feed refreshed."); setCursor(null); return; }
     setLoading(true); setLoadError("");
@@ -396,26 +398,26 @@ export function Feed() {
         <div className="flex min-h-14 items-center gap-2 px-4 sm:gap-3">
           <h1 className="display shrink-0 text-xl font-bold">Community</h1>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <DirectorySearch />
+            {!winsOnly && <DirectorySearch />}
             <button className="icon-btn shrink-0 border-transparent bg-transparent" aria-label="Refresh feed" onClick={() => void load()} disabled={loading}><RefreshCw size={18} className={loading ? "animate-spin" : ""} /></button>
           </div>
         </div>
-        <div className="flex border-t border-line">
+        {!winsOnly && <div className="flex border-t border-line">
           <div className="grid min-w-0 flex-1 grid-cols-3" role="tablist" aria-label="Feed view">
             <button id="feed-for-you-tab" type="button" role="tab" aria-selected={tab === "for-you"} aria-controls="feed-panel" tabIndex={tab === "for-you" ? 0 : -1} onClick={() => changeTab("for-you")} onKeyDown={(event) => handleTabKeyDown(event, "for-you")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "for-you" ? "text-ink" : "text-muted"}`}>For you{tab === "for-you" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
             <button id="feed-following-tab" type="button" role="tab" aria-selected={tab === "following"} aria-controls="feed-panel" tabIndex={tab === "following" ? 0 : -1} onClick={() => changeTab("following")} onKeyDown={(event) => handleTabKeyDown(event, "following")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "following" ? "text-ink" : "text-muted"}`}>Following{tab === "following" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
             <button id="feed-people-tab" type="button" role="tab" aria-selected={tab === "people"} aria-controls="feed-panel" tabIndex={tab === "people" ? 0 : -1} onClick={() => changeTab("people")} onKeyDown={(event) => handleTabKeyDown(event, "people")} className={`relative min-h-12 text-xs font-bold transition-colors hover:bg-surface/55 sm:text-sm ${tab === "people" ? "text-ink" : "text-muted"}`}>People only{tab === "people" && <span className="absolute inset-x-[30%] bottom-0 h-1 rounded-full bg-brand" />}</button>
           </div>
-        </div>
+        </div>}
       </header>
 
-      <div id="feed-panel" role="tabpanel" aria-labelledby={`feed-${tab}-tab`}>
+      <div id="feed-panel" role={winsOnly ? undefined : "tabpanel"} aria-labelledby={winsOnly ? undefined : `feed-${tab}-tab`}>
       {isPreviewMode && <div role="note" className="border-b border-line bg-sun-soft px-4 py-3 text-sm"><strong>Preview mode.</strong> Feed interactions use demo data and reset on reload.</div>}
 
       <p className="sr-only" aria-live="polite">{loading ? "Refreshing feed." : status}</p>
       {loadError && <p role="alert" className="border-b border-line bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{loadError}</p>}
 
-      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} onChange={changePost} onDelete={(postId) => setItems((current) => current.filter((item) => item.id !== postId))} onQuoteCreated={addQuote} onNotice={setStatus} onOpen={(postId) => router.push(`/posts/${encodeURIComponent(postId)}`)} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
+      <div>{displayedItems.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} replyAuthor={replyAuthor} onChange={changePost} onDelete={(postId) => setItems((current) => current.filter((item) => item.id !== postId))} onQuoteCreated={addQuote} onNotice={setStatus} onOpen={winsOnly ? undefined : (postId) => router.push(`/posts/${encodeURIComponent(postId)}`)} winsOnly={winsOnly} />)}{!loading && !displayedItems.length && <div className="border-b border-line p-10 text-center"><h2 className="display text-xl font-bold">No posts here yet.</h2><p className="mt-2 text-sm text-muted">Complete a task and choose to share it when you’re ready.</p></div>}</div>
       {(cursor || isPreviewMode) && <div className="border-b border-line p-4"><button className="btn btn-ghost w-full text-community" onClick={() => isPreviewMode ? setStatus("All preview posts are loaded.") : void load({ append: true })} disabled={loading}>Show more posts</button></div>}
       </div>
   </div>;

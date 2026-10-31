@@ -2,10 +2,12 @@ import "server-only";
 
 import { after } from "next/server";
 import type { AIJob, Json, PostEngagementContext, SocialCompanion } from "@/types";
+import { getFlags } from "@/lib/flags";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   canPlanPersonaEngagement,
   fallbackReply,
+  isGateOpen,
   personaEngagementChannels,
 } from "@/lib/domain";
 import { checkReplyDiversity, sanitizePersonaReply } from "@/lib/domain/reply-diversity";
@@ -571,6 +573,8 @@ export async function drainAIJobs(limit = 5) {
 export function drainAfterHumanEngagement(limit = 2) {
   after(async () => {
     try {
+      // Every queued job type is persona work, so Pivot A leaves the rows queued.
+      if (!isGateOpen(await getFlags(), "persona_engagement")) return;
       await drainAIJobs(limit);
     } catch (error) {
       console.error(JSON.stringify({

@@ -33,7 +33,8 @@ const previewTask = (taskId: string): Task => ({
   updated_at: "2026-08-12T12:14:00.000Z",
 });
 
-export function ShareComposer({ taskId }: { taskId: string }) {
+/** `peopleOnly`: sharing under Pivot A starts at "Only me" whatever the saved default (D9, D10). */
+export function ShareComposer({ taskId, peopleOnly = false }: { taskId: string; peopleOnly?: boolean }) {
   const [message, setMessage] = useState("");
   const [task, setTask] = useState<Task | null>(() => isPreviewMode ? previewTask(taskId) : null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -62,7 +63,7 @@ export function ShareComposer({ taskId }: { taskId: string }) {
       .then(([tasks, loadedProfile]) => {
         setTask(tasks.find((item) => item.id === taskId) ?? null);
         setProfile(loadedProfile);
-        setAudience(loadedProfile.completion_visibility);
+        if (!peopleOnly) setAudience(loadedProfile.completion_visibility);
       })
       .catch((error) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) setStatus(errorMessage(error));
@@ -71,7 +72,7 @@ export function ShareComposer({ taskId }: { taskId: string }) {
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [taskId]);
+  }, [taskId, peopleOnly]);
 
   function chooseImages(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files ?? []);

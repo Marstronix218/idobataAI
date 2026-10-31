@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { createChatReply } from "@/lib/server/chat-reply";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
@@ -23,10 +24,12 @@ function betaDailyChatLimit() {
 
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("chat");
     const { user, supabase } = await authed(request);
     const id = z.uuid().parse((await params).id);
     const input = await parseJson(request, messageSchema);
     const thread = assertDatabase(await supabase.from("chat_threads").select("*").eq("id", id).single(), true) as ChatThread;
+    await requireApiGate(thread.companion_id ? "persona_chat" : "social_feed");
     const admin = createAdminClient();
     const created = await admin.rpc("create_beta_chat_message", {
       p_user_id: user.id,

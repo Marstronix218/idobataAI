@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
 import type { ChatPeer, ChatThread, ChatThreadSummary, SocialCompanion, UserProfile } from "@/types";
@@ -12,10 +13,13 @@ const createThreadSchema = z.object({
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    const flags = await requireApiGate("chat");
     const { user, supabase } = await authed(request);
-    const threads = assertDatabase(await supabase
-      .from("chat_threads")
-      .select("*")
+    // Only the thread kinds that are open, filtered before the page limit.
+    let query = supabase.from("chat_threads").select("*");
+    if (!flags.personaChat) query = query.is("companion_id", null);
+    if (!flags.socialFeed) query = query.not("companion_id", "is", null);
+    const threads = assertDatabase(await query
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(100)) as ChatThread[];
@@ -76,11 +80,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApi(async () => {
+    await requireApiGate("chat");
     const { user, supabase } = await authed(request);
+    const input = await parseJson(request, createThreadSchema);
+    // Checked before the rate limit so a refused thread kind spends no budget.
+    await requireApiGate(input.companionId ? "persona_chat" : "social_feed");
     // Without this, one account could open a thread against every other user,
     // landing in each of their chat lists without ever sending a message.
     await enforceRateLimit(user.id, "thread:create", 20, 3600);
-    const input = await parseJson(request, createThreadSchema);
     const thread = assertDatabase(await supabase.rpc("get_or_create_chat_thread", {
       p_user_id: input.userId ?? null,
       p_companion_id: input.companionId ?? null,

@@ -6,6 +6,11 @@ import { afterEach, expect, vi } from "vitest";
 
 process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE = "true";
 
+// Route handlers now read flags through the server-only `@/lib/flags`. The
+// marker only means something to the Next bundler, and its default export
+// throws outside a React Server Components build.
+vi.mock("server-only", () => ({}));
+
 expect.extend(toHaveNoViolations);
 
 afterEach(() => {

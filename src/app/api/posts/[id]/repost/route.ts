@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { quoteRepostSchema } from "@/lib/server/schemas";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const postId = z.uuid().parse((await params).id);
     const { supabase } = await authed(request);
     const input = await parseJson(request, quoteRepostSchema);
@@ -22,6 +24,7 @@ export async function POST(request: Request, { params }: Context) {
 
 export async function PUT(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const postId = z.uuid().parse((await params).id);
     const { supabase } = await authed(request);
     const repost = assertDatabase(await supabase.rpc("set_human_repost", {
@@ -41,6 +44,7 @@ export async function PUT(request: Request, { params }: Context) {
 
 export async function DELETE(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const postId = z.uuid().parse((await params).id);
     const { supabase } = await authed(request);
     assertDatabase(await supabase.rpc("set_human_repost", {

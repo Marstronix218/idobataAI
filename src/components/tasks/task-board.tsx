@@ -183,7 +183,8 @@ function groupsFor(filter: Filter, tasks: Task[], now: number): TaskGroup[] {
   }].filter((group) => group.tasks.length);
 }
 
-export function TaskBoard() {
+/** `shareWin`: the share_win flag; while it is off nothing offers to post a win. */
+export function TaskBoard({ shareWin = true }: { shareWin?: boolean } = {}) {
   const [items, setItems] = useState<Task[]>(isPreviewMode ? previewTasks : []);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(isPreviewMode ? previewCategories : []);
   const [profile, setProfile] = useState<Pick<UserProfile, "daily_goal" | "current_streak" | "default_task_visibility"> | null>(isPreviewMode ? previewProfile : null);
@@ -576,7 +577,7 @@ export function TaskBoard() {
         <ol className="mt-4 space-y-3">
           <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">1</span><span><strong>Add it privately.</strong> Every task starts private, so you can be honest about what you are actually working on.</span></li>
           <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">2</span><span><strong>Finish it.</strong> Completing it is yours alone. Nothing leaves your account on its own.</span></li>
-          <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Post the win.</strong> <span className="badge badge-public align-middle">Recommended</span> Posting puts it on the feed, where AI personas and other members can react.</span></li>
+          {shareWin && <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Post the win.</strong> <span className="badge badge-public align-middle">Recommended</span> Posting puts it on the feed, where AI personas and other members can react.</span></li>}
         </ol>
       </section>}
 
@@ -587,7 +588,7 @@ export function TaskBoard() {
         <label className="relative min-w-44"><span className="sr-only">Filter by category</span><SlidersHorizontal aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-12 appearance-none py-2 text-sm font-bold" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value} value={value}>{value === "All" ? "All categories" : value}</option>)}</select><ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
       </div>
 
-      {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2><p className="mt-1 text-sm text-muted">Post it and the people following you can cheer you on.</p><div className="mt-3 flex flex-wrap gap-2"><Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-primary">Post the win</Link><button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
+      {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2>{shareWin && <p className="mt-1 text-sm text-muted">Post it and the people following you can cheer you on.</p>}<div className="mt-3 flex flex-wrap gap-2">{shareWin && <Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-primary">Post the win</Link>}<button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
 
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
         {loading ? (
@@ -615,7 +616,7 @@ export function TaskBoard() {
                         {task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 aria-hidden="true" size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}
                       </div>
                     </div>
-                    {task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post</Link>}
+                    {shareWin && task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post</Link>}
                     <button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => openEditor(task)}><MoreHorizontal size={18} /></button>
                   </article>
                 ))}

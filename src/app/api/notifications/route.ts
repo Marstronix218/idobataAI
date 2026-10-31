@@ -1,4 +1,5 @@
 import { notificationReadSchema } from "@/lib/server/schemas";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, makeCursor, ok, parseCursor, parseJson, withApi } from "@/lib/server/http";
 import { signPostMediaByPath } from "@/lib/server/post-media";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -53,6 +54,7 @@ async function signNotificationMedia(items: ActivityItem[]) {
 
 export async function GET(request: Request) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { user, supabase } = await authed(request);
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 30) || 30));
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { supabase } = await authed(request);
     const input = await parseJson(request, notificationReadSchema);
     const result = await supabase.rpc("mark_notifications_read", { p_ids: input.ids ?? null, p_all: input.all === true });

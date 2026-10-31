@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
 
 const relationshipUpdateSchema = z.discriminatedUnion("action", [
@@ -12,6 +13,7 @@ type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const companionId = z.uuid().parse((await params).id);
     const { user, supabase } = await authed(request);
     const relationship = assertDatabase(await supabase
@@ -26,6 +28,7 @@ export async function GET(request: Request, { params }: Context) {
 
 export async function PUT(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const companionId = z.uuid().parse((await params).id);
     const { supabase } = await authed(request);
     const input = await parseJson(request, relationshipUpdateSchema);
@@ -64,6 +67,7 @@ export async function PUT(request: Request, { params }: Context) {
 
 export async function DELETE(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const companionId = z.uuid().parse((await params).id);
     const { supabase } = await authed(request);
     assertDatabase(await supabase.rpc("set_user_companion_follow", {

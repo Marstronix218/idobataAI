@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { createChatReply } from "@/lib/server/chat-reply";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
@@ -11,6 +12,7 @@ const retrySchema = z.object({ messageId: z.uuid() });
 
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const { user, supabase } = await authed(request);
     const id = z.uuid().parse((await params).id);
     const { messageId } = await parseJson(request, retrySchema);

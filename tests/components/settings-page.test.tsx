@@ -12,8 +12,8 @@ vi.mock("@/components/settings/settings-panel", () => ({
 import SettingsPage from "@/app/(app)/settings/page";
 
 describe("SettingsPage", () => {
-  it("uses the wider tab layout without the right context rail", () => {
-    const { container } = render(<SettingsPage />);
+  it("uses the wider tab layout without the right context rail", async () => {
+    const { container } = render(await SettingsPage());
 
     expect(screen.getByText("Settings panel")).toBeVisible();
     expect(screen.queryByRole("complementary", { name: "Momentum rail" })).not.toBeInTheDocument();

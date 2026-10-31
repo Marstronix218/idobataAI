@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, noContent, ok, withApi } from "@/lib/server/http";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const companionId = z.uuid().parse((await params).id);
     const { user, supabase } = await authed(request);
     const memory = assertDatabase(await supabase
@@ -19,6 +21,7 @@ export async function GET(request: Request, { params }: Context) {
 
 export async function DELETE(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("persona_chat");
     const companionId = z.uuid().parse((await params).id);
     const { supabase } = await authed(request);
     assertDatabase(await supabase.rpc("reset_companion_memory", { p_companion_id: companionId }));

@@ -1,3 +1,4 @@
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 
 // A count-only endpoint so the app shell can surface unread encouragement
@@ -5,6 +6,7 @@ import { assertDatabase, authed, ok, withApi } from "@/lib/server/http";
 // the explicit user_id predicate lets the partial unread index serve it.
 export async function GET(request: Request) {
   return withApi(async () => {
+    await requireApiGate("social_feed");
     const { user, supabase } = await authed(request);
     const result = await supabase
       .from("notifications")

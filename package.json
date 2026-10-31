@@ -22,6 +22,7 @@
     "db:test": "node scripts/test-remote-database.mjs",
     "db:deploy": "npm run db:sync && npm run db:lint",
     "db:verify": "npm run db:check && npm run db:lint",
+    "flags": "node scripts/flags.mjs",
     "lint": "npm run lint:web && npm run lint:mobile",
     "lint:web": "eslint",
     "lint:mobile": "npm run lint --workspace @idobata/mobile",

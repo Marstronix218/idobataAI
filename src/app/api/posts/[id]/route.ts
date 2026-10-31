@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { postUpdateSchema } from "@/lib/server/schemas";
+import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, noContent, ok, parseJson, withApi } from "@/lib/server/http";
 import { removePostMedia, signPostMediaByPath } from "@/lib/server/post-media";
 import { loadThreadReplies } from "@/lib/server/reply-thread";
@@ -23,6 +24,9 @@ type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("wins");
+    // The post detail and its thread belong to the full feed, not the Wins view.
+    await requireApiGate("social_feed");
     const { user, supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
     const [postResult, replies] = await Promise.all([
@@ -53,6 +57,7 @@ export async function GET(request: Request, { params }: Context) {
 
 export async function PATCH(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("wins");
     const { user, supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
     const input = await parseJson(request, postUpdateSchema);
@@ -68,6 +73,7 @@ export async function PATCH(request: Request, { params }: Context) {
 
 export async function DELETE(request: Request, { params }: Context) {
   return withApi(async () => {
+    await requireApiGate("wins");
     const { user, supabase } = await authed(request);
     const postId = z.uuid().parse((await params).id);
     const post = assertDatabase(await supabase.from("social_posts")

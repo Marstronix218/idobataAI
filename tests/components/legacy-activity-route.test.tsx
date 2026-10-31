@@ -10,10 +10,10 @@ import { metadata } from "@/app/(app)/notifications/page";
 describe("notifications page routes", () => {
   beforeEach(() => navigation.permanentRedirect.mockClear());
 
-  it("uses the visible tab name as the canonical URL", () => {
+  it("uses the visible tab name as the canonical URL", async () => {
     expect(metadata.title).toBe("Notifications");
 
-    LegacyActivityPage();
+    await LegacyActivityPage();
 
     expect(navigation.permanentRedirect).toHaveBeenCalledWith("/notifications");
   });

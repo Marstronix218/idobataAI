@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getFlags } from "@/lib/flags";
 import { hasPublicSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,6 +10,8 @@ import { createClient } from "@/lib/supabase/server";
 export default async function ProfileRedirectPage() {
   const previewMode = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && process.env.NODE_ENV !== "production";
   if (previewMode || !hasPublicSupabaseEnv()) redirect("/u/mina");
+  // Profiles under /u/ belong to the social feed; Settings holds the account otherwise.
+  if (!(await getFlags()).socialFeed) redirect("/settings");
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
