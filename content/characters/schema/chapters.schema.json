@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Optional path to this file's JSON Schema, for editors.",
+      "type": "string"
+    },
+    "placeholder": {
+      "type": "boolean"
+    },
+    "chapters": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647,
+            "description": "1..n with no gaps, in file order."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "\\S"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000,
+            "pattern": "\\S"
+          },
+          "unlock_rule": {
+            "type": "object",
+            "properties": {
+              "consistency_days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483647
+              }
+            },
+            "required": [
+              "consistency_days"
+            ],
+            "additionalProperties": false,
+            "description": "Chapter n unlocks at n consistency days, so consistency_days must equal number."
+          }
+        },
+        "required": [
+          "number",
+          "title",
+          "body",
+          "unlock_rule"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "placeholder",
+    "chapters"
+  ],
+  "additionalProperties": false,
+  "title": "Story chapters"
+}

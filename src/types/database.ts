@@ -756,6 +756,7 @@ export interface Database {
       pivot_flag_enabled: { Args: { p_key: string }; Returns: boolean };
       coach_local_date: { Args: { p_user_id: string; p_at?: string }; Returns: string };
       start_task: { Args: { p_task_id: string }; Returns: TaskEvent };
+      set_coach_profile: { Args: { p_character_id?: string | null; p_timezone?: string | null }; Returns: UserCoachProfile };
       record_ai_usage: {
         Args: {
           p_user_id: string;

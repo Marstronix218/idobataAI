@@ -42,7 +42,9 @@ export function AuthForm({ mode, defaultEmail = "" }: { mode: "login" | "signup"
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.replace("/feed");
+        // /home picks the landing page from the flags: the feed today, and
+        // onboarding or tasks under Pivot A, where the feed may be off.
+        router.replace("/home");
       }
       router.refresh();
     } catch (error) { setStatus(errorMessage(error)); }

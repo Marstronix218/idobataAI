@@ -181,6 +181,9 @@ describe("gateForRoute", () => {
     ["(app)/ai-personas/[companionId]", "persona_chat"],
     ["(app)/u/[username]/edit", "social_feed"],
     ["(app)/settings", "always"],
+    ["api/characters", "pivot_a"],
+    ["api/coach/profile", "pivot_a"],
+    ["(app)/characters/[slug]", "pivot_a"],
   ] satisfies Array<[string, RouteGate]>)("maps %s to %s", (folder, gate) => {
     expect(gateForRoute(folder)).toBe(gate);
   });
@@ -229,10 +232,15 @@ describe("isGateOpen", () => {
     expect(isGateOpen(closed, "always")).toBe(true);
   });
 
-  it("opens every gate with today's flags and only wins under a default Pivot A", () => {
-    const gates: RouteGate[] = ["social_feed", "persona_chat", "persona_autopost", "persona_engagement", "share_win", "wins", "chat", "always"];
-    expect(gates.filter((gate) => isGateOpen(resolveFlags({}), gate))).toEqual(gates);
-    expect(gates.filter((gate) => isGateOpen(resolveFlags({ "pivot_a.enabled": true }), gate))).toEqual(["share_win", "wins", "always"]);
+  it("opens every gate but pivot_a with today's flags, and pivot_a, share_win and wins under a default Pivot A", () => {
+    const gates: RouteGate[] = ["pivot_a", "social_feed", "persona_chat", "persona_autopost", "persona_engagement", "share_win", "wins", "chat", "always"];
+    expect(gates.filter((gate) => isGateOpen(resolveFlags({}), gate))).toEqual(gates.filter((gate) => gate !== "pivot_a"));
+    expect(gates.filter((gate) => isGateOpen(resolveFlags({ "pivot_a.enabled": true }), gate))).toEqual(["pivot_a", "share_win", "wins", "always"]);
+  });
+
+  it("opens pivot_a only while Pivot A is on, whatever the other flags say", () => {
+    expect(isGateOpen(flags({ pivotA: false, socialFeed: false, shareWin: false }), "pivot_a")).toBe(false);
+    expect(isGateOpen(flags({ pivotA: true, socialFeed: true, shareWin: false }), "pivot_a")).toBe(true);
   });
 });
 

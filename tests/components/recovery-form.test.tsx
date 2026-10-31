@@ -66,6 +66,7 @@ describe("RecoveryForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save new password/ }));
 
     await waitFor(() => expect(auth.updateUser).toHaveBeenCalledWith({ password: "password-one" }));
-    expect(router.replace).toHaveBeenCalledWith("/feed");
+    // /home picks the landing page from the flags.
+    expect(router.replace).toHaveBeenCalledWith("/home");
   });
 });

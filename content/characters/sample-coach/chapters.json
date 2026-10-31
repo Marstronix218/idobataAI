@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/chapters.schema.json",
+  "placeholder": true,
+  "chapters": [
+    {
+      "number": 1,
+      "title": "[placeholder] Chapter 1: The first page",
+      "body": "[placeholder] The coach opens a new notebook and writes one line on the first page: start small. This is stand-in text until the real story is written.",
+      "unlock_rule": { "consistency_days": 1 }
+    },
+    {
+      "number": 2,
+      "title": "[placeholder] Chapter 2: The second page",
+      "body": "[placeholder] The notebook has two lines now. The coach reads them both and smiles. This is stand-in text until the real story is written.",
+      "unlock_rule": { "consistency_days": 2 }
+    },
+    {
+      "number": 3,
+      "title": "[placeholder] Chapter 3: A short list",
+      "body": "[placeholder] Three lines make a list. The coach closes the notebook and heads outside for a walk. This is stand-in text until the real story is written.",
+      "unlock_rule": { "consistency_days": 3 }
+    }
+  ]
+}

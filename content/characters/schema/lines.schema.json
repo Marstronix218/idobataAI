@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Optional path to this file's JSON Schema, for editors.",
+      "type": "string"
+    },
+    "placeholder": {
+      "type": "boolean"
+    },
+    "lines": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:task_started|task_finished|first_of_day|streak|comeback|session_nudge|split_intro|chapter_unlocked)\\.[0-9]{3}$",
+            "description": "Stable id <slug>.<event>.<nnn>. Never reuse an id for different copy."
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "task_started",
+              "task_finished",
+              "first_of_day",
+              "streak",
+              "comeback",
+              "session_nudge",
+              "split_intro",
+              "chapter_unlocked"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400,
+            "pattern": "\\S",
+            "description": "Under 40 words. May use {task}; no other tokens."
+          },
+          "min_streak": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "max_streak": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "task_age_bucket": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "days",
+              "weeks",
+              "stale"
+            ]
+          },
+          "tags": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+            }
+          },
+          "active": {
+            "description": "Defaults to true. Set false to retire a line and keep its id reserved.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "event",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "placeholder",
+    "lines"
+  ],
+  "additionalProperties": false,
+  "title": "Character lines"
+}

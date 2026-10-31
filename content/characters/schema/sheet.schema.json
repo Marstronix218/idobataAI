@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Optional path to this file's JSON Schema, for editors.",
+      "type": "string"
+    },
+    "slug": {
+      "type": "string",
+      "maxLength": 48,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Lowercase letters and digits separated by single hyphens; must match the folder name."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "pattern": "\\S"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "coach",
+        "rival",
+        "cheerleader",
+        "deadpan"
+      ]
+    },
+    "placeholder": {
+      "type": "boolean",
+      "description": "True while the copy is a stand-in. Must match lines.json and chapters.json."
+    },
+    "voice_notes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S",
+      "description": "How the character sounds; fills {voice_notes} in the AI system prompt."
+    },
+    "do": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "\\S"
+      }
+    },
+    "dont": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "\\S"
+      }
+    },
+    "sample_lines": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400,
+        "pattern": "\\S"
+      },
+      "description": "Example reactions for the AI prompt. May use {task}."
+    },
+    "art_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "\\S"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "is_launch": {
+      "type": "boolean"
+    },
+    "pack_sku": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,100}$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Store product id for this character's pack, or null."
+    },
+    "companion_slug": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{2,40}$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Existing persona whose art this character reuses, or null."
+    },
+    "active": {
+      "description": "Defaults to true. Set false to retire the character: the seed sets it inactive and keeps its rows.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "slug",
+    "name",
+    "role",
+    "placeholder",
+    "voice_notes",
+    "do",
+    "dont",
+    "sample_lines",
+    "art_url",
+    "is_launch",
+    "pack_sku",
+    "companion_slug"
+  ],
+  "additionalProperties": false,
+  "title": "Character sheet"
+}

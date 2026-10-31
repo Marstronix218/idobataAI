@@ -41,6 +41,7 @@ const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 /** The smallest flag change that closes each gate. */
 const CLOSING_ROWS: Record<Exclude<RouteGate, "always">, Partial<Record<PivotFlagKey, boolean>>> = {
+  pivot_a: { "pivot_a.enabled": false },
   social_feed: { "social_feed.enabled": false },
   persona_chat: { "persona_chat.enabled": false },
   persona_autopost: { "persona_autopost.enabled": false },

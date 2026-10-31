@@ -33,6 +33,10 @@ export const ROUTE_GATES = {
   "api/task-categories": "always",
   "api/tasks": "always",
 
+  // Character Coach: only exist while Pivot A is on.
+  "api/characters": "pivot_a",
+  "api/coach": "pivot_a",
+
   // Thread list and contacts are filtered per kind; persona threads need
   // persona_chat and human DM threads need social_feed.
   "api/chat": "chat",
@@ -66,6 +70,7 @@ export const ROUTE_GATES = {
   "api/uploads/completion-images": "share_win",
 
   "(app)/activity": "social_feed",
+  "(app)/characters": "pivot_a",
   "(app)/ai-personas": "persona_chat",
   "(app)/chat": "chat",
   "(app)/companions": "persona_chat",

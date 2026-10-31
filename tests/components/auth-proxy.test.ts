@@ -22,6 +22,21 @@ describe("auth proxy", () => {
     expect(response.headers.get("location")).toBe("https://idobata.test/login?next=%2Fupdate-password");
   });
 
+  it.each([
+    ["/home", "%2Fhome"],
+    ["/characters/sample-coach", "%2Fcharacters%2Fsample-coach"],
+  ])("protects the Pivot A route %s", async (path, next) => {
+    const response = await proxy(new NextRequest(`https://idobata.test${path}`));
+
+    expect(response.headers.get("location")).toBe(`https://idobata.test/login?next=${next}`);
+  });
+
+  it("forwards the pathname to the app, overwriting any value the client sent", async () => {
+    const response = await proxy(new NextRequest("https://idobata.test/privacy", { headers: { "x-idobata-pathname": "/settings" } }));
+
+    expect(response.headers.get("x-middleware-request-x-idobata-pathname")).toBe("/privacy");
+  });
+
   it("protects AI persona pages at their canonical route", async () => {
     const response = await proxy(new NextRequest("https://idobata.test/ai-personas/moss?tab=about"));
 

@@ -8,7 +8,7 @@
 
 - [x] Phase 0: baseline and guard rails
 - [x] Phase 1: data model and flags
-- [ ] Phase 2: character content, character pick, profile disclosure
+- [x] Phase 2: character content, character pick, profile disclosure
 - [ ] Phase 3: reaction engine, splitter, plan resolution, crisis routing
 - [ ] Phase 4: story, session nudge, no-guilt streaks
 - [ ] Phase 5: age gate, create/edit distress check, `/safety`
@@ -145,7 +145,9 @@ This is the map as built in Phase 1. `src/lib/flags/route-gates.ts` is the sourc
 - **`persona_chat`**
   - Pages: `ai-personas`, `companions`.
   - APIs: `companions`, `chat/[id]/messages/retry`.
-- **`persona_autopost`**: `cron/companions` and `workers`. Under Pivot A these return `skipped`, and jobs already queued stay queued; SQL finalization re-checks the flags.
+- **`persona_autopost`**: `cron/companions`. Under Pivot A it returns `skipped`.
+- **`persona_engagement`** (open whenever Pivot A is off): `workers`. Under Pivot A it returns `skipped`, and jobs already queued stay queued; SQL finalization re-checks the flags.
+- **`pivot_a`** (open only when Pivot A is on): `api/characters`, `api/coach`, `(app)/characters`. Phase 3 and later Pivot A routes join this gate.
 - **`share_win`**: `tasks/[id]/publish`, the share page, and `uploads/completion-images`.
 - **Always on**: `tasks`, `task-categories`, `profile`, `settings`, `account`, `feedback`, `health`, `analytics`, `blocks`, `reports`, `cron/rollover`, `companion-mutes` and `notification-preferences`.
   - `companion-mutes` stays on because muting is a safety control.
@@ -270,6 +272,16 @@ Naming follows the existing schema:
 - `supabase/tests/pivot_a_contract.sql`: RLS is on and only the user's own rows are visible, for every new table; with the flag off, completing a task writes no event and never fails; with the flag on, the event and consistency day are written.
 
 ### Phase 2: character content, character pick, profile disclosure
+
+**Phase 2 results and caveats carried forward**
+- **Character pick:** built as `GET /api/characters` and `GET`/`PUT /api/coach/profile`, backed by `set_coach_profile()` (migration `20261031130000`), rather than extending `PATCH /api/profile`. The profile read returns only the character, time zone and age-verification time; `ai_arm` stays server-side.
+- **Login landing:** logins, the auth callback and the manifest now land on `/home`. It sends legacy users to `/feed` as before; under Pivot A it sends users to onboarding if they haven't finished it, otherwise to `/tasks`.
+- **Seed placeholder copy:** `npm run content:seed` runs the real linter (Node strips the TypeScript types itself). It refuses to send placeholder characters to any non-localhost database unless given `--allow-placeholder`.
+- **Seed before switching on:** with Pivot A on and no characters seeded, users can't finish onboarding.
+- **Phase 6 must handle lapsed packs.** A pack character stays selected after its entitlement lapses.
+- **Phase 8 launch check** must fail while any active character's sheet has `placeholder: true`.
+- **Phase 5 auth-form leftovers:** the login form doesn't read `?next=`, its button says "Open my feed", and the preview-mode push still goes to `/feed`.
+- **Phase 3 `{task}` contract:** prewritten lines may contain `{task}`, filled with the task title. A long title can push a filled line past 40 words.
 
 **Content**
 - `content/characters/schema/{sheet,lines,chapters}.schema.json`: generated from Zod with `z.toJSONSchema`. A test fails if they drift.

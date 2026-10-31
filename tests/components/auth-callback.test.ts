@@ -24,9 +24,21 @@ describe("auth callback", () => {
   });
 
   it("rejects protocol-relative and absolute destinations", () => {
-    expect(safeDestination("//evil.test/path")).toBe("/feed");
-    expect(safeDestination("https://evil.test/path")).toBe("/feed");
-    expect(safeDestination("/\\evil.test/path")).toBe("/feed");
+    expect(safeDestination("//evil.test/path")).toBe("/home");
+    expect(safeDestination("https://evil.test/path")).toBe("/home");
+    expect(safeDestination("/\\evil.test/path")).toBe("/home");
+  });
+
+  it("lands on /home, which picks the page from the flags, when no destination is given", async () => {
+    const response = await GET(new NextRequest("https://idobata.test/auth/callback?code=pkce-code"));
+
+    expect(response.headers.get("location")).toBe("https://idobata.test/home");
+  });
+
+  it("keeps an explicit next destination", async () => {
+    const response = await GET(new NextRequest("https://idobata.test/auth/callback?code=pkce-code&next=/onboarding"));
+
+    expect(response.headers.get("location")).toBe("https://idobata.test/onboarding");
   });
 
   it("returns to login when the provider callback cannot create a session", async () => {

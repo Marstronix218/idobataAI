@@ -1,7 +1,10 @@
 import {
+  characterListSchema,
+  coachProfileSchema,
   taskSchema,
   type ApiEnvelope,
   type ApiErrorBody,
+  type CoachProfileUpdateInput,
   type TaskCreateInput,
   type TaskStatus,
   type TaskUpdateInput,
@@ -189,7 +192,46 @@ export function createApiClient(options: ApiClientOptions) {
       .then((value) => validateTask(value, 200));
   }
 
-  return { request, listTasks, createTask, updateTask };
+  function validateCoachProfile(value: unknown, status: number) {
+    const parsed = coachProfileSchema.safeParse(value);
+    if (!parsed.success) {
+      throw new ApiClientError(
+        "The server returned an invalid coach profile.",
+        status,
+        "invalid_response",
+        parsed.error.issues,
+      );
+    }
+    return parsed.data;
+  }
+
+  /** Pivot A: the characters the signed-in user may choose. */
+  function listCharacters() {
+    return request<unknown>("/api/characters").then((value) => {
+      const parsed = characterListSchema.safeParse(value);
+      if (!parsed.success) {
+        throw new ApiClientError(
+          "The server returned an invalid character list.",
+          200,
+          "invalid_response",
+          parsed.error.issues,
+        );
+      }
+      return parsed.data.items;
+    });
+  }
+
+  function getCoachProfile() {
+    return request<unknown>("/api/coach/profile").then((value) => validateCoachProfile(value, 200));
+  }
+
+  /** Saves the chosen character and/or time zone; a field left out keeps its stored value. */
+  function updateCoachProfile(input: CoachProfileUpdateInput) {
+    return request<unknown>("/api/coach/profile", { method: "PUT", body: input })
+      .then((value) => validateCoachProfile(value, 200));
+  }
+
+  return { request, listTasks, createTask, updateTask, listCharacters, getCoachProfile, updateCoachProfile };
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;

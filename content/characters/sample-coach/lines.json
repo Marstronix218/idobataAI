@@ -1,0 +1,114 @@
+{
+  "$schema": "../schema/lines.schema.json",
+  "placeholder": true,
+  "lines": [
+    {
+      "id": "sample-coach.task_started.001",
+      "event": "task_started",
+      "text": "[placeholder] Starting {task}. Just the first small step for now."
+    },
+    {
+      "id": "sample-coach.task_started.002",
+      "event": "task_started",
+      "text": "[placeholder] {task} is on. Set a short timer and see how far you get."
+    },
+    {
+      "id": "sample-coach.task_started.003",
+      "event": "task_started",
+      "text": "[placeholder] Fresh on the list and already started: {task}. Good momentum.",
+      "task_age_bucket": "fresh"
+    },
+    {
+      "id": "sample-coach.task_started.004",
+      "event": "task_started",
+      "text": "[placeholder] {task} is finally getting its turn. Today works fine.",
+      "task_age_bucket": "stale"
+    },
+    {
+      "id": "sample-coach.task_finished.001",
+      "event": "task_finished",
+      "text": "[placeholder] {task} is done. Nice work. Next task, or a short break?"
+    },
+    {
+      "id": "sample-coach.task_finished.002",
+      "event": "task_finished",
+      "text": "[placeholder] Finished {task}. That counts. Go enjoy the time you just freed up."
+    },
+    {
+      "id": "sample-coach.task_finished.003",
+      "event": "task_finished",
+      "text": "[placeholder] {task} sat on the list for weeks, and now it is done. Well played.",
+      "task_age_bucket": "weeks"
+    },
+    {
+      "id": "sample-coach.first_of_day.001",
+      "event": "first_of_day",
+      "text": "[placeholder] First one of the day: {task}. A good way to begin."
+    },
+    {
+      "id": "sample-coach.first_of_day.002",
+      "event": "first_of_day",
+      "text": "[placeholder] New day. One small task is plenty to get rolling."
+    },
+    {
+      "id": "sample-coach.streak.001",
+      "event": "streak",
+      "text": "[placeholder] A few days in a row now. Steady progress.",
+      "min_streak": 2,
+      "max_streak": 4
+    },
+    {
+      "id": "sample-coach.streak.002",
+      "event": "streak",
+      "text": "[placeholder] Several days of finishing things. That rhythm is yours.",
+      "min_streak": 5,
+      "max_streak": 13
+    },
+    {
+      "id": "sample-coach.streak.003",
+      "event": "streak",
+      "text": "[placeholder] Two weeks or more of showing up. Quietly impressive.",
+      "min_streak": 14
+    },
+    {
+      "id": "sample-coach.comeback.001",
+      "event": "comeback",
+      "text": "[placeholder] Welcome back. Today is a fresh start, and {task} is a fine place to begin."
+    },
+    {
+      "id": "sample-coach.comeback.002",
+      "event": "comeback",
+      "text": "[placeholder] Good to see you. Nothing to catch up on. Just pick one thing."
+    },
+    {
+      "id": "sample-coach.session_nudge.001",
+      "event": "session_nudge",
+      "text": "[placeholder] That is enough planning for now. Close the app and go do the next thing."
+    },
+    {
+      "id": "sample-coach.session_nudge.002",
+      "event": "session_nudge",
+      "text": "[placeholder] Time to step away from the screen. Check it off once it is done."
+    },
+    {
+      "id": "sample-coach.split_intro.001",
+      "event": "split_intro",
+      "text": "[placeholder] {task} looks big. Here it is in three smaller steps."
+    },
+    {
+      "id": "sample-coach.split_intro.002",
+      "event": "split_intro",
+      "text": "[placeholder] Let's make {task} easier to start. Step one is all you need right now."
+    },
+    {
+      "id": "sample-coach.chapter_unlocked.001",
+      "event": "chapter_unlocked",
+      "text": "[placeholder] A new chapter is unlocked. Read it whenever you like."
+    },
+    {
+      "id": "sample-coach.chapter_unlocked.002",
+      "event": "chapter_unlocked",
+      "text": "[placeholder] Another day with a finished task, another chapter. It is ready when you are."
+    }
+  ]
+}

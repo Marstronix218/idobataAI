@@ -46,6 +46,7 @@ export const LEGACY_FLAGS: PivotFlags = Object.freeze(resolveFlags({}));
 export const FAILSAFE_FLAGS: PivotFlags = Object.freeze({ ...LEGACY_FLAGS, personaChat: false, personaAutopost: false });
 
 export type RouteGate =
+  | "pivot_a"
   | "social_feed"
   | "persona_chat"
   | "persona_autopost"
@@ -57,6 +58,8 @@ export type RouteGate =
 
 export function isGateOpen(flags: PivotFlags, gate: RouteGate): boolean {
   switch (gate) {
+    // Character Coach surfaces: character pick, profiles and the coach profile.
+    case "pivot_a": return flags.pivotA;
     case "social_feed": return flags.socialFeed;
     case "persona_chat": return flags.personaChat;
     case "persona_autopost": return flags.personaAutopost;

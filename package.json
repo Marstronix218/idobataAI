@@ -23,6 +23,8 @@
     "db:deploy": "npm run db:sync && npm run db:lint",
     "db:verify": "npm run db:check && npm run db:lint",
     "flags": "node scripts/flags.mjs",
+    "content:schema": "node --experimental-strip-types scripts/generate-character-schemas.mjs",
+    "content:seed": "node --experimental-strip-types scripts/seed-characters.mjs",
     "lint": "npm run lint:web && npm run lint:mobile",
     "lint:web": "eslint",
     "lint:mobile": "npm run lint --workspace @idobata/mobile",

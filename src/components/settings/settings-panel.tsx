@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bell, Info, LockKeyhole, LogOut, MessageSquare, ShieldCheck, SlidersHorizontal, Smartphone, Trash2, VolumeX, X } from "lucide-react";
+import { Bell, Info, LockKeyhole, LogOut, MessageSquare, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Trash2, VolumeX, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { CoachSettings } from "@/components/settings/coach-settings";
 import { Avatar } from "@/components/ui/avatar";
 import { BetaBadge, PrivacyBadge } from "@/components/ui/status";
 import { apiRequest, errorMessage, isPreviewMode } from "@/lib/client/api";
@@ -234,7 +235,7 @@ export function SettingsPanel({ flags = LEGACY_FLAGS }: { flags?: PivotFlags } =
 
     <div className="mt-7 grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Settings sections">
-        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [Info, "About"], [ShieldCheck, "Safety"]].filter(([, label]) => (label !== "Notifications" || socialFeedOpen) && (label !== "Muted" || personasLive)).map(([Icon, label]) => {
+        {[[SlidersHorizontal, "Preferences"], [LockKeyhole, "Privacy"], [Sparkles, "Character"], [Bell, "Notifications"], [VolumeX, "Muted"], [MessageSquare, "Feedback"], [Info, "About"], [ShieldCheck, "Safety"]].filter(([, label]) => (label !== "Notifications" || socialFeedOpen) && (label !== "Muted" || personasLive) && (label !== "Character" || flags.pivotA)).map(([Icon, label]) => {
           const Comp = Icon as typeof SlidersHorizontal;
           return <a key={label as string} href={`#${String(label).toLowerCase()}`} className="btn btn-ghost shrink-0 justify-start"><Comp size={17} />{label as string}</a>;
         })}
@@ -258,6 +259,8 @@ export function SettingsPanel({ flags = LEGACY_FLAGS }: { flags?: PivotFlags } =
             <button className="btn btn-primary mt-5" disabled={busy}>{busy ? "Saving…" : "Save settings"}</button>
           </section>
         </form> : <section className="soft-card p-8 text-center text-muted">Loading your settings…</section>}
+
+        {flags.pivotA && <CoachSettings />}
 
         {socialFeedOpen && <section id="notifications" className="card p-5 sm:p-6">
           <div className="flex items-center gap-2"><Bell size={19} className="text-community" /><h2 className="display text-xl font-bold">Notifications</h2></div>

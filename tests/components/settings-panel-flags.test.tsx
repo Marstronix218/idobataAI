@@ -21,6 +21,8 @@ import { SettingsPanel } from "@/components/settings/settings-panel";
 
 describe("SettingsPanel under the Pivot A flags", () => {
   beforeEach(() => {
+    // Pivot A adds a time zone picker; the runtime's ~400 zones make axe slow.
+    vi.spyOn(Intl, "supportedValuesOf").mockReturnValue(["America/Chicago", "Europe/London"]);
     apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/profile") return Promise.resolve({
@@ -33,6 +35,8 @@ describe("SettingsPanel under the Pivot A flags", () => {
       if (path === "/api/notification-preferences") return Promise.resolve({ reactions: true, replies: true, companion_activity: true });
       if (path === "/api/blocks") return Promise.resolve({ items: [{ id: "user-2", name: "Casey Park", username: "casey", avatarUrl: null }] });
       if (path === "/api/companion-mutes") return Promise.resolve({ items: [{ id: "orbit", name: "Orbit", slug: "orbit", avatarUrl: null }] });
+      if (path === "/api/coach/profile") return Promise.resolve({ selected_character_id: null, timezone: null, age_verified_at: null });
+      if (path === "/api/characters") return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`Unexpected path: ${path}`));
     });
   });
@@ -50,7 +54,7 @@ describe("SettingsPanel under the Pivot A flags", () => {
     expect(screen.queryByRole("heading", { name: "Muted AI companions" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Notifications" })).not.toBeInTheDocument();
     const sections = screen.getByRole("navigation", { name: "Settings sections" });
-    expect(within(sections).getAllByRole("link").map((link) => link.textContent)).toEqual(["Preferences", "Privacy", "Feedback", "About", "Safety"]);
+    expect(within(sections).getAllByRole("link").map((link) => link.textContent)).toEqual(["Preferences", "Privacy", "Character", "Feedback", "About", "Safety"]);
     expect(apiRequest).not.toHaveBeenCalledWith("/api/companion-mutes", expect.anything());
     expect(screen.queryByText(/some safety lists could not be refreshed/)).not.toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();

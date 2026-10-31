@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const DEFAULT_DESTINATION = "/feed";
+// /home redirects by flags: the feed today, onboarding or tasks under Pivot A.
+const DEFAULT_DESTINATION = "/home";
 
 export function safeDestination(value: string | null) {
   return value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\")

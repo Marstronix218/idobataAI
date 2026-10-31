@@ -49,7 +49,7 @@ export function RecoveryForm({ mode, defaultEmail = "" }: { mode: RecoveryMode; 
         const password = String(form.get("password"));
         const { error } = await supabase.auth.updateUser({ password });
         if (error) throw error;
-        router.replace("/feed");
+        router.replace("/home");
         router.refresh();
         return;
       }

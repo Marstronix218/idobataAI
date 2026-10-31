@@ -97,6 +97,44 @@ export const taskUpdateSchema = z.object({
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
 
+// Pivot A: characters and the coach profile.
+
+export const CHARACTER_ROLES = ["coach", "rival", "cheerleader", "deadpan"] as const;
+
+/** A character the caller may select. The character sheet is server-only prompt material and never appears here. */
+export const characterSummarySchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  name: z.string(),
+  role: z.enum(CHARACTER_ROLES),
+  art_url: z.string().nullable(),
+  is_launch: z.boolean(),
+  pack_sku: z.string().nullable(),
+});
+
+export const characterListSchema = z.object({ items: z.array(characterSummarySchema) });
+
+export const coachProfileSchema = z.object({
+  selected_character_id: z.uuid().nullable(),
+  /** IANA zone; null until onboarding saves one. */
+  timezone: z.string().nullable(),
+  age_verified_at: z.string().nullable(),
+});
+
+/** A field left out keeps its stored value. */
+export const coachProfileUpdateSchema = z.object({
+  characterId: z.uuid().optional(),
+  timezone: timeZoneSchema.optional(),
+}).strict().refine(
+  (value) => value.characterId !== undefined || value.timezone !== undefined,
+  "Choose a character or a time zone.",
+);
+
+export type CharacterSummary = z.infer<typeof characterSummarySchema>;
+export type CharacterList = z.infer<typeof characterListSchema>;
+export type CoachProfile = z.infer<typeof coachProfileSchema>;
+export type CoachProfileUpdateInput = z.infer<typeof coachProfileUpdateSchema>;
+
 export interface ApiErrorBody {
   code: string;
   message: string;

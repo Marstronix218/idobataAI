@@ -183,8 +183,11 @@ function groupsFor(filter: Filter, tasks: Task[], now: number): TaskGroup[] {
   }].filter((group) => group.tasks.length);
 }
 
-/** `shareWin`: the share_win flag; while it is off nothing offers to post a win. */
-export function TaskBoard({ shareWin = true }: { shareWin?: boolean } = {}) {
+/**
+ * `shareWin`: the share_win flag; while it is off nothing offers to post a win.
+ * `pivotA`: the pivot_a.enabled flag; the first-run steps drop the persona copy.
+ */
+export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: boolean; pivotA?: boolean } = {}) {
   const [items, setItems] = useState<Task[]>(isPreviewMode ? previewTasks : []);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(isPreviewMode ? previewCategories : []);
   const [profile, setProfile] = useState<Pick<UserProfile, "daily_goal" | "current_streak" | "default_task_visibility"> | null>(isPreviewMode ? previewProfile : null);
@@ -577,7 +580,9 @@ export function TaskBoard({ shareWin = true }: { shareWin?: boolean } = {}) {
         <ol className="mt-4 space-y-3">
           <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">1</span><span><strong>Add it privately.</strong> Every task starts private, so you can be honest about what you are actually working on.</span></li>
           <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">2</span><span><strong>Finish it.</strong> Completing it is yours alone. Nothing leaves your account on its own.</span></li>
-          {shareWin && <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Post the win.</strong> <span className="badge badge-public align-middle">Recommended</span> Posting puts it on the feed, where AI personas and other members can react.</span></li>}
+          {/* TODO(founder): Pivot A first-run copy. Under Pivot A no persona
+              reacts to a shared win (D9), so this step is hidden there. */}
+          {shareWin && !pivotA && <li className="flex gap-3 text-sm leading-6"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">3</span><span><strong>Post the win.</strong> <span className="badge badge-public align-middle">Recommended</span> Posting puts it on the feed, where AI personas and other members can react.</span></li>}
         </ol>
       </section>}
 
