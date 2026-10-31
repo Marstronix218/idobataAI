@@ -32,7 +32,7 @@ const moss = {
 };
 
 const both = { people: [jonah], personas: [moss] };
-const searchBox = () => screen.getByLabelText("Search people and AI personas");
+const searchBox = () => screen.getByLabelText("Search account");
 
 describe("DirectorySearch", () => {
   beforeEach(() => {

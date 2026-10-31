@@ -696,11 +696,15 @@ do $$ begin
   if exists(select 1 from public.search_chat_contacts('user_c')) then
     raise exception 'private profile was enumerable through contact search';
   end if;
-  begin
-    perform public.get_profile_ai_follower_count('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
-    raise exception 'private AI follower count was readable';
-  exception when no_data_found then null;
-  end;
+  -- Private profile cards deliberately show the AI follower count, which
+  -- describes the account (20260828050000); only the relationship rows stay hidden.
+  -- User C has no persona relationships here, so anything but 0 counted other rows.
+  if public.get_profile_ai_follower_count('cccccccc-cccc-4ccc-8ccc-cccccccccccc') <> 0 then
+    raise exception 'private profile card counted AI followers it does not have';
+  end if;
+  if exists(select 1 from public.user_companion_relationships where user_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc') then
+    raise exception 'private relationship rows leaked to another authenticated user';
+  end if;
 end $$;
 reset role;
 
@@ -759,10 +763,12 @@ set local "request.jwt.claim.sub" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 do $$
 declare summary record;
 begin
-  if not public.set_user_follow('cccccccc-cccc-4ccc-8ccc-cccccccccccc', true) then
+  -- set_user_follow returns the resulting state as text ('following', 'requested',
+  -- 'none') rather than a boolean since 20260828050000.
+  if public.set_user_follow('cccccccc-cccc-4ccc-8ccc-cccccccccccc', true) <> 'following' then
     raise exception 'public profile follow was not created';
   end if;
-  if not public.set_user_follow('cccccccc-cccc-4ccc-8ccc-cccccccccccc', true) then
+  if public.set_user_follow('cccccccc-cccc-4ccc-8ccc-cccccccccccc', true) <> 'following' then
     raise exception 'repeated public profile follow did not preserve following state';
   end if;
   if not exists(
@@ -850,12 +856,16 @@ begin
     where ordered.is_favorite
       and ordered.position > (select count(*) from public.list_profile_favorite_personas(auth.uid()))
   ) then raise exception 'AI following list did not lead with favorites'; end if;
-  begin
-    perform public.set_user_follow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
-    raise exception 'private profile accepted a human follow';
-  exception when raise_exception then
-    if sqlerrm='private profile accepted a human follow' then raise; end if;
-  end;
+  -- Following a private profile files a request instead of creating the edge
+  -- (20260828050000 follow requests); the privacy intent is that no follow edge
+  -- exists until the owner approves.
+  if public.set_user_follow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true) <> 'requested' then
+    raise exception 'private profile follow did not become a request';
+  end if;
+  if exists(
+    select 1 from public.user_follows
+    where follower_id=auth.uid() and followed_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  ) then raise exception 'private profile accepted a human follow'; end if;
   begin
     perform public.set_user_follow('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', true);
     raise exception 'self-follow was accepted';

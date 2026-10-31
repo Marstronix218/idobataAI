@@ -24,9 +24,11 @@ describe("MomentumRail", () => {
     expect(screen.getByRole("progressbar", { name: "Daily goal progress" })).toHaveAttribute("aria-valuetext", "1 of 3 wins today");
     expect(screen.getByText(/Daily goals start at 3/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Change your daily goal in Settings" })).toHaveAttribute("href", "/settings#preferences");
-    expect(screen.getByText(/A streak is consecutive days with at least one completed task/)).toBeVisible();
-    expect(screen.getByText("6 days")).toBeVisible();
-    expect(screen.getByText("1 task")).toBeVisible();
+    // The streak and today's completions are a label/value pair, not prose:
+    // the streak explanation lives on the Your Tasks board, not in this rail.
+    expect(screen.getByText("Current streak").nextElementSibling).toHaveTextContent(/^6 days$/);
+    expect(screen.getByText("Completed today").nextElementSibling).toHaveTextContent(/^1 task$/);
+    expect(screen.queryByText(/A streak is consecutive days/)).not.toBeInTheDocument();
   });
 
   it("has no automated accessibility violations", async () => {

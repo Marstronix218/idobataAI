@@ -17,6 +17,7 @@ describe("TaskBoard", () => {
     expect(screen.getByRole("heading", { name: "Your Tasks" })).toBeVisible();
     expect(screen.getByText("6")).toBeVisible();
     expect(screen.getByText("day streak")).toBeVisible();
+    expect(screen.getByLabelText("6-day streak. A streak counts consecutive days with at least one completed task.")).toHaveAttribute("title", "A streak counts consecutive days with at least one completed task.");
     expect(screen.getByRole("progressbar", { name: "Daily task goal" })).toHaveAttribute("aria-valuetext", "1 of 3 tasks completed today");
     expect(screen.queryByText(/XP/)).not.toBeInTheDocument();
   });
@@ -94,7 +95,10 @@ describe("TaskBoard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByText("Work renamed to Office. Preview only.")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Delete Office" }));
+    // The status text and the row leaving rename mode land in separate renders
+    // (the manager clears its edit state one microtask after the board's
+    // notify), so wait for the row's own button rather than the status text.
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Office" }));
     expect(screen.getByText("It will be cleared from 1 current task. Published posts will not change.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Remove category" }));
 
