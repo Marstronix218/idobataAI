@@ -1,7 +1,10 @@
 import {
   characterListSchema,
   coachProfileSchema,
+  taskFinishResultSchema,
   taskSchema,
+  taskSplitResultSchema,
+  taskStartResultSchema,
   type ApiEnvelope,
   type ApiErrorBody,
   type CoachProfileUpdateInput,
@@ -231,7 +234,54 @@ export function createApiClient(options: ApiClientOptions) {
       .then((value) => validateCoachProfile(value, 200));
   }
 
-  return { request, listTasks, createTask, updateTask, listCharacters, getCoachProfile, updateCoachProfile };
+  function validated<T>(schema: { safeParse(value: unknown): { success: true; data: T } | { success: false; error: { issues: unknown } } }, what: string) {
+    return (value: unknown) => {
+      const parsed = schema.safeParse(value);
+      if (!parsed.success) {
+        throw new ApiClientError(`The server returned an invalid ${what}.`, 200, "invalid_response", parsed.error.issues);
+      }
+      return parsed.data;
+    };
+  }
+
+  /**
+   * Pivot A: starts a pending task and returns the started event with the
+   * character's reaction (null on a repeat start the same day). A `crisis`
+   * reaction means: show the crisis card, no banter.
+   */
+  function startTask(id: string) {
+    return request<unknown>(`/api/tasks/${encodeURIComponent(id)}/start`, { method: "POST" })
+      .then(validated(taskStartResultSchema, "task start"));
+  }
+
+  /** Pivot A: completes a task like `updateTask(id, { status: "completed" })` and returns the reaction. */
+  function finishTask(id: string) {
+    return request<unknown>(`/api/tasks/${encodeURIComponent(id)}/finish`, { method: "POST" })
+      .then(validated(taskFinishResultSchema, "task finish"));
+  }
+
+  /**
+   * Pivot A: three steps for a stuck task, or `{ kind: "crisis" }`. Fails with
+   * ApiClientError code `plan_required` (402), `split_cap_reached` (429) or
+   * `split_unavailable` (503); see TASK_SPLIT_ERROR_CODES.
+   */
+  function splitTask(id: string) {
+    return request<unknown>(`/api/tasks/${encodeURIComponent(id)}/split`, { method: "POST" })
+      .then(validated(taskSplitResultSchema, "task split"));
+  }
+
+  return {
+    request,
+    listTasks,
+    createTask,
+    updateTask,
+    listCharacters,
+    getCoachProfile,
+    updateCoachProfile,
+    startTask,
+    finishTask,
+    splitTask,
+  };
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;

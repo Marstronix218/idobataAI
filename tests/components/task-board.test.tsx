@@ -321,3 +321,28 @@ describe("TaskBoard", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 });
+
+describe("TaskBoard under Pivot A in preview mode", () => {
+  it("stays usable without a network: start and finish work, with no reaction", async () => {
+    const { container } = render(<TaskBoard pivotA coach={{ character: null }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start: Draft the project kickoff outline" }));
+    expect(screen.getByRole("button", { name: "In progress: Draft the project kickoff outline" })).toBeVisible();
+    expect(screen.queryByText(/is typing|^Typing$/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Complete: Draft the project kickoff outline" }));
+    expect(screen.getByText("Done")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Draft the project kickoff outline completed and remains off the feed.");
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("answers a split with the neutral unavailable line", async () => {
+    render(<TaskBoard pivotA coach={{ character: null }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stuck? Split it: Draft the project kickoff outline" }));
+
+    expect(await screen.findByText("Splitting isn’t available right now.")).toBeVisible();
+    expect(screen.queryByText(/Preview mode\./)).toBeInTheDocument();
+    expect(screen.queryByText("Persistence is unavailable in Preview mode.")).not.toBeInTheDocument();
+  });
+});

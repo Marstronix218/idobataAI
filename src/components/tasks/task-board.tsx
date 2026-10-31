@@ -11,6 +11,7 @@ import {
   Flag,
   LockKeyhole,
   MoreHorizontal,
+  Play,
   Plus,
   RefreshCw,
   Repeat2,
@@ -21,7 +22,10 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactionCharacter, ReactionPayload, TaskFinishResult, TaskSplitResult, TaskStartResult } from "@idobata/contracts";
 import { tasks as demoTasks } from "@/data/demo";
+import { ReactionBubble } from "@/components/coach/reaction-bubble";
+import { SplitSteps } from "@/components/coach/split-steps";
 import { TaskCategoryManager } from "@/components/tasks/task-category-manager";
 import { PrivacyBadge } from "@/components/ui/status";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -186,8 +190,15 @@ function groupsFor(filter: Filter, tasks: Task[], now: number): TaskGroup[] {
 /**
  * `shareWin`: the share_win flag; while it is off nothing offers to post a win.
  * `pivotA`: the pivot_a.enabled flag; the first-run steps drop the persona copy.
+ * `coach`: passed by the server page only under Pivot A. It adds Start and
+ * split controls, finishes through the finish route, and shows the coach panel.
+ * Without it the board behaves exactly as before.
  */
-export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: boolean; pivotA?: boolean } = {}) {
+export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
+  shareWin?: boolean;
+  pivotA?: boolean;
+  coach?: { character: ReactionCharacter | null };
+} = {}) {
   const [items, setItems] = useState<Task[]>(isPreviewMode ? previewTasks : []);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(isPreviewMode ? previewCategories : []);
   const [profile, setProfile] = useState<Pick<UserProfile, "daily_goal" | "current_streak" | "default_task_visibility"> | null>(isPreviewMode ? previewProfile : null);
@@ -212,6 +223,13 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
   const [busyId, setBusyId] = useState<string | null>(null);
   const [categoryBusyId, setCategoryBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Pivot A only. "In progress" is this session's view: the board does not load start events.
+  const [startedIds, setStartedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [reactionRequest, setReactionRequest] = useState<Promise<ReactionPayload | null> | null>(null);
+  const [split, setSplit] = useState<{ taskId: string; request: Promise<TaskSplitResult> } | null>(null);
+  // Finished tasks whose reaction was the crisis card: the board stops offering to post them.
+  const [crisisIds, setCrisisIds] = useState<ReadonlySet<string>>(() => new Set());
+  const splitCache = useRef(new Map<string, Promise<TaskSplitResult>>());
   const editDialogRef = useRef<HTMLDivElement | null>(null);
 
   const notify = useCallback((message: string, tone: "status" | "error" = "status") => {
@@ -294,6 +312,7 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
   const completedToday = items.filter((task) => task.status === "completed" && task.completed_at && new Date(task.completed_at).getTime() >= dayBoundary()).length;
   const dailyGoal = Math.max(1, profile?.daily_goal ?? 3);
   const dailyProgress = Math.min(100, Math.round((completedToday / dailyGoal) * 100));
+  const canShare = (taskId: string) => shareWin && !crisisIds.has(taskId);
 
   const visible = useMemo(() => items.filter((task) => {
     const dueTime = task.due_at ? new Date(task.due_at).getTime() : null;
@@ -333,9 +352,13 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
     setItems((current) => current.map((item) => item.id === task.id ? optimistic : item));
     setJustCompleted(next === "completed" ? optimistic : null);
     try {
+      // Under Pivot A finishing goes through the finish route, which also
+      // brings the character's reaction. Undo still reopens through PATCH.
       const updated = isPreviewMode
         ? optimistic
-        : await apiRequest<Task>(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
+        : coach && next === "completed"
+          ? await finish(task)
+          : await apiRequest<Task>(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
       setItems((current) => current.map((item) => item.id === task.id ? updated : item));
       setJustCompleted((current) => current?.id === task.id && next === "completed" ? updated : current);
       notify(next === "completed" ? `${task.title} completed and remains off the feed.` : `${task.title} moved back to open tasks.`);
@@ -344,8 +367,62 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
       setJustCompleted((current) => current?.id === task.id ? null : current);
       notify(errorMessage(error), "error");
     } finally {
-      setBusyId(null);
+      // A finish can take seconds (it brings the reaction back with it), so it
+      // must not clear the busy mark of a task completed after it.
+      setBusyId((current) => coach && current !== task.id ? current : null);
     }
+  }
+
+  // Pivot A: hand the reaction to the coach panel and return the request
+  // untouched. Nothing waits on the reaction, and a failed one shows nothing.
+  function react<T extends { reaction: ReactionPayload | null }>(request: Promise<T>) {
+    setReactionRequest(request.then((response) => response.reaction, () => null));
+    return request;
+  }
+
+  // Marks the task in progress straight away. If recording the start fails,
+  // the mark stays and the character simply doesn't react: an error here
+  // would only pull the user back into the app.
+  function start(task: Task) {
+    setStartedIds((current) => new Set(current).add(task.id));
+    if (!isPreviewMode) void react(apiRequest<TaskStartResult>(`/api/tasks/${task.id}/start`, { method: "POST" })).catch(() => undefined);
+  }
+
+  async function finish(task: Task): Promise<Task> {
+    const result = await react(apiRequest<TaskFinishResult>(`/api/tasks/${task.id}/finish`, { method: "POST" }));
+    if (result.reaction?.kind === "crisis") setCrisisIds((current) => new Set(current).add(task.id));
+    return result.task;
+  }
+
+  // One request per task for the session, so reopening shows the same steps
+  // rather than spending another split; a failure is forgotten so a retry can
+  // work. A crisis goes to the coach panel, where it stays until dismissed and
+  // no banter covers it. Preview mode has no server: apiRequest rejects there,
+  // and SplitSteps shows its neutral "unavailable" line.
+  function toggleSplit(task: Task) {
+    if (split?.taskId === task.id) {
+      setSplit(null);
+      return;
+    }
+    let request = splitCache.current.get(task.id);
+    if (!request) {
+      const created = apiRequest<TaskSplitResult>(`/api/tasks/${task.id}/split`, { method: "POST" });
+      splitCache.current.set(task.id, created);
+      created.then((result) => {
+        if (result.kind !== "crisis") return;
+        splitCache.current.delete(task.id);
+        setReactionRequest(Promise.resolve(result));
+        setSplit((current) => current?.request === created ? null : current);
+      }, () => { splitCache.current.delete(task.id); });
+      request = created;
+    }
+    setSplit({ taskId: task.id, request });
+  }
+
+  function closeSplit(task: Task) {
+    setSplit(null);
+    // The panel's close button is going away; hand focus back to the toggle.
+    document.getElementById(`split-toggle-${task.id}`)?.focus();
   }
 
   async function addTask(event?: FormEvent<HTMLFormElement>) {
@@ -429,6 +506,7 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
         ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, due_has_time: patch.dueHasTime, due_timezone: patch.dueTimezone, recurrence_rule: patch.recurrenceRule, priority: patch.priority, visibility: patch.visibility }
         : await apiRequest<Task>(`/api/tasks/${editing.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       setItems((current) => current.map((task) => task.id === updated.id ? updated : task));
+      splitCache.current.delete(updated.id);
       closeEditor();
       notify("Task changes saved.");
     } catch (error) {
@@ -593,7 +671,10 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
         <label className="relative min-w-44"><span className="sr-only">Filter by category</span><SlidersHorizontal aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><select className="field field-prefixed field-suffixed min-h-12 appearance-none py-2 text-sm font-bold" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value} value={value}>{value === "All" ? "All categories" : value}</option>)}</select><ChevronDown aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" /></label>
       </div>
 
-      {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2>{shareWin && <p className="mt-1 text-sm text-muted">Post it and the people following you can cheer you on.</p>}<div className="mt-3 flex flex-wrap gap-2">{shareWin && <Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-primary">Post the win</Link>}<button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
+      {/* Pivot A: one coach panel for the latest reaction, not chatter per row. */}
+      {coach && <ReactionBubble request={reactionRequest} character={coach.character} className="mt-5" />}
+
+      {justCompleted && <section aria-labelledby={`completed-${justCompleted.id}`} className="animate-rise mt-5 rounded-[1.25rem] border border-success/45 bg-success-soft p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success text-canvas"><Check aria-hidden="true" size={19} strokeWidth={3} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-success">Done</p><h2 id={`completed-${justCompleted.id}`} className="display mt-0.5 text-lg font-bold">{justCompleted.title}</h2>{canShare(justCompleted.id) && <p className="mt-1 text-sm text-muted">Post it and the people following you can cheer you on.</p>}<div className="mt-3 flex flex-wrap gap-2">{canShare(justCompleted.id) && <Link href={`/tasks/${justCompleted.id}/share`} className="btn btn-primary">Post the win</Link>}<button className="btn btn-ghost" onClick={() => void complete(justCompleted)} disabled={busyId === justCompleted.id}><Undo2 aria-hidden="true" size={16} /> Undo</button></div></div><button type="button" className="icon-btn h-11 w-11 shrink-0 border-0 bg-transparent" onClick={() => { setJustCompleted(null); notify(""); }} aria-label="Dismiss completion message"><X aria-hidden="true" size={18} /></button></div></section>}
 
       <section className="card mt-5 overflow-hidden" aria-label={`${filter} tasks`}>
         {loading ? (
@@ -607,7 +688,7 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
               </div>
               <div className="divide-y divide-line">
                 {group.tasks.map((task) => (
-                  <article key={task.id} className="group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:items-center sm:px-5">
+                  <article key={task.id} className={`group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:px-5 ${coach ? "" : "sm:items-center"}`}>
                     <button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>
                       {task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}
                     </button>
@@ -620,8 +701,17 @@ export function TaskBoard({ shareWin = true, pivotA = false }: { shareWin?: bool
                         <span className={`flex items-center gap-1 text-xs font-semibold ${isOverdue(task, now) ? "text-danger" : "text-muted"}`}>{task.due_has_time ? <Clock aria-hidden="true" size={13} /> : <CalendarDays aria-hidden="true" size={13} />} {task.due_at ? <time dateTime={task.due_at}>{dueLabel(task, now)}</time> : "Anytime"}</span>
                         {task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 aria-hidden="true" size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}
                       </div>
+                      {coach && task.status === "pending" && <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {/* Once started the control stays in place as a quiet "In progress"
+                            mark, so keyboard focus is not dropped. */}
+                        {startedIds.has(task.id)
+                          ? <button type="button" aria-disabled="true" className="inline-flex min-h-9 cursor-default items-center gap-1.5 rounded-full bg-success-soft px-3 text-xs font-bold text-success" aria-label={`In progress: ${task.title}`}><Play aria-hidden="true" size={13} /> In progress</button>
+                          : <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-xs font-bold transition-colors hover:border-ink" aria-label={`Start: ${task.title}`} onClick={() => start(task)}><Play aria-hidden="true" size={13} /> Start</button>}
+                        <button type="button" className="inline-flex min-h-9 items-center rounded-full px-3 text-xs font-bold text-muted transition-colors hover:bg-[var(--hover)] hover:text-ink" id={`split-toggle-${task.id}`} aria-label={`Stuck? Split it: ${task.title}`} aria-expanded={split?.taskId === task.id} aria-controls={split?.taskId === task.id ? `split-steps-${task.id}` : undefined} onClick={() => toggleSplit(task)}>Stuck? Split it</button>
+                      </div>}
+                      {coach && task.status === "pending" && split?.taskId === task.id && <SplitSteps id={`split-steps-${task.id}`} request={split.request} character={coach.character} onDismiss={() => closeSplit(task)} className="mt-3" />}
                     </div>
-                    {shareWin && task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post</Link>}
+                    {canShare(task.id) && task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post</Link>}
                     <button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => openEditor(task)}><MoreHorizontal size={18} /></button>
                   </article>
                 ))}

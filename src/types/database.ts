@@ -440,6 +440,8 @@ export type EntitlementProduct = "plus" | `pack:${string}`;
 export type EntitlementStatus = "trialing" | "active" | "past_due" | "canceled" | "expired" | "refunded";
 export type EntitlementSource = "stripe" | "app_store";
 export type SafetyCounterKind = "crisis_card_shown" | "distress_check_unavailable";
+/** What reserve_ai_usage / release_ai_usage count. */
+export type AIUsageKind = "reaction" | "split";
 
 export interface Character {
   id: string;
@@ -531,6 +533,9 @@ export interface AIUsageDaily {
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
   est_cost_usd: number;
+  /** Reservations made by reserve_ai_usage; never released, so they bound model calls. */
+  reaction_attempts: number;
+  split_attempts: number;
   updated_at: string;
 }
 
@@ -774,6 +779,11 @@ export interface Database {
         Returns: undefined;
       };
       increment_safety_counter: { Args: { p_kind: SafetyCounterKind; p_date?: string }; Returns: undefined };
+      reserve_ai_usage: {
+        Args: { p_user_id: string; p_kind: AIUsageKind; p_date: string; p_window_days: number; p_cap: number; p_attempt_ceiling: number };
+        Returns: boolean;
+      };
+      release_ai_usage: { Args: { p_user_id: string; p_kind: AIUsageKind; p_date: string }; Returns: undefined };
     };
     Enums: {
       task_visibility: TaskVisibility;

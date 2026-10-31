@@ -9,7 +9,7 @@
 - [x] Phase 0: baseline and guard rails
 - [x] Phase 1: data model and flags
 - [x] Phase 2: character content, character pick, profile disclosure
-- [ ] Phase 3: reaction engine, splitter, plan resolution, crisis routing
+- [x] Phase 3: reaction engine, splitter, plan resolution, crisis routing
 - [ ] Phase 4: story, session nudge, no-guilt streaks
 - [ ] Phase 5: age gate, create/edit distress check, `/safety`
 - [ ] Phase 6: billing and entitlements
@@ -311,6 +311,21 @@ Naming follows the existing schema:
 - The profile route rejects inactive characters, pack characters the user doesn't own, and invalid time zones.
 
 ### Phase 3: reaction engine, splitter, plan resolution, crisis routing
+
+**Phase 3 results and caveats carried forward**
+- **Contract:** in `packages/contracts`.
+  - `POST /api/tasks/[id]/start` returns `{ event, reaction }`.
+  - `POST /api/tasks/[id]/finish` returns `{ task, reaction }`.
+  - `POST /api/tasks/[id]/split` returns `{ kind: "split", intro, steps, character }` or `{ kind: "crisis" }`. Its error codes are `plan_required`, `character_required`, `split_cap_reached` and `split_unavailable`.
+  - A reaction is `{ kind: "reaction", text, source, character, disclosure }` or `{ kind: "crisis" }`.
+- **Caps are reserved atomically** before each AI call, through `reserve_ai_usage` and `release_ai_usage` (migration `20261031150000`). Only delivered AI reactions count toward the cap, and a hard ceiling of twice the cap limits attempts, so failed calls can't run up cost. Time-zone changes are limited to 3 a day, so they can't be used to multiply daily caps.
+- **The model distress check is capped at 300 calls per user per day, to bound cost.** Past the cap, and when too little time is left before the 2.9 s request ceiling, the keyword check alone decides and `distress_check_unavailable` goes up. This is a narrow exception to D4's "never capped": the keyword check always runs. TODO(founder): the clinical review should confirm this.
+- **The distress check never stores anything.** It gets its own minimum time slice. A refusal from the classifier counts as "possible" (fail closed). "None" results are cached in memory per server instance. Repeat crisis counts for the same event are deduplicated in memory. TODO(founder): the clinical review must cover refusal handling and the keyword list.
+- **The splitter ignores the experiment arm** (the arm applies only to reactions). It runs the distress check before the plan and cap checks, so a free user with distressing text sees the crisis card, not the paywall. Founder: confirm the splitter should stay outside the experiment.
+- **Prompt caching** probably won't engage with the sample sheet, which is about 460 tokens against Haiku 5.5's 512 minimum. Check `cache_read_input_tokens` once the real sheets exist.
+- **Undo** stays disabled for up to about 2.5 s after a finish, because the finish response carries the task and the reaction together.
+- **Undo after a finish keeps the recorded finish**, so "tasks finished per week" slightly over-counts tasks that are undone and never finished again.
+- **After a crisis, the board stops offering "Post the win"** for that task. Founder: confirm.
 
 **New dependency:** `@anthropic-ai/sdk`.
 

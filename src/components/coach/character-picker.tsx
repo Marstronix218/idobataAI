@@ -14,7 +14,7 @@ function saveCharacter(characterId: string) {
 }
 
 /** The character's art, or a plain initial when it has none. Decorative: the name is always shown beside it. */
-export function CharacterAvatar({ character, size = "lg" }: { character: Pick<CharacterSummary, "name" | "art_url">; size?: "lg" | "xl" }) {
+export function CharacterAvatar({ character, size = "lg" }: { character: Pick<CharacterSummary, "name" | "art_url">; size?: "md" | "lg" | "xl" }) {
   return <Avatar initials={characterInitial(character.name)} avatarUrl={character.art_url} ai size={size} />;
 }
 

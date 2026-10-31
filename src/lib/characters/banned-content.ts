@@ -69,6 +69,8 @@ const MASK = String.raw`\{task\}`;
 /** Words that only read as a pet name when they address the user directly. */
 const VOCATIVE = String.raw`(?:honey|baby|babe|love|dear|sugar|hon|my love|my dear|my sweet)`;
 const GREETING = String.raw`(?:hey|hi|hello|hiya|morning|good morning|night|good night|thanks|thank you|nice work|nice job|good job|great job|well done)`;
+/** A greeting or praise that, followed straight away by a name, addresses someone by it. */
+const ADDRESS_LEAD = String.raw`(?:${GREETING}|great work|good work|nice one|nice going|way to go|congrats|congratulations|bravo|cheers|bye|goodbye|proud of you)`;
 const MEDS = String.raw`(?:meds|medications?|medicine|pills|antidepressants?|ssris?|stimulants?|adderall|ritalin|vyvanse|xanax|zoloft|prozac|lexapro|melatonin|ibuprofen|tylenol|advil|insulin|benzos?|sleeping pills|supplements)`;
 const CONDITION = String.raw`(?:adhd|clinical depression|depression|an anxiety disorder|anxiety|bipolar(?: disorder)?|ocd|ptsd|autism|burnout|insomnia|executive dysfunction|an? (?:mental|mood|anxiety|eating|personality|sleep) disorder)`;
 /** Things a streak can be that are not the streak itself: "reset the streak counter". */
@@ -112,6 +114,12 @@ const PATTERNS: Record<BannedContentCategory, readonly string[]> = {
     String.raw`sweetheart|sweetie(?: pie)?|sweetums|darling|darlin'|babe(?! ruth)|bae|cutie(?: pie)?|honey ?bun(?:ny)?|hunny|sugar ?pie|snookums|love ?bug|hottie|dearest|my (?:darling|angel|beloved)`,
     String.raw`${GREETING},? ${VOCATIVE}(?! (?:steps?|it|this|that|the|your|yourself|to|how|seeing)\b)`,
     String.raw`oh,? (?:honey|baby|sugar|hon|sweetie)`,
+    // The user's title used as a name: with a title such as "honey", masking
+    // turns "Nice work, honey!" into "nice work, {task}!", which must still be
+    // caught. Only the vocative shape counts: a greeting or praise followed
+    // directly by the mask and then a comma, end punctuation or the end, so
+    // "Great job on {task}!" and "Nice work, {task} is done." pass.
+    String.raw`${ADDRESS_LEAD},? ${MASK}(?=\s*(?:[,!.?]|$))`,
     String.raw`(?<=, )(?:${VOCATIVE}|gorgeous|beautiful|handsome|sexy|my queen|my king)(?= ?[.!?]| ?$)`,
     String.raw`love you(?! (?:to|card|cards|note)\b)|love ya|luv (?:you|ya|u)|i adore you|miss(?:ed)? you(?! (?:to|at|by|on)\b)`,
     String.raw`in love with you|(?:falling|fell|fall) for you|crush on you|(?:have|had|got) a crush`,

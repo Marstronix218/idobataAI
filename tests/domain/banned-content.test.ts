@@ -240,6 +240,39 @@ describe("maskTaskTitle", () => {
     expect(findBannedContent("{task} done!")).toEqual([]);
   });
 
+  it("still flags a pet name hidden behind a title used as one", () => {
+    const vocatives: Array<[title: string, reaction: string]> = [
+      ["honey", "Nice work, honey!"],
+      ["honey", "Nice work, honey"],
+      ["Sweetie", "Thanks, sweetie."],
+      ["darling", "Hey darling!"],
+      ["Baby", "Well done, baby, now rest."],
+      ["sugar", "Good morning, sugar!"],
+      ["Love bug", "Great work, love bug."],
+    ];
+    for (const [title, reaction] of vocatives) {
+      const masked = maskTaskTitle(reaction, title);
+      expect(masked, reaction).toContain("{task}");
+      expect(findBannedContent(masked).map((match) => match.category), masked).toContain("romance");
+    }
+  });
+
+  it("does not flag a reaction that ends with the task name without addressing anyone", () => {
+    const reactions: Array<[title: string, reaction: string]> = [
+      ["honey", "Great job on honey!"],
+      ["Buy honey", "Nice work, Buy honey is done."],
+      ["Water the plants", "Great job on Water the plants!"],
+      ["Water the plants", "Nice work: Water the plants."],
+      ["Water the plants", "Next up, Water the plants."],
+      ["Water the plants", "Well done finishing Water the plants."],
+      ["Water the plants", "Hey, Water the plants time!"],
+    ];
+    for (const [title, reaction] of reactions) {
+      const masked = maskTaskTitle(reaction, title);
+      expect(findBannedContent(masked), masked).toEqual([]);
+    }
+  });
+
   it("leaves very short titles alone so they cannot hide a claim", () => {
     expect(findBannedContent(maskTaskTitle("I'm human.", "I"))).toEqual([{ category: "human_claim", phrase: "i'm human" }]);
     expect(findBannedContent(maskTaskTitle("Im a doctor.", "Im"))).toEqual([{ category: "credential", phrase: "im a doctor" }]);

@@ -275,4 +275,38 @@ describe("the tasks page under Pivot A", () => {
     expect(createClient).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalled();
   });
+
+  // TaskBoard is mocked, so the page's element tree holds the props it was given.
+  const boardProps = (page: Awaited<ReturnType<typeof TasksPage>>) => (page.props as { children: { props: Record<string, unknown> } }).children.props;
+
+  it("gives the board coach props with the user's character, public columns only", async () => {
+    getFlags.mockResolvedValue(PIVOT);
+    const client = useSession({ row: complete });
+    const characters = client.from("characters") as unknown as { select: ReturnType<typeof vi.fn>; maybeSingle: ReturnType<typeof vi.fn> };
+    characters.maybeSingle.mockResolvedValue({ data: { ...launchCharacter, art_url: "/characters/sample-coach.webp" }, error: null });
+
+    const props = boardProps(await TasksPage());
+
+    expect(props.coach).toEqual({ character: { id: characterId, slug: "sample-coach", name: "Sample Coach", artUrl: "/characters/sample-coach.webp" } });
+    expect(props.pivotA).toBe(true);
+    expect(characters.select).toHaveBeenCalledWith("id, slug, name, art_url");
+  });
+
+  it("still gives the board coach props when the character can't be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ error: { code: "XX999", message: "boom" } });
+
+    expect(boardProps(await TasksPage()).coach).toEqual({ character: null });
+  });
+
+  it("passes no coach props while Pivot A is off", async () => {
+    getFlags.mockResolvedValue(LEGACY);
+    useSession({ row: null });
+
+    const props = boardProps(await TasksPage());
+
+    expect(props.coach).toBeUndefined();
+    expect(props.pivotA).toBe(false);
+  });
 });

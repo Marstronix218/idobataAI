@@ -506,6 +506,33 @@ select e.user_id, e.id, 'c0000000-0000-4000-8000-000000000001', 'task_finished',
   'test-coach.task_finished.001', 'Done. Next one, or rest.', true
 from public.task_events e where e.type='finished';
 
+-- One reaction per task event; reactions without an event are unconstrained.
+do $$
+declare state text; event_id uuid;
+begin
+  select id into event_id from public.task_events
+  where task_id='aaaaaaaa-2222-4000-8000-000000000003' and type='finished';
+  begin
+    insert into public.character_reactions(user_id, task_event_id, character_id, event, source, text)
+    values ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', event_id, 'c0000000-0000-4000-8000-000000000001',
+      'task_finished', 'ai', 'A second reaction for the same event.');
+  exception when others then get stacked diagnostics state = returned_sqlstate;
+  end;
+  if state is distinct from '23505' then raise exception 'a second reaction for one task event did not raise 23505 (got %)', state; end if;
+
+  insert into public.character_reactions(user_id, task_event_id, character_id, event, source, text)
+  values
+    ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', null, 'c0000000-0000-4000-8000-000000000001', 'session_nudge', 'prewritten', 'Time to close the app.'),
+    ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', null, 'c0000000-0000-4000-8000-000000000001', 'session_nudge', 'prewritten', 'Time to close the app.');
+  if (select count(*) from public.character_reactions
+      where user_id='aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa' and task_event_id is null) <> 2
+  then raise exception 'reactions without a task event were constrained'; end if;
+
+  if exists(select 1 from pg_indexes where schemaname='public' and indexname='character_reactions_task_event_idx') then
+    raise exception 'the redundant non-unique task event index is still present';
+  end if;
+end $$;
+
 insert into public.story_progress(user_id, character_id, consistency_days)
 values ('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb','c0000000-0000-4000-8000-000000000001',1);
 
