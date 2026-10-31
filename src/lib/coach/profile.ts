@@ -31,13 +31,16 @@ export function isCoachProfileComplete(profile: Pick<CoachProfile, "selected_cha
 }
 
 /**
- * Whether to send the user to onboarding: the profile is incomplete and
- * onboarding can complete it. With no character to choose (an empty cast, for
- * example before content is seeded) it cannot, so the app stays open rather
- * than locking the user out of it.
+ * Whether to send the user to onboarding (only asked under Pivot A): the age
+ * is not verified yet (accounts from before the age gate, PLAN D6), or the
+ * profile is incomplete and onboarding can complete it. With no character to
+ * choose (an empty cast, for example before content is seeded) it cannot, so
+ * the app stays open rather than locking the user out of it; the age step
+ * needs no cast, so it always applies.
  */
 export async function needsCoachOnboarding(supabase: SupabaseClient<Database>, userId: string) {
   const profile = await readCoachProfile(supabase, userId);
+  if (!profile.age_verified_at) return true;
   if (isCoachProfileComplete(profile)) return false;
   // Only the time zone is missing: that step needs no cast.
   if (profile.selected_character_id) return true;

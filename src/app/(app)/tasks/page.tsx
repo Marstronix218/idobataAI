@@ -23,13 +23,14 @@ export default async function TasksPage() {
   let coach: { character: ReactionCharacter | null } | undefined;
   // The (app) layout's onboarding check does not re-run on client navigation,
   // but pages do: without this, entering via /settings and tapping Tasks would
-  // skip onboarding. A failed read lets the user in, as in the layout.
+  // skip onboarding. A failed read goes to onboarding, as in the layout.
   if (flags.pivotA) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const [needsOnboarding, character] = user
       ? await Promise.all([
-          needsCoachOnboarding(supabase, user.id).catch(() => false),
+          // A failed read goes to onboarding: the age gate fails closed (PLAN D6).
+          needsCoachOnboarding(supabase, user.id).catch(() => true),
           // The board works without it: the panel then names the character once a reaction arrives.
           selectedCharacter(supabase, user.id).catch(() => null),
         ])

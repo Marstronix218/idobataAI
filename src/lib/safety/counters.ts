@@ -54,8 +54,28 @@ export async function recordCrisisShown(scope: string, userId: string): Promise<
   await incrementSafetyCounter("crisis_card_shown");
 }
 
-/** Test-only: forget which crises were counted. */
+/** At most this many distress_check_unavailable increments per user per UTC day (per instance). */
+export const UNAVAILABLE_COUNTS_PER_USER_DAY = 5;
+const unavailablePerUserDay = new BoundedCache<number>(10_000, DAY_MS);
+
+/**
+ * Counts a distress check whose model step was unavailable (PLAN D4) in
+ * distress_check_unavailable, at most five times per user per UTC day, so one
+ * account editing tasks past its `ai:distress` limit cannot inflate the
+ * aggregate. Same per-instance limitation as recordCrisisShown; nothing about
+ * the user is stored.
+ */
+export async function recordDistressCheckUnavailable(userId: string): Promise<void> {
+  const userDayKey = opaqueKey("unavailable-user-day", userId, new Date().toISOString().slice(0, 10));
+  const counted = unavailablePerUserDay.get(userDayKey) ?? 0;
+  if (counted >= UNAVAILABLE_COUNTS_PER_USER_DAY) return;
+  unavailablePerUserDay.set(userDayKey, counted + 1);
+  await incrementSafetyCounter("distress_check_unavailable");
+}
+
+/** Test-only: forget which crises and unavailable checks were counted. */
 export function resetCrisisDedupeForTests() {
   recentCrises.clear();
   crisesPerUserDay.clear();
+  unavailablePerUserDay.clear();
 }

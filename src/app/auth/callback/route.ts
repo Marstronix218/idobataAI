@@ -1,14 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { DEFAULT_DESTINATION, safeDestination } from "@/lib/auth/safe-destination";
 import { createClient } from "@/lib/supabase/server";
-
-// /home redirects by flags: the feed today, onboarding or tasks under Pivot A.
-const DEFAULT_DESTINATION = "/home";
-
-export function safeDestination(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\")
-    ? value
-    : DEFAULT_DESTINATION;
-}
 
 function privateRedirect(request: NextRequest, destination: string) {
   const configuredOrigin = process.env.APP_URL;

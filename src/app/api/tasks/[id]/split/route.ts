@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireAgeVerified } from "@/lib/coach/age";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { splitTask } from "@/lib/reactions/splitter";
 import { authed, ok, withApi } from "@/lib/server/http";
@@ -15,7 +16,8 @@ type Context = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Context) {
   return withApi(async () => {
     await requireApiGate("pivot_a");
-    const { user } = await authed(request);
+    const { user, supabase } = await authed(request);
+    await requireAgeVerified(supabase, user.id);
     const id = idSchema.parse((await params).id);
     await enforceRateLimit(user.id, "tasks:split", 30, 3600);
     return ok(await splitTask(user.id, id));

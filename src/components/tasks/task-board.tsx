@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ReactionCharacter, ReactionPayload, TaskFinishResult, TaskSplitResult, TaskStartResult } from "@idobata/contracts";
+import type { ReactionCharacter, ReactionPayload, TaskFinishResult, TaskSplitResult, TaskStartResult, TaskWriteSafety } from "@idobata/contracts";
 import { tasks as demoTasks } from "@/data/demo";
 import { CONSISTENCY_DAYS_DESCRIPTION, ConsistencyDaysContext, hasConsistencyDays } from "@/components/coach/consistency-days";
 import { ReactionBubble } from "@/components/coach/reaction-bubble";
@@ -74,6 +74,10 @@ function currentTimeZone() {
 }
 
 const todayInputValue = () => localDateInputValue();
+
+/** Pivot A: a task shown before the server has saved it. Real ids are UUIDs. */
+const PENDING_TASK_PREFIX = "pending-";
+const isPendingTask = (task: Task) => task.id.startsWith(PENDING_TASK_PREFIX);
 
 const previewTasks: Task[] = demoTasks.map((task, index) => ({
   id: task.id,
@@ -257,6 +261,7 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
   // Pivot A: successful finishes this session; each one may add a consistency day.
   const [finishes, setFinishes] = useState(0);
   const splitCache = useRef(new Map<string, Promise<TaskSplitResult>>());
+  const pendingSeq = useRef(0);
   const editDialogRef = useRef<HTMLDivElement | null>(null);
 
   const notify = useCallback((message: string, tone: "status" | "error" = "status") => {
@@ -447,6 +452,14 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
     setSplit({ taskId: task.id, request });
   }
 
+  // A created or edited task, without the response's `safety` field. Under
+  // Pivot A a flagged title or note puts the crisis card in the coach panel,
+  // with no banter for that event; the task itself is saved either way.
+  function savedTask({ safety, ...task }: Task & { safety?: TaskWriteSafety }): Task {
+    if (coach && safety?.crisisCard) setReactionRequest(Promise.resolve({ kind: "crisis" }));
+    return task;
+  }
+
   function closeSplit(task: Task) {
     setSplit(null);
     // The panel's close button is going away; hand focus back to the toggle.
@@ -461,46 +474,69 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
     const dueHasTime = Boolean(dueAt && quickDeadlineTime);
     const dueTimezone = dueHasTime ? currentTimeZone() : null;
     const recurrenceRule = quickRecurrence ? quickRecurrence as "daily" | "weekdays" | "weekly" : null;
-    setBusyId("new");
-    notify("");
-    try {
-      const created = isPreviewMode
-        ? {
-            ...previewTasks[0],
-            id: `preview-${Date.now()}`,
-            title,
-            category: quickCategory.trim() || null,
-            due_at: dueAt,
-            due_has_time: dueHasTime,
-            due_timezone: dueTimezone,
-            recurrence_rule: recurrenceRule,
-            priority: quickPriority || null,
-            visibility: profile?.default_task_visibility ?? "private",
-            status: "pending",
-            completed_at: null,
-            xp_earned: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          } as Task
-        : await apiRequest<Task>("/api/tasks", {
-            method: "POST",
-            body: JSON.stringify({
-              title,
-              category: quickCategory.trim() || null,
-              dueAt,
-              dueHasTime,
-              dueTimezone,
-              recurrenceRule,
-              priority: quickPriority || null,
-            }),
-          });
-      setItems((current) => [created, ...current]);
+    const category = quickCategory.trim() || null;
+    const priority = quickPriority || null;
+    // The task as typed: the preview's result, and the pending row under Pivot A.
+    const local = {
+      ...previewTasks[0],
+      id: isPreviewMode ? `preview-${Date.now()}` : `${PENDING_TASK_PREFIX}${++pendingSeq.current}`,
+      title,
+      category,
+      due_at: dueAt,
+      due_has_time: dueHasTime,
+      due_timezone: dueTimezone,
+      recurrence_rule: recurrenceRule,
+      priority,
+      visibility: profile?.default_task_visibility ?? "private",
+      status: "pending",
+      completed_at: null,
+      xp_earned: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as Task;
+    const body = JSON.stringify({ title, category, dueAt, dueHasTime, dueTimezone, recurrenceRule, priority });
+    const clearComposer = () => {
       setDraft("");
       setQuickCategory("");
       setQuickRecurrence("");
       setQuickPriority("");
       setQuickDeadlineTime("");
-      notify(`${title} added ${created.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
+    };
+    const announceAdded = (task: Task) =>
+      notify(`${title} added ${task.visibility === "private" ? "privately" : "with public progress"}.${isPreviewMode ? " Preview only." : ""}`);
+    notify("");
+
+    // Pivot A: saving waits on the distress check (up to about 2.5 s), so the
+    // task shows at once as a pending row and the composer clears. The saved
+    // task replaces the row; on failure the row goes and the composer gets
+    // back whatever is still empty there.
+    if (coach && !isPreviewMode) {
+      setItems((current) => [local, ...current]);
+      clearComposer();
+      try {
+        const created = savedTask(await apiRequest<Task & { safety?: TaskWriteSafety }>("/api/tasks", { method: "POST", body }));
+        setItems((current) => current.map((item) => item.id === local.id ? created : item));
+        announceAdded(created);
+      } catch (error) {
+        setItems((current) => current.filter((item) => item.id !== local.id));
+        setDraft((current) => current.trim() ? current : title);
+        setQuickCategory((current) => current || quickCategory);
+        setQuickRecurrence((current) => current || quickRecurrence);
+        setQuickPriority((current) => current || quickPriority);
+        setQuickDeadlineTime((current) => current || quickDeadlineTime);
+        notify(errorMessage(error), "error");
+      }
+      return;
+    }
+
+    setBusyId("new");
+    try {
+      const created = isPreviewMode
+        ? local
+        : savedTask(await apiRequest<Task & { safety?: TaskWriteSafety }>("/api/tasks", { method: "POST", body }));
+      setItems((current) => [created, ...current]);
+      clearComposer();
+      announceAdded(created);
     } catch (error) {
       notify(errorMessage(error), "error");
     } finally {
@@ -532,7 +568,7 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
     try {
       const updated = isPreviewMode
         ? { ...editing, title: patch.title, category: patch.category, due_at: patch.dueAt, due_has_time: patch.dueHasTime, due_timezone: patch.dueTimezone, recurrence_rule: patch.recurrenceRule, priority: patch.priority, visibility: patch.visibility }
-        : await apiRequest<Task>(`/api/tasks/${editing.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+        : savedTask(await apiRequest<Task & { safety?: TaskWriteSafety }>(`/api/tasks/${editing.id}`, { method: "PATCH", body: JSON.stringify(patch) }));
       setItems((current) => current.map((task) => task.id === updated.id ? updated : task));
       splitCache.current.delete(updated.id);
       closeEditor();
@@ -723,8 +759,8 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
               </div>
               <div className="divide-y divide-line">
                 {group.tasks.map((task) => (
-                  <article key={task.id} className={`group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:px-5 ${coach ? "" : "sm:items-center"}`}>
-                    <button disabled={busyId === task.id} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>
+                  <article key={task.id} aria-busy={isPendingTask(task) || undefined} className={`group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-[var(--hover)] sm:px-5 ${coach ? "" : "sm:items-center"} ${isPendingTask(task) ? "opacity-60" : ""}`}>
+                    <button disabled={busyId === task.id || isPendingTask(task)} onClick={() => void complete(task)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition sm:mt-0 ${task.status === "completed" ? "border-success bg-success text-canvas" : "border-line-strong bg-surface-raised hover:border-success"}`} aria-label={`${task.status === "completed" ? "Mark open" : "Complete"}: ${task.title}`}>
                       {task.status === "completed" ? <Check size={15} strokeWidth={3} /> : <Circle size={12} className="opacity-0 group-hover:opacity-100" />}
                     </button>
                     <div className="min-w-0 flex-1">
@@ -735,8 +771,9 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
                         <PrivacyBadge isPublic={task.visibility === "public"} />
                         <span className={`flex items-center gap-1 text-xs font-semibold ${isOverdue(task, now) ? "text-danger" : "text-muted"}`}>{task.due_has_time ? <Clock aria-hidden="true" size={13} /> : <CalendarDays aria-hidden="true" size={13} />} {task.due_at ? <time dateTime={task.due_at}>{dueLabel(task, now)}</time> : "Anytime"}</span>
                         {task.recurrence_rule && <span className="flex items-center gap-1 text-xs font-semibold text-muted"><Repeat2 aria-hidden="true" size={13} /> {recurrenceLabel(task.recurrence_rule)}</span>}
+                        {isPendingTask(task) && <span className="text-xs font-semibold text-muted">Saving…</span>}
                       </div>
-                      {coach && task.status === "pending" && <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {coach && task.status === "pending" && !isPendingTask(task) && <div className="mt-3 flex flex-wrap items-center gap-2">
                         {/* Once started the control stays in place as a quiet "In progress"
                             mark, so keyboard focus is not dropped. */}
                         {startedIds.has(task.id)
@@ -747,7 +784,7 @@ export function TaskBoard({ shareWin = true, pivotA = false, coach }: {
                       {coach && task.status === "pending" && split?.taskId === task.id && <SplitSteps id={`split-steps-${task.id}`} request={split.request} character={coach.character} onDismiss={() => closeSplit(task)} className="mt-3" />}
                     </div>
                     {canShare(task.id) && task.status === "completed" && <Link href={`/tasks/${task.id}/share`} className="btn btn-ghost min-h-9 shrink-0 px-3 py-2 text-xs text-brand">Post</Link>}
-                    <button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} onClick={() => openEditor(task)}><MoreHorizontal size={18} /></button>
+                    <button className="icon-btn h-9 w-9 shrink-0 border-0 bg-transparent" aria-label={`Edit ${task.title}`} disabled={isPendingTask(task)} onClick={() => openEditor(task)}><MoreHorizontal size={18} /></button>
                   </article>
                 ))}
               </div>

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskSplitResult } from "@idobata/contracts";
@@ -9,7 +9,9 @@ describe("SplitSteps", () => {
   it("shows the crisis card instead of steps", async () => {
     const { container } = render(<SplitSteps request={Promise.resolve({ kind: "crisis" })} onDismiss={vi.fn()} />);
 
-    expect(await screen.findByRole("heading", { name: "988 Suicide & Crisis Lifeline" })).toHaveFocus();
+    const heading = await screen.findByRole("heading", { name: "988 Suicide & Crisis Lifeline" });
+    // The card moves focus in a passive effect, which can land after the heading is first found.
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });

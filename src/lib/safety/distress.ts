@@ -11,7 +11,7 @@ import {
   type AiCallMeter,
 } from "@/lib/ai/anthropic";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { incrementSafetyCounter } from "./counters";
+import { recordDistressCheckUnavailable } from "./counters";
 import { hasDistressKeyword, normalizeForDistress } from "./keywords";
 import { BoundedCache, opaqueKey } from "./memory-cache";
 
@@ -133,7 +133,8 @@ export function resetDistressCacheForTests() {
 export interface KeywordPlusModelDeps {
   isModelConfigured: () => boolean;
   createMessage: typeof createMessageWithin;
-  incrementUnavailableCounter: () => Promise<void>;
+  /** distress_check_unavailable, capped per user per day. */
+  incrementUnavailableCounter: (userId: string) => Promise<void>;
   /** The per-user daily model-check limit; false once it is used up. */
   allowModelCheck: (userId: string) => Promise<boolean>;
   verdictCache: VerdictCache;
@@ -158,7 +159,7 @@ async function allowModelCheck(userId: string): Promise<boolean> {
 const DEFAULT_DEPS: KeywordPlusModelDeps = {
   isModelConfigured: () => isReactionAiConfigured(),
   createMessage: createMessageWithin,
-  incrementUnavailableCounter: () => incrementSafetyCounter("distress_check_unavailable"),
+  incrementUnavailableCounter: recordDistressCheckUnavailable,
   allowModelCheck,
   verdictCache: sharedVerdictCache,
 };
@@ -187,10 +188,10 @@ export class KeywordPlusModelDetector implements DistressDetector {
     if (cacheKey && this.deps.verdictCache.get(cacheKey)) return { risk: "none", source: "model" };
 
     const deadline = Date.now() + Math.min(opts.timeoutMs ?? DISTRESS_MAX_SLICE_MS, DISTRESS_MAX_SLICE_MS);
-    if (deadline - Date.now() < MIN_MODEL_WINDOW_MS) return this.unavailable("no_time");
-    if (!(await this.deps.allowModelCheck(opts.userId))) return this.unavailable("daily_limit");
+    if (deadline - Date.now() < MIN_MODEL_WINDOW_MS) return this.unavailable("no_time", opts.userId);
+    if (!(await this.deps.allowModelCheck(opts.userId))) return this.unavailable("daily_limit", opts.userId);
     const timeoutMs = deadline - Date.now();
-    if (timeoutMs < MIN_MODEL_WINDOW_MS) return this.unavailable("no_time");
+    if (timeoutMs < MIN_MODEL_WINDOW_MS) return this.unavailable("no_time", opts.userId);
 
     const result = await this.deps.createMessage({
       model: AI_MODEL,
@@ -213,13 +214,14 @@ export class KeywordPlusModelDetector implements DistressDetector {
     }
     return this.unavailable(
       !result.ok ? result.reason : result.message.stop_reason === "end_turn" ? "invalid_output" : result.message.stop_reason ?? "unknown",
+      opts.userId,
       result.meter,
     );
   }
 
-  private unavailable(reason: string, meter?: AiCallMeter): DistressCheckResult {
+  private unavailable(reason: string, userId: string, meter?: AiCallMeter): DistressCheckResult {
     logAiEvent("warn", "safety", { message: "distress check unavailable", reason });
-    const pendingWrites = this.deps.incrementUnavailableCounter().catch(() => undefined);
+    const pendingWrites = this.deps.incrementUnavailableCounter(userId).catch(() => undefined);
     return { risk: "none", source: "unavailable", ...(meter && { meter }), pendingWrites };
   }
 }

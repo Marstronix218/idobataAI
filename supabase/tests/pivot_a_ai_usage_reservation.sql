@@ -170,6 +170,10 @@ reset role;
 -- zone again does not count.
 -- ---------------------------------------------------------------------------
 
+-- set_coach_profile requires a verified age (20261031190000); no zone saved yet.
+insert into public.user_coach_profiles(user_id, age_verified_at, age_verification_method)
+values ('e5e5e5e5-1111-4111-8111-e5e5e5e5e5e5', now(), 'self_attested');
+
 update public.app_feature_flags set enabled=true where key='pivot_a.enabled';
 
 set local role authenticated;

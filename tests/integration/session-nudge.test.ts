@@ -16,6 +16,8 @@ vi.mock("@/lib/server/http", async (importOriginal) => ({
   authed,
 }));
 vi.mock("@/lib/flags", () => ({ getFlags }));
+// Age verified; the guard itself is covered by tests/integration/coach-age-guard.test.ts.
+vi.mock("@/lib/coach/age", () => ({ isAgeVerified: vi.fn(async () => true), requireAgeVerified: vi.fn(async () => undefined) }));
 vi.mock("@/lib/server/rate-limit", () => ({ enforceRateLimit }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
 // No AI: if anything tried to call the model, the test would see it.

@@ -1,4 +1,5 @@
 import { coachProfileUpdateSchema } from "@idobata/contracts";
+import { requireAgeVerified } from "@/lib/coach/age";
 import { readCoachProfile, toCoachProfile } from "@/lib/coach/profile";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
@@ -21,6 +22,8 @@ export async function PUT(request: Request) {
   return withApi(async () => {
     await requireApiGate("pivot_a");
     const { user, supabase } = await authed(request);
+    // Reading stays open so the client can show the age step; saving needs a verified age.
+    await requireAgeVerified(supabase, user.id);
     await enforceRateLimit(user.id, "coach:profile:update", 60, 3600);
     const input = await parseJson(request, coachProfileUpdateSchema);
     const result = await supabase.rpc("set_coach_profile", {

@@ -1,3 +1,4 @@
+import { requireAgeVerified } from "@/lib/coach/age";
 import { NUDGE_RATE_LIMIT, pickSessionNudge } from "@/lib/coach/nudge";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { authed, ok, withApi } from "@/lib/server/http";
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
   return withApi(async () => {
     await requireApiGate("pivot_a");
     const { user, supabase } = await authed(request);
+    await requireAgeVerified(supabase, user.id);
     await enforceRateLimit(user.id, NUDGE_RATE_LIMIT.bucket, NUDGE_RATE_LIMIT.limit, NUDGE_RATE_LIMIT.windowSeconds);
     return ok(await pickSessionNudge(supabase, user.id));
   });

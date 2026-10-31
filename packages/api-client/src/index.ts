@@ -1,4 +1,6 @@
 import {
+  ageCheckResultSchema,
+  ageRequirementSchema,
   characterListSchema,
   coachProfileSchema,
   sessionNudgeSchema,
@@ -8,7 +10,9 @@ import {
   taskSchema,
   taskSplitResultSchema,
   taskStartResultSchema,
+  taskWriteResultSchema,
   type ApiEnvelope,
+  type AgeCheckInput,
   type ApiErrorBody,
   type CoachProfileUpdateInput,
   type TaskCreateInput,
@@ -34,6 +38,8 @@ export interface ApiRequestOptions {
   body?: unknown;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  /** Send no access token (and never refresh one), for routes used before sign-in. */
+  anonymous?: boolean;
 }
 
 export interface TaskListFilters {
@@ -78,11 +84,11 @@ export function createApiClient(options: ApiClientOptions) {
     tokenOverride: string | null,
     mayRefresh: boolean,
   ): Promise<T> {
-    const token = tokenOverride ?? await options.getAccessToken();
-    if (!token) throw new ApiClientError("Please log in to continue.", 401, "unauthorized");
+    const token = requestOptions.anonymous ? null : tokenOverride ?? await options.getAccessToken();
+    if (!token && !requestOptions.anonymous) throw new ApiClientError("Please log in to continue.", 401, "unauthorized");
 
     const headers = new Headers(requestOptions.headers);
-    headers.set("Authorization", `Bearer ${token}`);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
     if (requestOptions.body !== undefined && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
@@ -120,7 +126,7 @@ export function createApiClient(options: ApiClientOptions) {
     if (response.status === 204) return undefined as T;
 
     const refreshAccessToken = options.refreshAccessToken;
-    if (response.status === 401 && mayRefresh && refreshAccessToken) {
+    if (response.status === 401 && mayRefresh && refreshAccessToken && !requestOptions.anonymous) {
       const refreshedToken = await Promise.resolve(refreshAccessToken()).catch(() => null);
       if (refreshedToken) {
         return requestWithToken(path, requestOptions, refreshedToken, false);
@@ -136,7 +142,7 @@ export function createApiClient(options: ApiClientOptions) {
 
     if (!response.ok || (payload && isApiFailure(payload))) {
       const error = payload && isApiFailure(payload) ? payload.error : undefined;
-      if (response.status === 401) await options.onUnauthorized?.();
+      if (response.status === 401 && !requestOptions.anonymous) await options.onUnauthorized?.();
       throw new ApiClientError(
         error?.message ?? `Request failed (${response.status}).`,
         response.status,
@@ -156,8 +162,9 @@ export function createApiClient(options: ApiClientOptions) {
     return requestWithToken<T>(path, requestOptions, null, true);
   }
 
+  /** A created or updated task. Under Pivot A, `safety.crisisCard` means: show the crisis card, no banter. */
   function validateTask(value: unknown, status: number) {
-    const parsed = taskSchema.safeParse(value);
+    const parsed = taskWriteResultSchema.safeParse(value);
     if (!parsed.success) {
       throw new ApiClientError(
         "The server returned an invalid task.",
@@ -292,6 +299,35 @@ export function createApiClient(options: ApiClientOptions) {
     return request<unknown>("/api/coach/nudge").then(validated(sessionNudgeSchema, "session nudge"));
   }
 
+  /** Whether sign-up needs the age check (`checkAge`) first. Needs no session. */
+  function getAgeRequirement() {
+    return request<unknown>("/api/auth/age-check", { anonymous: true })
+      .then(validated(ageRequirementSchema, "age requirement"));
+  }
+
+  /**
+   * Pivot A: the age gate before sign-up. Needs no session. Resolves to a
+   * single-use token for `signUp({ options: { data: { age_token: token } } })`,
+   * valid for 15 minutes. Fails with ApiClientError 404 while Pivot A is off
+   * (sign up without a token), 403 `age_requirement` (under 18: create no
+   * account), 422, 429 `rate_limited` or 503 `age_verification_unavailable`;
+   * see AGE_CHECK_ERROR_CODES.
+   */
+  function checkAge(input: AgeCheckInput) {
+    return request<unknown>("/api/auth/age-check", { method: "POST", body: input, anonymous: true })
+      .then(validated(ageCheckResultSchema, "age check"));
+  }
+
+  /**
+   * Pivot A: the one-time age step for an account created before the age
+   * gate. Resolves to the coach profile with `age_verified_at` set; fails like
+   * `checkAge` (403 `age_requirement` means: keep the app closed).
+   */
+  function verifyCoachAge(input: AgeCheckInput) {
+    return request<unknown>("/api/coach/age", { method: "POST", body: input })
+      .then((value) => validateCoachProfile(value, 200));
+  }
+
   return {
     request,
     listTasks,
@@ -306,6 +342,9 @@ export function createApiClient(options: ApiClientOptions) {
     getStory,
     getStoryChapter,
     getSessionNudge,
+    getAgeRequirement,
+    checkAge,
+    verifyCoachAge,
   };
 }
 

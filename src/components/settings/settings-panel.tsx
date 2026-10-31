@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Info, LockKeyhole, LogOut, MessageSquare, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Trash2, VolumeX, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
@@ -303,6 +304,7 @@ export function SettingsPanel({ flags = LEGACY_FLAGS }: { flags?: PivotFlags } =
 
         <section id="safety" className="card border-danger/25 p-5 sm:p-6">
           <div className="flex items-center gap-2"><ShieldCheck size={19} className="text-danger" /><h2 className="display text-xl font-bold">Account and data</h2></div>
+          {flags.pivotA && <p className="mt-3 text-sm leading-6"><Link href="/safety" className="font-bold text-brand hover:underline">How safety works</Link></p>}
           <div className="mt-5"><h3 className="font-bold">Blocked people</h3><p className="mt-1 text-sm leading-6 text-muted">Blocked people cannot interact with you, and you won’t see each other’s community activity.</p>{blockedPeople.length ? <ul className="mt-3 divide-y divide-line" aria-label="Blocked people">{blockedPeople.map((person) => <li key={person.id} className="flex items-center gap-3 py-4"><Avatar initials={initials(person.name)} avatarUrl={person.avatarUrl} name={person.name} /><div className="min-w-0 flex-1"><p className="truncate font-bold">{person.name}</p><p className="truncate text-sm text-muted">@{person.username}</p></div><button type="button" className="btn btn-secondary shrink-0" aria-label={`Unblock ${person.name}`} disabled={safetyBusyId !== null} onClick={() => void unblock(person)}>{safetyBusyId === `person-${person.id}` ? "Unblocking…" : "Unblock"}</button></li>)}</ul> : <p className="soft-card mt-4 p-5 text-center text-sm text-muted">You haven’t blocked anyone.</p>}</div>
           <div className="mt-5 flex flex-col gap-4 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">Delete account</p><p className="mt-1 max-w-lg text-sm leading-6 text-muted">Permanently remove your profile, tasks, posts, replies, and reactions.</p></div><button className="btn btn-danger shrink-0" onClick={() => setDeleteOpen(true)}><Trash2 size={16} /> Delete account</button></div>
         </section>

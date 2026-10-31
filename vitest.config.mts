@@ -13,5 +13,8 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     clearMocks: true,
     restoreMocks: true,
+    // Every test is well under a second alone; CI runners and loaded machines run them 10x slower, and the 5s default then times out unrelated tests.
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
   },
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireAgeVerified } from "@/lib/coach/age";
 import { readStoryChapter, STORY_RATE_LIMIT } from "@/lib/coach/story";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { ApiError, authed, ok, withApi } from "@/lib/server/http";
@@ -17,6 +18,7 @@ export async function GET(request: Request, { params }: Context) {
   return withApi(async () => {
     await requireApiGate("pivot_a");
     const { user, supabase } = await authed(request);
+    await requireAgeVerified(supabase, user.id);
     const number = numberSchema.parse((await params).number);
     await enforceRateLimit(user.id, STORY_RATE_LIMIT.bucket, STORY_RATE_LIMIT.limit, STORY_RATE_LIMIT.windowSeconds);
     const chapter = await readStoryChapter(supabase, user.id, number);

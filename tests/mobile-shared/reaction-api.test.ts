@@ -6,7 +6,9 @@ import {
   reactionPayloadSchema,
   taskFinishResultSchema,
   taskSplitResultSchema,
+  taskSchema,
   taskStartResultSchema,
+  taskWriteResultSchema,
 } from "../../packages/contracts/src";
 
 const taskId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
@@ -63,6 +65,17 @@ describe("reaction contracts", () => {
     expect(taskSplitResultSchema.parse({ kind: "crisis" })).toEqual({ kind: "crisis" });
   });
 
+  it("adds an optional crisis-card flag to the create and update response, which older clients drop", () => {
+    const flagged = { ...task, safety: { crisisCard: true } };
+    expect(taskWriteResultSchema.parse(flagged)).toEqual(flagged);
+    expect(taskWriteResultSchema.parse(task)).toEqual(task);
+    expect(taskWriteResultSchema.safeParse({ ...task, safety: { crisisCard: false } }).success).toBe(false);
+    // The task rules still apply.
+    expect(taskWriteResultSchema.safeParse({ ...task, due_has_time: true }).success).toBe(false);
+    // A client that only knows taskSchema keeps working and simply ignores the flag.
+    expect(taskSchema.parse(flagged)).toEqual(task);
+  });
+
   it("names the split error codes", () => {
     expect(TASK_SPLIT_ERROR_CODES).toEqual({ planRequired: "plan_required", capReached: "split_cap_reached", unavailable: "split_unavailable" });
   });
@@ -98,6 +111,19 @@ describe("reaction API client", () => {
     const { client } = clientAnswering(402, { error: { code: "plan_required", message: "Splitting tasks is part of Plus." } });
 
     await expect(client.splitTask(taskId)).rejects.toMatchObject({ status: 402, code: TASK_SPLIT_ERROR_CODES.planRequired });
+  });
+
+  it.each([
+    ["createTask", 201, (client: ReturnType<typeof createApiClient>) => client.createTask({ title: "Water the plants" })],
+    ["updateTask", 200, (client: ReturnType<typeof createApiClient>) => client.updateTask(taskId, { title: "Water the plants" })],
+  ] as const)("%s returns the crisis-card flag when the server sets it, and no flag otherwise", async (_name, status, call) => {
+    const flagged = clientAnswering(status, { data: { ...task, safety: { crisisCard: true } } });
+    await expect(call(flagged.client)).resolves.toEqual({ ...task, safety: { crisisCard: true } });
+
+    const plain = clientAnswering(status, { data: task });
+    const result = await call(plain.client);
+    expect(result).toEqual(task);
+    expect(result).not.toHaveProperty("safety");
   });
 
   it("rejects a malformed response", async () => {

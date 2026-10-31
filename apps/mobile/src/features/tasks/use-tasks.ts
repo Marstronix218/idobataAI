@@ -1,5 +1,5 @@
 import { ApiClientError } from "@idobata/api-client";
-import type { Task, TaskStatus } from "@idobata/contracts";
+import type { Task, TaskStatus, TaskWriteResult } from "@idobata/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useApiClient } from "../../providers/api-provider";
@@ -26,6 +26,15 @@ export function useTasks() {
   const [error, setError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [recentlyCompleted, setRecentlyCompleted] = useState<Task | null>(null);
+  const [crisisCard, setCrisisCard] = useState(false);
+
+  // Pivot A: a create or edit whose text suggests distress comes back with
+  // `safety.crisisCard`, and the screen shows the crisis resources. The task
+  // is saved either way, and kept here without the flag.
+  const saved = useCallback(({ safety, ...task }: TaskWriteResult): Task => {
+    if (safety?.crisisCard) setCrisisCard(true);
+    return task;
+  }, []);
 
   const load = useCallback(async (refresh = false) => {
     if (!client) return;
@@ -54,13 +63,13 @@ export function useTasks() {
     setMutationError(null);
     try {
       const exactDeadline = Boolean(dueAt && dueHasTime);
-      const created = await client.createTask({
+      const created = saved(await client.createTask({
         title,
         dueAt,
         dueHasTime: exactDeadline,
         dueTimezone: exactDeadline ? currentTimeZone() : null,
         visibility: "private",
-      });
+      }));
       setTasks((current) => [created, ...current]);
       setFilter("pending");
       return true;
@@ -70,7 +79,7 @@ export function useTasks() {
     } finally {
       setCreating(false);
     }
-  }, [client]);
+  }, [client, saved]);
 
   const setTaskStatus = useCallback(async (task: Task, status: TaskStatus) => {
     if (!client || inFlightTaskIds.current.has(task.id)) return false;
@@ -93,7 +102,7 @@ export function useTasks() {
       setRecentlyCompleted(null);
     }
     try {
-      const updated = await client.updateTask(task.id, { status });
+      const updated = saved(await client.updateTask(task.id, { status }));
       setTasks((current) => current.map((item) => item.id === task.id ? updated : item));
       if (status === "completed" && latestCompletionTaskId.current === task.id) {
         setRecentlyCompleted(updated);
@@ -111,7 +120,7 @@ export function useTasks() {
       inFlightTaskIds.current.delete(task.id);
       setBusyTaskIds(new Set(inFlightTaskIds.current));
     }
-  }, [client]);
+  }, [client, saved]);
 
   const setTaskDeadline = useCallback(async (task: Task, dueAt: string | null, dueHasTime: boolean) => {
     if (!client || inFlightTaskIds.current.has(task.id)) return false;
@@ -131,11 +140,11 @@ export function useTasks() {
     setTasks((current) => current.map((item) => item.id === task.id ? optimistic : item));
     setRecentlyCompleted((current) => current?.id === task.id ? optimistic : current);
     try {
-      const updated = await client.updateTask(task.id, {
+      const updated = saved(await client.updateTask(task.id, {
         dueAt,
         dueHasTime: exactDeadline,
         dueTimezone,
-      });
+      }));
       setTasks((current) => current.map((item) => item.id === task.id ? updated : item));
       setRecentlyCompleted((current) => current?.id === task.id ? updated : current);
       return true;
@@ -148,7 +157,7 @@ export function useTasks() {
       inFlightTaskIds.current.delete(task.id);
       setBusyTaskIds(new Set(inFlightTaskIds.current));
     }
-  }, [client]);
+  }, [client, saved]);
 
   const visibleTasks = useMemo(
     () => tasks
@@ -169,6 +178,8 @@ export function useTasks() {
     completed: tasks.filter((task) => task.status === "completed").length,
   }), [tasks]);
 
+  const dismissCrisisCard = useCallback(() => setCrisisCard(false), []);
+
   const dismissCompletion = useCallback(() => {
     latestCompletionTaskId.current = null;
     setRecentlyCompleted(null);
@@ -187,6 +198,8 @@ export function useTasks() {
     mutationError,
     recentlyCompleted,
     dismissCompletion,
+    crisisCard,
+    dismissCrisisCard,
     load,
     createTask,
     setTaskDeadline,

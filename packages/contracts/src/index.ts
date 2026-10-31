@@ -156,6 +156,17 @@ export const reactionPayloadSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("crisis") }),
 ]);
 
+/**
+ * Pivot A: `safety` on a POST /api/tasks or PATCH /api/tasks/[id] response.
+ * Present only when the task's title or note suggests distress: the task is
+ * saved as typed, and the client shows the crisis card (988, 911) with no
+ * banter. Absent otherwise, and always absent while Pivot A is off.
+ */
+export const taskWriteSafetySchema = z.object({ crisisCard: z.literal(true) });
+
+/** POST /api/tasks and PATCH /api/tasks/[id]: the saved task, plus `safety` when the crisis card should show. */
+export const taskWriteResultSchema = taskSchema.safeExtend({ safety: taskWriteSafetySchema.optional() });
+
 /** POST /api/tasks/[id]/start. `reaction` is null when this start was already reacted to, or no character is selected. */
 export const taskStartResultSchema = z.object({
   event: z.object({ id: z.uuid(), type: z.literal("started"), occurredAt: z.string() }),
@@ -250,6 +261,8 @@ export type SessionNudge = z.infer<typeof sessionNudgeSchema>;
 
 export type ReactionCharacter = z.infer<typeof reactionCharacterSchema>;
 export type ReactionPayload = z.infer<typeof reactionPayloadSchema>;
+export type TaskWriteSafety = z.infer<typeof taskWriteSafetySchema>;
+export type TaskWriteResult = z.infer<typeof taskWriteResultSchema>;
 export type TaskStartResult = z.infer<typeof taskStartResultSchema>;
 export type TaskFinishResult = z.infer<typeof taskFinishResultSchema>;
 export type TaskSplitResult = z.infer<typeof taskSplitResultSchema>;
@@ -258,6 +271,49 @@ export type CharacterSummary = z.infer<typeof characterSummarySchema>;
 export type CharacterList = z.infer<typeof characterListSchema>;
 export type CoachProfile = z.infer<typeof coachProfileSchema>;
 export type CoachProfileUpdateInput = z.infer<typeof coachProfileUpdateSchema>;
+
+// Pivot A: the age gate (adults only).
+
+/**
+ * POST /api/auth/age-check (before sign-up, no session) and POST
+ * /api/coach/age (an existing account). The date of birth is checked and
+ * never stored. `timeZone` decides "today"; missing or unknown means UTC.
+ */
+export const ageCheckInputSchema = z.object({
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD."),
+  timeZone: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
+/**
+ * GET /api/auth/age-check: whether sign-up needs the age check (true while
+ * Pivot A is on). Clients ask for a date of birth only when it does; the
+ * server enforces the gate either way.
+ */
+export const ageRequirementSchema = z.object({ required: z.boolean() });
+
+/**
+ * POST /api/auth/age-check on a pass: a single-use token to send as
+ * `signUp({ options: { data: { age_token: token } } })` before `expiresAt`
+ * (15 minutes). Answers 404 while Pivot A is off: sign up without a token.
+ */
+export const ageCheckResultSchema = z.object({
+  token: z.string().min(16),
+  expiresAt: z.string(),
+});
+
+/** Error codes the age routes answer with, besides the usual ones (422 `validation_error`, 429 `rate_limited`). */
+export const AGE_CHECK_ERROR_CODES = {
+  /** 403: under 18. No account may be created; nothing was stored. */
+  ageRequirement: "age_requirement",
+  /** 422: the date of birth is not a real past date. */
+  invalidDateOfBirth: "invalid_date_of_birth",
+  /** 503: age verification is not available right now. */
+  unavailable: "age_verification_unavailable",
+} as const;
+
+export type AgeCheckInput = z.infer<typeof ageCheckInputSchema>;
+export type AgeCheckResult = z.infer<typeof ageCheckResultSchema>;
+export type AgeRequirement = z.infer<typeof ageRequirementSchema>;
 
 export interface ApiErrorBody {
   code: string;

@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authed, parseJson } = vi.hoisted(() => ({
+const { authed, enforceRateLimit, parseJson } = vi.hoisted(() => ({
   authed: vi.fn(),
+  enforceRateLimit: vi.fn(),
   parseJson: vi.fn(),
 }));
+
+vi.mock("@/lib/server/rate-limit", () => ({ enforceRateLimit }));
 
 vi.mock("@/lib/server/http", () => ({
   assertDatabase: <T>(result: { data: T; error: Error | null }) => {
@@ -45,6 +48,31 @@ describe("task update route", () => {
       user: { id: userId },
       supabase: { from: vi.fn(() => ({ update })) },
     });
+  });
+
+  it("rate limits text edits like task creation, before saving anything", async () => {
+    parseJson.mockResolvedValueOnce({ title: "Water the plants" });
+    enforceRateLimit.mockRejectedValueOnce(new Error("rate limited"));
+
+    await expect(PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    )).rejects.toThrow("rate limited");
+
+    expect(enforceRateLimit).toHaveBeenCalledWith(userId, "task:update", 120, 3600);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Text edits can reach the distress check; completion toggles and other
+  // fields cost no extra round trip and never risk a 429.
+  it("does not rate limit a completion toggle or other non-text fields", async () => {
+    const response = await PATCH(
+      new Request(`http://localhost/api/tasks/${taskId}`, { method: "PATCH" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(enforceRateLimit).not.toHaveBeenCalled();
   });
 
   it("persists a priority change alongside task completion", async () => {

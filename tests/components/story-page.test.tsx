@@ -40,7 +40,8 @@ function useDatabase(row: { selected_character_id: string | null; timezone: stri
     return query;
   };
   const tables: Record<string, ReturnType<typeof chain>> = {
-    user_coach_profiles: chain([], row && { ...row, age_verified_at: null }),
+    // Verified at sign-up; an unverified age would send the user to the age step.
+    user_coach_profiles: chain([], row && { ...row, age_verified_at: "2026-10-01T12:00:00.000Z" }),
     characters: chain([launch], null),
     entitlements: chain([], null),
   };

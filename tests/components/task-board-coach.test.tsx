@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactionCharacter, ReactionPayload, TaskSplitResult } from "@idobata/contracts";
@@ -257,7 +257,7 @@ describe("TaskBoard under Pivot A", () => {
     expect(await screen.findByText("Here's the plan.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Close steps" }));
     // The close button is gone; focus goes back to the toggle.
-    expect(toggle).toHaveFocus();
+    await waitFor(() => expect(toggle).toHaveFocus());
     fireEvent.click(toggle);
 
     expect(await screen.findByText("Here's the plan.")).toBeVisible();
@@ -289,7 +289,7 @@ describe("TaskBoard under Pivot A", () => {
     fireEvent.click(toggle);
 
     const heading = await screen.findByRole("heading", { name: "988 Suicide & Crisis Lifeline" });
-    expect(heading).toHaveFocus();
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(screen.getByRole("link", { name: "Call 988" })).toHaveAttribute("href", "tel:988");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Sample Coach is typing")).not.toBeInTheDocument();
@@ -312,7 +312,7 @@ describe("TaskBoard under Pivot A", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dismiss crisis resources" }));
 
     expect(screen.queryByRole("heading", { name: "988 Suicide & Crisis Lifeline" })).not.toBeInTheDocument();
-    expect(toggle).toHaveFocus();
+    await waitFor(() => expect(toggle).toHaveFocus());
   });
 
   it("stops offering to post a finished task whose reaction was the crisis card", async () => {
@@ -353,6 +353,85 @@ describe("TaskBoard under Pivot A", () => {
     expect(screen.queryByText("Sample Coach")).not.toBeInTheDocument();
   });
 
+  it("shows the crisis card in the coach panel when a new task's text is flagged, and keeps the task", async () => {
+    const flagged = task("t3", "Sort the drawer");
+    serve({
+      "POST /api/tasks": () => Promise.resolve({ ...flagged, safety: { crisisCard: true } }),
+      "POST /api/tasks/t1/start": () => Promise.resolve({ event: { id: "e1", type: "started", occurredAt: now }, reaction: reaction("Banter that must not cover the card.") }),
+    });
+    await renderCoachBoard();
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Sort the drawer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    const heading = await screen.findByRole("heading", { name: "988 Suicide & Crisis Lifeline" });
+    await waitFor(() => expect(heading).toHaveFocus());
+    // The task is saved and listed; the panel shows no banter for this event.
+    expect(screen.getByRole("heading", { name: "Sort the drawer" })).toBeVisible();
+    expect(screen.queryByText("Sample Coach is typing")).not.toBeInTheDocument();
+
+    // Later banter never covers the card until it is dismissed.
+    fireEvent.click(screen.getByRole("button", { name: "Start: Fold the laundry" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole("heading", { name: "988 Suicide & Crisis Lifeline" })).toBeVisible();
+    expect(screen.queryByText("Banter that must not cover the card.")).not.toBeInTheDocument();
+  });
+
+  it("shows the crisis card when an edited title is flagged, and saves the edit", async () => {
+    serve({ "PATCH /api/tasks/t1": () => Promise.resolve({ ...laundry, title: "Fold the laundry tonight", safety: { crisisCard: true } }) });
+    await renderCoachBoard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Fold the laundry" }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Fold the laundry tonight" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByRole("heading", { name: "988 Suicide & Crisis Lifeline" })).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fold the laundry tonight" })).toBeVisible();
+    expect(screen.getByText("Task changes saved.")).toBeInTheDocument();
+  });
+
+  it("adds a task at once as a pending row, then swaps in the saved task with nothing in the coach panel", async () => {
+    const create = deferred<unknown>();
+    serve({ "POST /api/tasks": () => create.promise });
+    await renderCoachBoard();
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Sort the drawer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    // Shown straight away, before the server (and its distress check) answers.
+    const pendingRow = screen.getByRole("heading", { name: "Sort the drawer" }).closest("article") as HTMLElement;
+    expect(pendingRow).toHaveAttribute("aria-busy", "true");
+    expect(within(pendingRow).getByText("Saving…")).toBeInTheDocument();
+    expect(within(pendingRow).getByRole("button", { name: "Complete: Sort the drawer" })).toBeDisabled();
+    expect(within(pendingRow).getByRole("button", { name: "Edit Sort the drawer" })).toBeDisabled();
+    expect(within(pendingRow).queryByRole("button", { name: "Start: Sort the drawer" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Add a task")).toHaveValue("");
+
+    await act(async () => create.resolve(task("t3", "Sort the drawer")));
+
+    expect(screen.getByText("Sort the drawer added privately.")).toBeInTheDocument();
+    const savedRow = screen.getByRole("heading", { name: "Sort the drawer" }).closest("article") as HTMLElement;
+    expect(savedRow).not.toHaveAttribute("aria-busy");
+    expect(within(savedRow).queryByText("Saving…")).not.toBeInTheDocument();
+    expect(within(savedRow).getByRole("button", { name: "Start: Sort the drawer" })).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: "Sort the drawer" })).toHaveLength(1);
+    expect(screen.queryByRole("heading", { name: "988 Suicide & Crisis Lifeline" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Sample Coach is typing")).not.toBeInTheDocument();
+  });
+
+  it("removes the pending row and gives the text back when adding fails", async () => {
+    serve({ "POST /api/tasks": () => Promise.reject(apiError("internal_error", 500)) });
+    await renderCoachBoard();
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Sort the drawer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Raw server message internal_error");
+    expect(screen.queryByRole("heading", { name: "Sort the drawer" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Add a task")).toHaveValue("Sort the drawer");
+  });
+
   it("has no automated accessibility violations with a reaction showing", async () => {
     serve({ "POST /api/tasks/t1/start": () => Promise.resolve({ event: { id: "e1", type: "started", occurredAt: now }, reaction: reaction("Go fold.") }) });
     const { container } = await renderCoachBoard();
@@ -378,6 +457,19 @@ describe("TaskBoard with today's flags", () => {
 
     expect(apiRequest).toHaveBeenCalledWith("/api/tasks/t1", { method: "PATCH", body: JSON.stringify({ status: "completed" }) });
     expect(calls().some((call) => /\/(start|finish|split)$/.test(call))).toBe(false);
+  });
+
+  it("never shows a crisis card on a create or edit response", async () => {
+    // The server only adds `safety` under Pivot A; the legacy board has no coach panel either way.
+    serve({ "POST /api/tasks": () => Promise.resolve({ ...task("t3", "Sort the drawer"), safety: { crisisCard: true } }) });
+    render(<TaskBoard shareWin />);
+    await screen.findByRole("heading", { name: "Fold the laundry" });
+
+    fireEvent.change(screen.getByLabelText("Add a task"), { target: { value: "Sort the drawer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    expect(await screen.findByRole("heading", { name: "Sort the drawer" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "988 Suicide & Crisis Lifeline" })).not.toBeInTheDocument();
   });
 
   it("stays the same under Pivot A until the page passes coach props", async () => {

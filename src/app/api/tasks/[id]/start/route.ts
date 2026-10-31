@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ReactionPayload, TaskStartResult } from "@idobata/contracts";
+import { isAgeVerified } from "@/lib/coach/age";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { getReaction } from "@/lib/reactions/engine";
 import { reactionRateLimitAllows } from "@/lib/reactions/rate-limit";
@@ -32,7 +33,11 @@ export async function POST(request: Request, { params }: Context) {
 
     let reaction: ReactionPayload | null = null;
     try {
-      const banter = await reactionRateLimitAllows(user.id);
+      // Banter needs a verified age (start_task refuses an unverified caller
+      // anyway); past the rate limit, or if the age read fails, only the
+      // safety checks run.
+      const verified = await isAgeVerified(supabase, user.id).catch(() => false);
+      const banter = verified && await reactionRateLimitAllows(user.id);
       reaction = await getReaction(user.id, event.id, { startedAt, safetyOnly: !banter });
     } catch {
       reaction = null;

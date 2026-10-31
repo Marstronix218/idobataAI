@@ -33,6 +33,11 @@ export const ROUTE_GATES = {
   "api/task-categories": "always",
   "api/tasks": "always",
 
+  // The age check before sign-up is public (no session yet). GET says whether
+  // it is required, so it always answers; POST checks the pivot_a gate itself
+  // (with Pivot A off its 404 tells clients to sign up without an age token).
+  "api/auth/age-check": "always",
+
   // Character Coach: only exist while Pivot A is on.
   "api/characters": "pivot_a",
   "api/coach": "pivot_a",

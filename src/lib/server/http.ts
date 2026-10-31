@@ -79,6 +79,8 @@ const RAISED_MESSAGES: Array<{ match: RegExp; status: number; code: string; mess
   { match: /message must be between/i, status: 400, code: "invalid_message", message: "A message must be between 1 and 2000 characters." },
   // Database guards for flagged-off features answer like a closed route gate.
   { match: /feature disabled/i, status: 404, code: "not_found", message: "Resource not found." },
+  // Pivot A coach writes need a verified age (PLAN D6); the client shows the age step.
+  { match: /age verification required/i, status: 403, code: "age_requirement", message: "Confirm your age to continue." },
 ];
 
 // Connectivity and timeout classes are a server-side outage, not a client

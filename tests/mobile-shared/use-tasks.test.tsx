@@ -71,6 +71,39 @@ describe("mobile task state", () => {
     expect(result.current.visibleTasks[0]).toMatchObject({ due_at: dueAt, due_has_time: true, due_timezone: dueTimezone });
   });
 
+  it("shows the crisis resources when a new task's text is flagged, and keeps the task without the flag", async () => {
+    const created = { ...task("11111111-1111-4111-8111-111111111111"), title: "Sort the drawer" };
+    api.createTask.mockResolvedValue({ ...created, safety: { crisisCard: true } });
+    const { result } = renderHook(() => useTasks());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.crisisCard).toBe(false);
+
+    let succeeded = false;
+    await act(async () => {
+      succeeded = await result.current.createTask("Sort the drawer");
+    });
+
+    expect(succeeded).toBe(true);
+    expect(result.current.crisisCard).toBe(true);
+    expect(result.current.visibleTasks[0]).toEqual(created);
+    expect(result.current.visibleTasks[0]).not.toHaveProperty("safety");
+
+    act(() => result.current.dismissCrisisCard());
+    expect(result.current.crisisCard).toBe(false);
+  });
+
+  it("shows no crisis resources for an unflagged task", async () => {
+    api.createTask.mockResolvedValue(task("11111111-1111-4111-8111-111111111111"));
+    const { result } = renderHook(() => useTasks());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.createTask("Task 11111111-1111-4111-8111-111111111111");
+    });
+
+    expect(result.current.crisisCard).toBe(false);
+  });
+
   it("updates a timed deadline label after its exact cutoff without shaming completed tasks", () => {
     const timed = {
       ...task("11111111-1111-4111-8111-111111111111"),

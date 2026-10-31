@@ -12,9 +12,9 @@ export const metadata: Metadata = { title: "Story" };
 export default async function StoryPage() {
   await requirePageGate("pivot_a");
   // As on /tasks: the (app) layout's onboarding check does not re-run on client
-  // navigation, but pages do. A failed read lets the user in.
+  // navigation, but pages do. A failed read goes to onboarding (the age gate fails closed).
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user && await needsCoachOnboarding(supabase, user.id).catch(() => false)) redirect("/onboarding");
+  if (user && await needsCoachOnboarding(supabase, user.id).catch(() => true)) redirect("/onboarding");
   return <AppTabLayout padded contextRail={false}><StoryList /></AppTabLayout>;
 }

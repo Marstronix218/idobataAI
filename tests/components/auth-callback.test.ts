@@ -7,7 +7,8 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { exchangeCodeForSession } }),
 }));
 
-import { GET, safeDestination } from "@/app/auth/callback/route";
+import { GET } from "@/app/auth/callback/route";
+import { safeDestination } from "@/lib/auth/safe-destination";
 
 describe("auth callback", () => {
   beforeEach(() => {
@@ -27,6 +28,16 @@ describe("auth callback", () => {
     expect(safeDestination("//evil.test/path")).toBe("/home");
     expect(safeDestination("https://evil.test/path")).toBe("/home");
     expect(safeDestination("/\\evil.test/path")).toBe("/home");
+    // URL parsing strips tabs and newlines, which would turn these into //evil.test.
+    expect(safeDestination("/\t/evil.test/path")).toBe("/home");
+    expect(safeDestination("/\n/evil.test/path")).toBe("/home");
+    expect(safeDestination("/ /evil.test")).toBe("/home");
+    // Dot segments that normalise to a protocol-relative path.
+    expect(safeDestination("/..//evil.test/path")).toBe("/home");
+    expect(safeDestination("/%2e%2e//evil.test/path")).toBe("/home");
+    expect(safeDestination("/tasks/../story")).toBe("/story");
+    expect(safeDestination(null)).toBe("/home");
+    expect(safeDestination("/tasks?view=today")).toBe("/tasks?view=today");
   });
 
   it("lands on /home, which picks the page from the flags, when no destination is given", async () => {

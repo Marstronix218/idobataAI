@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -66,14 +66,15 @@ describe("StoryList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read chapter 1: The first page" }));
 
     const heading = await screen.findByRole("heading", { level: 1, name: "The first page" });
-    expect(heading).toHaveFocus();
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(await screen.findByText("The coach opens a notebook.")).toBeVisible();
     expect(screen.getByText("One line: start small.")).toBeVisible();
     expect(requested()).toEqual(["/api/story", "/api/story/1"]);
 
     fireEvent.click(screen.getByRole("button", { name: "All chapters" }));
 
-    expect(await screen.findByRole("button", { name: "Read chapter 1: The first page" })).toHaveFocus();
+    const back = await screen.findByRole("button", { name: "Read chapter 1: The first page" });
+    await waitFor(() => expect(back).toHaveFocus());
   });
 
   it("reopens a chapter it has already read without fetching it again", async () => {

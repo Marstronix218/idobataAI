@@ -342,3 +342,76 @@ describe("POST /api/tasks/[id]/split", () => {
     expect(body.error.message).not.toMatch(/json|anthropic|error/i);
   });
 });
+
+// PLAN D6: an account whose age is not verified gets no character banter. The
+// task action itself is never held back, and the crisis card still shows.
+describe("start, finish and split for an account whose age is not verified", () => {
+  beforeEach(() => {
+    db.tables.user_coach_profiles[0].age_verified_at = null;
+  });
+
+  it("finishes the task with no banter", async () => {
+    const response = await finishTask(post("finish"), context());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.task.status).toBe("completed");
+    expect(body.data.reaction).toBeNull();
+    expect(db.updated.tasks).toHaveLength(1);
+    expect(db.inserted.character_reactions ?? []).toEqual([]);
+    // The reaction rate limit is not spent on a reaction that cannot show.
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("still shows the crisis card on finish", async () => {
+    db.tables.tasks[0].description = "honestly I want to hurt myself";
+
+    const body = await (await finishTask(post("finish"), context())).json();
+
+    expect(body.data.task.status).toBe("completed");
+    expect(body.data.reaction).toEqual({ kind: "crisis" });
+    expect(db.rpc).toHaveBeenCalledWith("increment_safety_counter", { p_kind: "crisis_card_shown" });
+  });
+
+  it("treats an unreadable age as unverified, and still finishes the task", async () => {
+    useDatabase({}, { user_coach_profiles: { message: "boom", code: "XX999" } });
+
+    const body = await (await finishTask(post("finish"), context())).json();
+
+    expect(body.data.task.status).toBe("completed");
+    expect(body.data.reaction).toBeNull();
+  });
+
+  // start_task itself refuses an unverified caller in SQL (20261031190000);
+  // if it ever records the start, the route still adds no banter.
+  it("adds no banter to a start, but keeps the crisis card", async () => {
+    const plain = await (await startTask(post("start"), context())).json();
+    expect(plain.data.reaction).toBeNull();
+
+    db.tables.tasks[0].description = "honestly I want to hurt myself";
+    db.tables.task_events = [];
+    const crisis = await (await startTask(post("start"), context())).json();
+    expect(crisis.data.reaction).toEqual({ kind: "crisis" });
+  });
+
+  it("answers 403 age_requirement when start_task refuses the caller", async () => {
+    useDatabase();
+    db.rpc.mockImplementation(async (name: string) => name === "start_task"
+      ? { data: null, error: { code: "P0001", message: "age verification required" } }
+      : { data: null, error: null });
+
+    const response = await startTask(post("start"), context());
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe("age_requirement");
+  });
+
+  it("refuses to split the task with 403 age_requirement", async () => {
+    const response = await splitTask(post("split"), context());
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toEqual({ code: "age_requirement", message: "Confirm your age to continue." });
+    expect(messagesCreate).not.toHaveBeenCalled();
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+  });
+});

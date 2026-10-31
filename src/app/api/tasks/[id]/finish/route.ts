@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ReactionPayload, TaskFinishResult } from "@idobata/contracts";
+import { isAgeVerified } from "@/lib/coach/age";
 import { requireApiGate } from "@/lib/flags/route-gates";
 import { logAiEvent } from "@/lib/ai/anthropic";
 import { getReaction } from "@/lib/reactions/engine";
@@ -40,7 +41,10 @@ export async function POST(request: Request, { params }: Context) {
     // The task is completed now; nothing below may turn that into an error.
     let reaction: ReactionPayload | null = null;
     try {
-      const banter = await reactionRateLimitAllows(user.id);
+      // The task is never held back for the age, and the crisis card still
+      // shows; banter needs a verified age (an unknown age counts as unverified).
+      const verified = await isAgeVerified(supabase, user.id).catch(() => false);
+      const banter = verified && await reactionRateLimitAllows(user.id);
       // The finish trigger keys events like XP awards: one per occurrence.
       // The event is new only if this completion wrote it, i.e. it carries
       // this completion's timestamp; a reopened-and-redone occurrence keeps the old one.

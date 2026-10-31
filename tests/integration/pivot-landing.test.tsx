@@ -74,7 +74,10 @@ function useSession({
   return client;
 }
 
-const complete: Row = { selected_character_id: characterId, timezone: "America/Chicago", age_verified_at: null };
+const VERIFIED_AT = "2026-10-01T12:00:00.000Z";
+const complete: Row = { selected_character_id: characterId, timezone: "America/Chicago", age_verified_at: VERIFIED_AT };
+/** Age verified (at sign-up, or by the age step), nothing else saved yet. */
+const verifiedOnly: Row = { selected_character_id: null, timezone: null, age_verified_at: VERIFIED_AT };
 
 async function landing() {
   const response = await home(new NextRequest("https://idobata.test/home"));
@@ -106,6 +109,8 @@ describe("GET /home", () => {
     ["a character but no time zone", { ...complete, timezone: null }, "/onboarding"],
     ["a time zone but no character", { ...complete, selected_character_id: null }, "/onboarding"],
     ["a character and a time zone", complete, "/tasks"],
+    // Accounts from before the age gate (PLAN D6) take the age step first.
+    ["a complete profile but no age verification", { ...complete, age_verified_at: null }, "/onboarding"],
   ] satisfies Array<[string, Row, string]>)("under Pivot A with %s goes to %s", async (_name, row, destination) => {
     getFlags.mockResolvedValue(PIVOT);
     const client = useSession({ row });
@@ -115,8 +120,11 @@ describe("GET /home", () => {
   });
 
   it.each([
-    ["no coach profile yet", null, "/tasks"],
+    ["only a verified age", verifiedOnly, "/tasks"],
     ["a time zone but no character", { ...complete, selected_character_id: null }, "/tasks"],
+    // The age step needs no cast either.
+    ["no coach profile yet", null, "/onboarding"],
+    ["a time zone but no age verification", { ...complete, selected_character_id: null, age_verified_at: null }, "/onboarding"],
     // The time zone step needs no cast, so onboarding can still finish.
     ["a character but no time zone", { ...complete, timezone: null }, "/onboarding"],
   ] satisfies Array<[string, Row, string]>)("under Pivot A with an empty cast and %s goes to %s", async (_name, row, destination) => {
@@ -126,12 +134,13 @@ describe("GET /home", () => {
     expect(await landing()).toBe(`https://idobata.test${destination}`);
   });
 
-  it("goes to tasks when the profile cannot be read, where the layout checks again", async () => {
+  // The age is unknown then, and the age gate fails closed (PLAN D6).
+  it("goes to onboarding when the profile cannot be read", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     getFlags.mockResolvedValue(PIVOT);
     useSession({ error: { code: "XX999", message: "boom" } });
 
-    expect(await landing()).toBe("https://idobata.test/tasks");
+    expect(await landing()).toBe("https://idobata.test/onboarding");
   });
 
   it("sends a signed-out visitor to log in under Pivot A", async () => {
@@ -161,7 +170,7 @@ describe("the app layout under Pivot A", () => {
 
   it("lets a user with no character in when the cast is empty, rather than locking them out", async () => {
     getFlags.mockResolvedValue(PIVOT);
-    useSession({ row: null, cast: [] });
+    useSession({ row: verifiedOnly, cast: [] });
 
     await expect(AuthenticatedLayout({ children })).resolves.toBeTruthy();
     expect(redirect).not.toHaveBeenCalled();
@@ -187,6 +196,16 @@ describe("the app layout under Pivot A", () => {
     await expect(AuthenticatedLayout({ children })).rejects.toThrow("NEXT_REDIRECT;/onboarding");
   });
 
+  it.each([
+    ["a complete profile", { ...complete, age_verified_at: null }, [launchCharacter]],
+    ["an empty cast", null, []],
+  ] satisfies Array<[string, Row, object[]]>)("sends a user whose age is not verified to onboarding, even with %s", async (_name, row, cast) => {
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ row, cast });
+
+    await expect(AuthenticatedLayout({ children })).rejects.toThrow("NEXT_REDIRECT;/onboarding");
+  });
+
   it("lets a user with both through", async () => {
     getFlags.mockResolvedValue(PIVOT);
     useSession({ row: complete });
@@ -207,8 +226,17 @@ describe("the app layout under Pivot A", () => {
     expect((await AuthenticatedLayout({ children })).props.consistencyDays).toBeNull();
   });
 
-  it("lets the user in when the profile cannot be read", async () => {
+  it("sends the user to onboarding when the profile cannot be read, since the age is unknown", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ error: { code: "XX999", message: "boom" } });
+
+    await expect(AuthenticatedLayout({ children })).rejects.toThrow("NEXT_REDIRECT;/onboarding");
+  });
+
+  it("keeps Settings reachable when the profile cannot be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    request.pathname = "/settings";
     getFlags.mockResolvedValue(PIVOT);
     useSession({ error: { code: "XX999", message: "boom" } });
 
@@ -258,7 +286,27 @@ describe("the onboarding page", () => {
     const page = await OnboardingPage();
 
     expect(page.type).toBe(PivotOnboarding);
-    expect(page.props).toEqual({ characters: [launchCharacter], selectedCharacterId: characterId, savedTimezone: null });
+    expect(page.props).toEqual({ characters: [launchCharacter], ageVerified: true, selectedCharacterId: characterId, savedTimezone: null });
+  });
+
+  it("shows the age step, not an error, when the profile cannot be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ error: { code: "XX999", message: "boom" } });
+
+    const page = await OnboardingPage();
+
+    expect(page.type).toBe(PivotOnboarding);
+    expect(page.props).toEqual({ characters: [launchCharacter], ageVerified: false, selectedCharacterId: null, savedTimezone: null });
+  });
+
+  it("asks for the age first when it is not verified yet", async () => {
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ row: { ...complete, age_verified_at: null } });
+
+    const page = await OnboardingPage();
+
+    expect(page.props).toEqual({ characters: [launchCharacter], ageVerified: false, selectedCharacterId: characterId, savedTimezone: "America/Chicago" });
   });
 });
 
@@ -272,10 +320,17 @@ describe("the tasks page under Pivot A", () => {
     await expect(TasksPage()).rejects.toThrow("NEXT_REDIRECT;/onboarding");
   });
 
+  it("sends the user to onboarding when the profile cannot be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getFlags.mockResolvedValue(PIVOT);
+    useSession({ error: { code: "XX999", message: "boom" } });
+
+    await expect(TasksPage()).rejects.toThrow("NEXT_REDIRECT;/onboarding");
+  });
+
   it.each([
     ["a complete profile", { row: complete }],
-    ["an empty cast", { row: null, cast: [] }],
-    ["a failed read", { error: { code: "XX999", message: "boom" } }],
+    ["an empty cast", { row: verifiedOnly, cast: [] }],
   ])("renders the board with %s", async (_name, session) => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     getFlags.mockResolvedValue(PIVOT);
@@ -316,7 +371,10 @@ describe("the tasks page under Pivot A", () => {
   it("still gives the board coach props when the character can't be read", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     getFlags.mockResolvedValue(PIVOT);
-    useSession({ error: { code: "XX999", message: "boom" } });
+    const client = useSession({ row: complete });
+    const tableFor = client.from.getMockImplementation()!;
+    const failing = { select: () => ({ eq: () => ({ maybeSingle: () => Promise.reject(new Error("boom")) }) }) };
+    client.from.mockImplementation((table: string) => (table === "characters" ? failing : tableFor(table)) as never);
 
     expect(boardProps(await TasksPage()).coach).toEqual({ character: null });
   });

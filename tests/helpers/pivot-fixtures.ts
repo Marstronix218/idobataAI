@@ -54,7 +54,7 @@ export const PLUS: Row = { user_id: USER_ID, product: "plus", status: "active", 
 export function baseTables(overrides: Partial<Record<string, Row[]>> = {}): Record<string, Row[]> {
   return {
     task_events: [{ id: EVENT_ID, user_id: USER_ID, task_id: TASK_ID, type: "started", occurred_at: NOW.toISOString(), local_date: TODAY, occurrence_key: null }],
-    user_coach_profiles: [{ user_id: USER_ID, selected_character_id: CHARACTER_ID, timezone: TIME_ZONE, ai_arm: "ai" }],
+    user_coach_profiles: [{ user_id: USER_ID, selected_character_id: CHARACTER_ID, timezone: TIME_ZONE, ai_arm: "ai", age_verified_at: "2026-10-01T12:00:00.000Z", age_verification_method: "self_attested" }],
     character_reactions: [],
     entitlements: [PLUS],
     tasks: [{ id: TASK_ID, owner_id: USER_ID, title: "Water the plants", description: null, status: "pending", recurrence_instance_id: null, completed_at: null, created_at: "2026-10-28T15:00:00.000Z" }],

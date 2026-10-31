@@ -184,6 +184,8 @@ describe("gateForRoute", () => {
     ["api/characters", "pivot_a"],
     ["api/coach/profile", "pivot_a"],
     ["api/coach/nudge", "pivot_a"],
+    ["api/coach/age", "pivot_a"],
+    ["api/auth/age-check", "always"],
     ["api/story", "pivot_a"],
     ["api/story/[number]", "pivot_a"],
     ["api/tasks/[id]/start", "pivot_a"],

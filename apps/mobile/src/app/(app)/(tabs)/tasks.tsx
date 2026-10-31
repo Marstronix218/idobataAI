@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { InlineNotice } from "@/components/inline-notice";
 import { colors, radius, spacing, typography } from "@/constants/theme";
+import { CrisisNotice } from "@/features/safety/crisis-notice";
 import { TaskCard } from "@/features/tasks/task-card";
 import { type TaskFilter, useTasks } from "@/features/tasks/use-tasks";
 
@@ -97,6 +98,8 @@ export default function TasksScreen() {
     mutationError,
     recentlyCompleted,
     dismissCompletion,
+    crisisCard,
+    dismissCrisisCard,
     load,
     createTask,
     setTaskDeadline,
@@ -235,6 +238,7 @@ export default function TasksScreen() {
         </View>
       </View>
 
+      {crisisCard && <CrisisNotice onDismiss={dismissCrisisCard} />}
       {mutationError && <InlineNotice message={mutationError} tone="danger" />}
       {error && visibleTasks.length > 0 && <InlineNotice message={error} tone="danger" />}
 

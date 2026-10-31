@@ -2,6 +2,8 @@ export type AuthResult = {
   error: string | null;
   requiresEmailConfirmation?: boolean;
   existingAccount?: boolean;
+  /** The server refused the sign-up for want of an age check (Pivot A is on). */
+  ageVerificationRequired?: boolean;
 };
 
 export function friendlyAuthError(message: string) {
@@ -9,6 +11,7 @@ export function friendlyAuthError(message: string) {
   if (lower.includes("invalid login credentials")) return "That email and password do not match.";
   if (lower.includes("email not confirmed")) return "Confirm your email before signing in.";
   if (lower.includes("network")) return "We could not reach Idobata. Check your connection and try again.";
+  if (lower.includes("age verification required")) return "Confirm your date of birth to create an account.";
   return message;
 }
 

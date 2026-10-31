@@ -11,7 +11,7 @@
 - [x] Phase 2: character content, character pick, profile disclosure
 - [x] Phase 3: reaction engine, splitter, plan resolution, crisis routing
 - [x] Phase 4: story, session nudge, no-guilt streaks
-- [ ] Phase 5: age gate, create/edit distress check, `/safety`
+- [x] Phase 5: age gate, create/edit distress check, `/safety`
 - [ ] Phase 6: billing and entitlements
 - [ ] Phase 7: metrics, experiment, cost guardrail
 - [ ] Phase 8: retention, deletion, launch check, handoff
@@ -415,6 +415,26 @@ Naming follows the existing schema:
 - The nudge timer (component test with fake timers), including a check that it ignores background time.
 
 ### Phase 5: age gate, create/edit distress check, `/safety`
+
+**Phase 5 results and caveats carried forward**
+- **The age gate covers every sign-up path.** `POST /api/auth/age-check` is public, gated `pivot_a`, and limited to 10 per IP per 15 minutes.
+  - It runs `getAgeVerifier()` and returns a single-use token that expires in 15 minutes. Only the token's sha256 hash is stored, and the date of birth is never stored or logged.
+  - The `hook_before_user_created` Postgres hook (migration `20261031180000`) rejects any new user without a valid token while Pivot A is on, and lets everyone through while it is off.
+  - `handle_new_user` copies the age-verification fields into `user_coach_profiles` and deletes the token row. Two small triggers strip `age_token` from `auth.users` and `auth.identities`.
+  - Mobile sign-up asks for a date of birth and treats a 404 from age-check as legacy mode.
+- **Existing accounts get an age step.** It is the first onboarding step for users without `age_verified_at`, through `POST /api/coach/age` and the service-role-only `set_coach_age_verified`. An under-18 result shows a block screen and stores nothing. Settings and account deletion stay reachable.
+- **`safeDestination` was hardened.** It now rejects control characters and dot segments; a tab character made the existing auth callback an open redirect. Login honours `?next=`.
+- **Create and edit run the distress check under Pivot A.** The task is always saved. A flagged result returns `safety: { crisisCard: true }`, which older clients ignore. Adding a task can now take up to 2.5 s longer when the model is slow.
+- **`/safety` exists only under Pivot A** (it returns 404 when the flag is off), and needs no sign-in. It carries a visible placeholder banner and the `data-placeholder="counsel-review"` marker exported from `src/app/safety/placeholder.ts`. Its links in privacy, terms and settings only show under Pivot A. The 30-day retention line was removed until Phase 8's purge job exists; Phase 8 adds it back.
+- **Age is enforced in three layers:** the API (`requireAgeVerified` returns 403 `age_requirement`), SQL (`set_coach_profile` and `start_task`) and a `BEFORE INSERT` backstop on `auth.users` that works even if the dashboard hook is never enabled. Without the hook, a refused sign-up reports a generic "Database error saving new user"; enabling the hook gives the friendly date-of-birth path.
+- **Self-attestation needs an explicit opt-in:** `ALLOW_SELF_ATTESTED_AGE=true` plus an explicitly non-production `APP_ENV`. When an age-verification read fails, the user is sent to onboarding (fail closed), and every onboarding step shows Sign out and Settings.
+- **Founder setup:**
+  - Turn on the Before User Created hook (`public.hook_before_user_created`) in every hosted Supabase project.
+  - Set `APP_ENV` (`production` on prod; `staging` on any staging deployment Vercel marks as production).
+  - Choose a real age-verification provider. Without one, Pivot A in production closes sign-up and leaves existing accounts on the age step.
+  - Apply the migration to a hosted branch first, because hosted Supabase may restrict triggers on `auth.identities`.
+- **Under Pivot A, every other way of creating a user also needs a token:** dashboard-created users, `auth.admin.createUser` and OAuth. The Phase 8 end-to-end test must call age-check first.
+- **Phase 8 purge** must also delete expired age-verification tokens.
 
 **Age gate**
 - `src/lib/domain/age.ts`: pure age-from-date-of-birth, including the 18th birthday falling today and leap days.

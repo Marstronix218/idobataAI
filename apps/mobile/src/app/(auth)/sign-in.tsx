@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,14 +10,20 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { createApiClient } from "@idobata/api-client";
 
 import { BrandMark } from "@/components/brand-mark";
 import { InlineNotice } from "@/components/inline-notice";
 import { PrimaryButton } from "@/components/primary-button";
 import { colors, radius, spacing, typography } from "@/constants/theme";
+import { checkSignUpAge, deviceTimeZone, fetchAgeRequirement, isDateOfBirthFormat } from "@/lib/auth/age-gate";
+import { mobileEnvironment } from "@/lib/environment";
 import { useAuth } from "@/providers/auth-provider";
 
 type Mode = "sign-in" | "sign-up";
+
+/** The public age routes need no session. */
+const publicApiClient = () => createApiClient({ baseUrl: mobileEnvironment.apiBaseUrl, getAccessToken: () => null });
 
 export default function SignInScreen() {
   const {
@@ -33,15 +39,32 @@ export default function SignInScreen() {
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [underAge, setUnderAge] = useState(false);
+  // Whether sign-up needs a date of birth (Pivot A); null while unknown, when
+  // sign-up goes ahead without one and the server has the final say.
+  const [ageRequired, setAgeRequired] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (mode !== "sign-up" || !isConfigured) return;
+    let active = true;
+    void fetchAgeRequirement(publicApiClient()).then((required) => {
+      if (active) setAgeRequired(required);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isConfigured, mode]);
+
   const submit = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     setError(null);
     setMessage(null);
+    setUnderAge(false);
     if (!normalizedEmail || !password) {
       setError("Enter your email and password.");
       return;
@@ -50,13 +73,36 @@ export default function SignInScreen() {
       setError("Use at least 8 characters for your password.");
       return;
     }
+    if (mode === "sign-up" && ageRequired === true && !isDateOfBirthFormat(dateOfBirth)) {
+      setError("Enter your date of birth as YYYY-MM-DD.");
+      return;
+    }
 
     setBusy(true);
     try {
+      let ageToken: string | null = null;
+      if (mode === "sign-up" && ageRequired === true) {
+        // Under Pivot A the age check comes first (PLAN D5): the server
+        // refuses a sign-up without its single-use token.
+        const age = await checkSignUpAge(publicApiClient(), dateOfBirth, deviceTimeZone());
+        if (age.kind === "blocked") {
+          setUnderAge(true);
+          return;
+        }
+        if (age.kind === "error") {
+          setError(age.message);
+          return;
+        }
+        if (age.kind === "token") ageToken = age.token;
+      }
       const result = mode === "sign-in"
         ? await signIn(normalizedEmail, password)
-        : await signUp(normalizedEmail, password);
-      if (result.existingAccount) {
+        : await signUp(normalizedEmail, password, ageToken);
+      if (result.ageVerificationRequired) {
+        // The requirement was unknown or changed: ask for the date of birth.
+        setAgeRequired(true);
+        setError(result.error);
+      } else if (result.existingAccount) {
         setMessage("You already have an account with this email — sign in instead.");
         setMode("sign-in");
         setPassword("");
@@ -116,6 +162,7 @@ export default function SignInScreen() {
                     setMode(item);
                     setError(null);
                     setMessage(null);
+                    setUnderAge(false);
                   }}
                   style={[styles.modeButton, mode === item && styles.modeButtonActive]}
                 >
@@ -163,6 +210,13 @@ export default function SignInScreen() {
                 </Pressable>
               </>
             )}
+            {underAge && (
+              // TODO(founder): under-18 block message copy (counsel).
+              <InlineNotice
+                message="You need to be 18 or older to use Idobata. No account was created."
+                tone="danger"
+              />
+            )}
             {error && <InlineNotice message={error} tone="danger" />}
             {message && <InlineNotice message={message} tone="success" />}
 
@@ -197,6 +251,25 @@ export default function SignInScreen() {
                 value={password}
               />
             </View>
+            {mode === "sign-up" && ageRequired === true && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Date of birth</Text>
+                <TextInput
+                  accessibilityHint="Idobata is for adults 18 and over."
+                  accessibilityLabel="Date of birth"
+                  autoCapitalize="none"
+                  autoComplete="birthdate-full"
+                  editable={!busy}
+                  inputMode="numeric"
+                  maxLength={10}
+                  onChangeText={setDateOfBirth}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                  value={dateOfBirth}
+                />
+              </View>
+            )}
 
             <PrimaryButton
               busy={busy}

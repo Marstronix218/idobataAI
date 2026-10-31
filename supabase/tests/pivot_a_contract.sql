@@ -23,8 +23,9 @@ values
 insert into public.story_chapters(character_id, number, title, body)
 values ('c0000000-0000-4000-8000-000000000001',1,'Chapter one','Placeholder chapter body.');
 
-insert into public.user_coach_profiles(user_id, selected_character_id, timezone)
-values ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa','c0000000-0000-4000-8000-000000000001','America/Los_Angeles');
+-- A's age is verified, which start_task requires (20261031190000).
+insert into public.user_coach_profiles(user_id, selected_character_id, timezone, age_verified_at, age_verification_method)
+values ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa','c0000000-0000-4000-8000-000000000001','America/Los_Angeles',now(),'self_attested');
 
 insert into public.tasks(id, owner_id, title, visibility, status)
 values

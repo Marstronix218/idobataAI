@@ -24,14 +24,15 @@ describe("AuthForm", () => {
     expect(screen.getByLabelText("Password")).toBeRequired();
   });
 
-  it("opens the Feed after a returning user signs in", () => {
+  // /home picks the landing page from the flags (the feed while Pivot A is off).
+  it("sends a returning user to /home in preview mode", () => {
     render(<AuthForm mode="login" />);
 
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "idobata@example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: /Open my feed/ }));
 
-    expect(router.push).toHaveBeenCalledWith("/feed");
+    expect(router.push).toHaveBeenCalledWith("/home");
   });
 
   it("links users to password recovery and confirmation resend", () => {

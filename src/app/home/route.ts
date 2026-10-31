@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return privateRedirect(request, "/login?next=%2Fhome");
-  // A failed read goes to tasks; the app layout checks onboarding again there.
-  const onboarding = await needsCoachOnboarding(supabase, user.id).catch(() => false);
+  // A failed read goes to onboarding: the age is then unknown, and the age
+  // gate fails closed (PLAN D6).
+  const onboarding = await needsCoachOnboarding(supabase, user.id).catch(() => true);
   return privateRedirect(request, onboarding ? "/onboarding" : "/tasks");
 }

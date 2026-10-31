@@ -574,6 +574,15 @@ export interface SafetyCounter {
   count: number;
 }
 
+/** Pivot A age gate: the hash of a single-use sign-up token. No user id and no date of birth. Service role and the auth hook only. */
+export interface AgeVerificationToken {
+  token_hash: string;
+  method: string;
+  verified_at: string;
+  expires_at: string;
+  consumed_at: string | null;
+}
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Insert>> = {
   Row: Row & Record<string, unknown>;
   Insert: Insert & Record<string, unknown>;
@@ -620,6 +629,7 @@ export interface Database {
       coach_consistency_dates: Table<CoachConsistencyDate, CoachConsistencyDate>;
       entitlements: Table<Entitlement, Partial<Entitlement> & Pick<Entitlement, "user_id" | "product" | "status" | "source">>;
       safety_counters: Table<SafetyCounter, Partial<SafetyCounter> & Pick<SafetyCounter, "date" | "kind">>;
+      age_verification_tokens: Table<AgeVerificationToken, Partial<AgeVerificationToken> & Pick<AgeVerificationToken, "token_hash" | "method" | "expires_at">>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -770,6 +780,7 @@ export interface Database {
       coach_consistency_total_days: { Args: { p_user_id: string }; Returns: number };
       start_task: { Args: { p_task_id: string }; Returns: TaskEvent };
       set_coach_profile: { Args: { p_character_id?: string | null; p_timezone?: string | null }; Returns: UserCoachProfile };
+      set_coach_age_verified: { Args: { p_user_id: string; p_method: string }; Returns: UserCoachProfile };
       record_ai_usage: {
         Args: {
           p_user_id: string;

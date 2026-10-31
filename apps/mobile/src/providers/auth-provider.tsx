@@ -29,7 +29,8 @@ type AuthContextValue = {
   missingConfiguration: readonly string[];
   requiresReauthentication: boolean;
   signIn: (email: string, password: string) => Promise<AuthResult>;
-  signUp: (email: string, password: string) => Promise<AuthResult>;
+  /** `ageToken` comes from the age check (POST /api/auth/age-check); null while Pivot A is off. */
+  signUp: (email: string, password: string, ageToken?: string | null) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
   refreshSession: () => Promise<string | null>;
   recoverSession: () => Promise<AuthResult>;
@@ -117,10 +118,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   }, [client]);
 
-  const signUp = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+  const signUp = useCallback(async (email: string, password: string, ageToken?: string | null): Promise<AuthResult> => {
     if (!client) return { error: "Authentication is still starting. Try again in a moment." };
     return guardAuthResult(async () => {
-      const { data, error } = await client.auth.signUp({ email, password });
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        ...(ageToken ? { options: { data: { age_token: ageToken } } } : {}),
+      });
       if (isExistingAccountError(error) || (!error && isExistingAccountSignUp(data))) {
         return { error: null, existingAccount: true };
       }
@@ -128,6 +133,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return {
         error: error ? friendlyAuthError(error.message) : null,
         requiresEmailConfirmation: !error && !data.session,
+        ...(error && /age verification required/i.test(error.message) ? { ageVerificationRequired: true } : {}),
       };
     });
   }, [client]);

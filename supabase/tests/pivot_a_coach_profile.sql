@@ -107,6 +107,13 @@ do $$ begin
   end if;
 end $$;
 
+-- Both have verified their age (at sign-up, or in the D6 step). The refusal
+-- for an unverified caller is covered by pivot_a_age_enforcement.sql.
+insert into public.user_coach_profiles(user_id, age_verified_at, age_verification_method)
+values
+  ('aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa', now(), 'self_attested'),
+  ('bbbbbbbb-3333-4333-8333-bbbbbbbbbbbb', now(), 'self_attested');
+
 update public.app_feature_flags set enabled=true where key='pivot_a.enabled';
 
 -- ---------------------------------------------------------------------------

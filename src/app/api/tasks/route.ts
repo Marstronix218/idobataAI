@@ -1,6 +1,10 @@
+import type { TaskWriteResult } from "@idobata/contracts";
+import { getFlags } from "@/lib/flags";
+import { taskTextSuggestsCrisis } from "@/lib/safety/task-text";
 import { taskCreateSchema } from "@/lib/server/schemas";
 import { ApiError, assertDatabase, authed, ok, parseJson, withApi } from "@/lib/server/http";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
+import type { Task } from "@/types";
 
 export async function GET(request: Request) {
   return withApi(async () => {
@@ -33,6 +37,11 @@ export async function POST(request: Request) {
       due_timezone: input.dueAt && input.dueHasTime ? input.dueTimezone ?? null : null,
       recurrence_rule: input.recurrenceRule ?? null, priority: input.priority ?? null, visibility,
     }).select("*").single();
-    return ok(assertDatabase(result), { status: 201 });
+    const task = assertDatabase(result) as Task;
+    // Pivot A: the task is saved either way; distress text adds the crisis card (D3: nothing stored).
+    if ((await getFlags()).pivotA && await taskTextSuggestsCrisis(user.id, task)) {
+      return ok({ ...task, safety: { crisisCard: true } } satisfies TaskWriteResult, { status: 201 });
+    }
+    return ok(task, { status: 201 });
   });
 }
