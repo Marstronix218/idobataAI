@@ -8,6 +8,7 @@ export const PIVOT_FLAG_KEYS = [
   "persona_chat.enabled",
   "persona_autopost.enabled",
   "share_win.enabled",
+  "beta_full_access.enabled",
 ] as const;
 
 export type PivotFlagKey = (typeof PIVOT_FLAG_KEYS)[number];
@@ -20,6 +21,12 @@ export interface PivotFlags {
   shareWin: boolean;
   /** Shared wins get no persona engagement and the composer starts at "Only me" (D9, D10). */
   sharePeopleOnly: boolean;
+  /**
+   * Free beta (founder decision 2026-10-31): with Pivot A on, every user gets
+   * Plus-level access (src/lib/coach/plan.ts). Its row alone decides it; a
+   * missing row means off, and no guardrail rule touches it.
+   */
+  betaFullAccess: boolean;
 }
 
 /** `rows` holds the stored `app_feature_flags` values; a missing key means the row is absent. */
@@ -33,6 +40,7 @@ export function resolveFlags(rows: Partial<Record<PivotFlagKey, boolean>>): Pivo
     personaAutopost: pivotA ? false : rows["persona_autopost.enabled"] ?? true,
     shareWin: rows["share_win.enabled"] ?? true,
     sharePeopleOnly: pivotA,
+    betaFullAccess: rows["beta_full_access.enabled"] ?? false,
   };
 }
 

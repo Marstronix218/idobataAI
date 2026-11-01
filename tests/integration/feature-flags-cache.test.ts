@@ -44,10 +44,10 @@ describe("getFlags", () => {
     expect(createAdminClient).not.toHaveBeenCalled();
   });
 
-  it("reads only the five Pivot A keys and resolves them", async () => {
-    reads.push({ data: [{ key: "pivot_a.enabled", enabled: true }, { key: "social_feed.enabled", enabled: true }], error: null });
+  it("reads only the six Pivot A keys and resolves them", async () => {
+    reads.push({ data: [{ key: "pivot_a.enabled", enabled: true }, { key: "social_feed.enabled", enabled: true }, { key: "beta_full_access.enabled", enabled: true }], error: null });
 
-    await expect(getFlags()).resolves.toEqual(resolveFlags({ "pivot_a.enabled": true, "social_feed.enabled": true }));
+    await expect(getFlags()).resolves.toEqual(resolveFlags({ "pivot_a.enabled": true, "social_feed.enabled": true, "beta_full_access.enabled": true }));
     expect(select).toHaveBeenCalledWith("key, enabled");
     expect(inKeys).toHaveBeenCalledWith("key", [
       "pivot_a.enabled",
@@ -55,6 +55,7 @@ describe("getFlags", () => {
       "persona_chat.enabled",
       "persona_autopost.enabled",
       "share_win.enabled",
+      "beta_full_access.enabled",
     ]);
   });
 

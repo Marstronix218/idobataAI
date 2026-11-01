@@ -14,15 +14,18 @@ import {
 import { findBannedContent, maskTaskTitle } from "@/lib/characters/banned-content";
 import { fillTaskToken, selectLine, taskAgeBucket, taskAgeDays, type SelectableLine } from "@/lib/domain/line-selection";
 import { localDate, resolveTimeZone } from "@/lib/domain/local-day";
-import { resolvePlan, type EntitlementRow } from "@/lib/domain/plan";
+import { resolveEffectivePlan } from "@/lib/coach/plan";
+import type { EntitlementRow } from "@/lib/domain/plan";
 import { readAiCaps, splitReservation } from "@/lib/domain/reaction-caps";
 import { recordCrisisShown } from "@/lib/safety/counters";
 import { createDistressDetector, isCrisisRisk } from "@/lib/safety/distress";
 import { hasDistressKeyword } from "@/lib/safety/keywords";
+import { recordCoachEvent } from "@/lib/analytics/events";
 import { ApiError } from "@/lib/server/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordAiUsage, releaseAiUsage, reserveAiUsage } from "./metering";
 import { promptTaskTitle } from "./prompt";
+import { isAiSpendLimitReached } from "./spend-breaker";
 
 // splitTask (SPEC Phase 3 "Task splitter", PLAN D2): three small steps for a
 // stuck task, introduced by a prewritten split_intro line in the character's
@@ -30,7 +33,9 @@ import { promptTaskTitle } from "./prompt";
 // atomically before the call). The ai_arm experiment does not apply: the arm
 // is about reactions, and the splitter is a tool the user asks for. The
 // distress check runs first, on every plan, before the plan and cap checks, so
-// a crisis card is never behind the paywall.
+// a crisis card is never behind the paywall. Once the global daily AI spend
+// limit is reached, splits answer split_unavailable (the distress check still
+// runs). A delivered split records a split_used event.
 
 export const SPLIT_STEP_MAX_WORDS = 12;
 const SPLIT_STEP_MAX_CHARS = 120;
@@ -135,9 +140,11 @@ export async function splitTask(userId: string, taskId: string): Promise<TaskSpl
 
   const characterId = profileResult.data?.selected_character_id;
   if (!characterId) return refuse(CHARACTER_REQUIRED());
-  // D2: Plus or trial only. The ai_arm experiment applies to reactions, not
-  // to the splitter, which is a tool the user asks for.
-  const plan = splitReservation({ tier: resolvePlan((entitlementResult.data ?? []) as EntitlementRow[], now).tier, caps: readAiCaps() });
+  // D2: Plus or trial only (everyone during the free beta). The ai_arm
+  // experiment applies to reactions, not to the splitter, which is a tool the
+  // user asks for.
+  const effectivePlan = await resolveEffectivePlan((entitlementResult.data ?? []) as EntitlementRow[], now);
+  const plan = splitReservation({ tier: effectivePlan.tier, caps: readAiCaps() });
   if (!plan.ok) return refuse(new ApiError(402, "Splitting tasks is part of Plus.", "plan_required"));
 
   const [characterResult, linesResult] = await Promise.all([
@@ -148,7 +155,7 @@ export async function splitTask(userId: string, taskId: string): Promise<TaskSpl
   if (characterResult.error || linesResult.error) return refuse(UNAVAILABLE());
   const character = characterResult.data;
   if (!character?.active) return refuse(CHARACTER_REQUIRED());
-  if (!isReactionAiConfigured()) return refuse(UNAVAILABLE());
+  if (!isReactionAiConfigured() || await isAiSpendLimitReached(admin, now)) return refuse(UNAVAILABLE());
 
   // The cap is taken atomically before the call, and given back unless the
   // split is delivered; the attempt ceiling bounds what failures can cost.
@@ -173,6 +180,7 @@ export async function splitTask(userId: string, taskId: string): Promise<TaskSpl
     await Promise.all([
       recordAiUsage(admin, userId, today, { safetyChecks, calls: [distress.meter, result.meter] }),
       distress.pendingWrites,
+      steps ? recordCoachEvent(admin, userId, { name: "split_used" }) : null,
     ]);
     if (!steps) {
       logAiEvent("warn", "splitter", {

@@ -10,6 +10,7 @@ import { BetaBadge } from "@/components/ui/status";
 import { apiRequest, isPreviewMode } from "@/lib/client/api";
 import { LEGACY_FLAGS, isGateOpen, type PivotFlags, type RouteGate } from "@/lib/domain/feature-flags";
 import { BetaActivityTracker } from "@/components/analytics/beta-activity-tracker";
+import { SessionLengthTracker } from "@/components/analytics/session-length-tracker";
 import { CONSISTENCY_DAYS_DESCRIPTION, ConsistencyDaysContext, consistencyDaysLabel, hasConsistencyDays } from "@/components/coach/consistency-days";
 import { SessionNudge } from "@/components/coach/session-nudge";
 import type { UserProfile } from "@/types";
@@ -125,6 +126,7 @@ export function AppShell({ children, flags = LEGACY_FLAGS, consistencyDays = nul
       </aside>
       <main id="main-content" className="min-w-0 lg:ml-[88px] xl:ml-[280px]"><ConsistencyDaysContext value={consistency}>{children}</ConsistencyDaysContext></main>
       {pivotA && <SessionNudge />}
+      {pivotA && <SessionLengthTracker />}
       <nav className={`fixed inset-x-0 bottom-0 z-40 grid ${MOBILE_NAV_COLUMNS[visibleNav.length]} border-t border-line bg-surface/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur lg:hidden`} aria-label="Primary navigation">
         {visibleNav.map(({ href, label, shortLabel, icon: Icon }) => {
           const destination = label === "Profile" ? profileHref : href;

@@ -574,6 +574,52 @@ export interface SafetyCounter {
   count: number;
 }
 
+/** Estimated AI spend per UTC day across all users, booked as it is metered (20261031210000). Service role read only. */
+export interface AISpendDaily {
+  date: string;
+  est_cost_usd: number;
+  updated_at: string;
+}
+
+/** Events record_coach_product_event writes; the other Pivot A events come from triggers. */
+export type CoachProductEventName = "split_used" | "paywall_viewed" | "session_length";
+
+/** One row of report_ai_arm(): plan_tier `all` is the arm as a whole. */
+export interface AIArmReportRow {
+  arm: AIArm;
+  plan_tier: "all" | "free" | "trial" | "plus";
+  users: number;
+  tasks_finished: number;
+  tasks_finished_per_user_week: number | null;
+  day14_eligible_users: number;
+  day14_retained_users: number;
+  day14_retention: number | null;
+}
+
+/** The single row of report_ai_cost(). Per-user figures are null when their denominator is 0. */
+export interface AICostReportRow {
+  month: string;
+  as_of: string;
+  days_elapsed: number;
+  days_in_month: number;
+  total_cost_usd: number;
+  active_users: number;
+  paying_users: number;
+  cost_per_active_user_usd: number | null;
+  /** Users with activity in the 30 local days ending as_of. */
+  active_users_30d: number;
+  /** AI cost over those 30 days per user active in them: the free beta's alert basis. */
+  cost_per_active_user_30d_usd: number | null;
+  cost_per_paying_user_usd: number | null;
+  projected_cost_per_paying_user_usd: number | null;
+  users_at_reaction_cap: number;
+  users_at_split_cap: number;
+  share_at_reaction_cap: number | null;
+  share_at_split_cap: number | null;
+  /** The free beta's full access was on: the cap columns judge everyone against the Plus caps. */
+  beta_full_access: boolean;
+}
+
 /** Pivot A age gate: the hash of a single-use sign-up token. No user id and no date of birth. Service role and the auth hook only. */
 export interface AgeVerificationToken {
   token_hash: string;
@@ -630,6 +676,7 @@ export interface Database {
       entitlements: Table<Entitlement, Partial<Entitlement> & Pick<Entitlement, "user_id" | "product" | "status" | "source">>;
       safety_counters: Table<SafetyCounter, Partial<SafetyCounter> & Pick<SafetyCounter, "date" | "kind">>;
       age_verification_tokens: Table<AgeVerificationToken, Partial<AgeVerificationToken> & Pick<AgeVerificationToken, "token_hash" | "method" | "expires_at">>;
+      ai_spend_daily: Table<AISpendDaily>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -803,6 +850,22 @@ export interface Database {
         Returns: boolean;
       };
       release_ai_usage: { Args: { p_user_id: string; p_kind: AIUsageKind; p_date: string }; Returns: undefined };
+      record_coach_product_event: {
+        Args: { p_user_id: string; p_event_name: CoachProductEventName; p_detail?: string | null; p_duration_seconds?: number | null };
+        Returns: undefined;
+      };
+      coach_ai_arm: { Args: { p_user_id: string }; Returns: AIArm };
+      report_ai_arm: { Args: { p_as_of?: string }; Returns: AIArmReportRow[] };
+      report_ai_cost: {
+        Args: {
+          p_month?: string | null;
+          p_as_of?: string | null;
+          p_plus_daily_reactions?: number;
+          p_plus_daily_splits?: number;
+          p_free_weekly_reactions?: number;
+        };
+        Returns: AICostReportRow[];
+      };
     };
     Enums: {
       task_visibility: TaskVisibility;

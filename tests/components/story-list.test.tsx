@@ -2,12 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiRequest } = vi.hoisted(() => ({ apiRequest: vi.fn() }));
+const { apiRequest, recordPaywallView } = vi.hoisted(() => ({ apiRequest: vi.fn(), recordPaywallView: vi.fn() }));
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.ComponentProps<"a">) => <a href={href} {...props}>{children}</a>,
 }));
 vi.mock("@/lib/client/api", () => ({ apiRequest, errorMessage: () => "Request failed.", isPreviewMode: false }));
+vi.mock("@/lib/client/analytics", () => ({ recordPaywallView }));
 
 import { StoryList } from "@/components/coach/story-list";
 
@@ -52,6 +53,7 @@ const chapterItem = (title: string) => screen.getByRole("heading", { level: 2, n
 
 beforeEach(() => {
   apiRequest.mockReset();
+  recordPaywallView.mockReset();
 });
 
 describe("StoryList", () => {
@@ -108,6 +110,16 @@ describe("StoryList", () => {
     const plan = chapterItem("The next notebook");
     expect(within(plan).getByText("This chapter comes with Plus.")).toBeVisible();
     expect(within(plan).queryByRole("button")).not.toBeInTheDocument();
+    // Shown, so recorded once as a story paywall view (no chapter or title sent).
+    expect(recordPaywallView.mock.calls).toEqual([["story"]]);
+  });
+
+  it("records no paywall view when no chapter needs a plan", async () => {
+    serve({ "/api/story": () => Promise.resolve({ ...story, chapters: story.chapters.filter((chapter) => chapter.lock?.reason !== "plan") }) });
+    await renderList();
+
+    expect(screen.queryByText("This chapter comes with Plus.")).not.toBeInTheDocument();
+    expect(recordPaywallView).not.toHaveBeenCalled();
   });
 
   it("never requests the body of a locked chapter", async () => {

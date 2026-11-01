@@ -278,6 +278,44 @@ describe("splitTask", () => {
   });
 });
 
+describe("splitTask: the split_used event", () => {
+  const splitUsed = () => rpcCalls("record_coach_product_event");
+
+  it("records one content-free split_used for each delivered split", async () => {
+    await splitTask(USER_ID, TASK_ID);
+    await splitTask(USER_ID, TASK_ID);
+
+    expect(splitUsed()).toEqual([
+      { p_user_id: USER_ID, p_event_name: "split_used", p_detail: null, p_duration_seconds: null },
+      { p_user_id: USER_ID, p_event_name: "split_used", p_detail: null, p_duration_seconds: null },
+    ]);
+    expect(JSON.stringify(splitUsed())).not.toMatch(/Water|plants|Fill/);
+  });
+
+  it.each([
+    ["invalid model output", () => { splitReply = () => message("Sure! Step one: fill the can."); }],
+    ["a free user (plan_required)", () => useDatabase({ entitlements: [] })],
+    ["the daily split cap", () => useDatabase({ ai_usage_daily: [{ user_id: USER_ID, date: TODAY, reactions: 0, splits: 10 }] })],
+    ["a crisis", () => { distressReply = () => message('{"risk":"high"}'); }],
+  ])("records nothing for %s", async (_name, arrange) => {
+    arrange();
+
+    await splitTask(USER_ID, TASK_ID).catch((error: unknown) => expect(error).toBeInstanceOf(ApiError));
+
+    expect(rpcCalls("record_ai_usage").length).toBeGreaterThan(0);
+    expect(splitUsed()).toEqual([]);
+  });
+
+  it("still returns the split when the event cannot be written", async () => {
+    db = createFakeSupabase(baseTables(), {
+      rpc: (name, args, fake) => (name === "record_coach_product_event" ? { data: null, error: { message: "boom", code: "XX000" } } : pivotRpc(name, args, fake)),
+    });
+    createAdminClient.mockReturnValue(db);
+
+    expect((await splitTask(USER_ID, TASK_ID)).kind).toBe("split");
+  });
+});
+
 describe("parseSplitSteps", () => {
   it("masks the user's own title before checking for banned content", () => {
     const title = "Call lawyer about lease";

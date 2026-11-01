@@ -8,7 +8,7 @@ import {
 } from "../../scripts/lib/pivot-flags.mjs";
 
 // `npm run flags` keeps its own copy of the rules so it runs on plain Node.
-// Every combination of absent/true/false rows (3^5) must agree with the app.
+// Every combination of absent/true/false rows (3^6) must agree with the app.
 function allRowCombinations() {
   const combinations: Array<Partial<Record<PivotFlagKey, boolean>>> = [{}];
   for (const key of PIVOT_FLAG_KEYS) {
@@ -28,7 +28,7 @@ describe("scripts/lib/pivot-flags.mjs", () => {
 
   it("resolves every row combination exactly like resolveFlags", () => {
     const combinations = allRowCombinations();
-    expect(combinations).toHaveLength(243);
+    expect(combinations).toHaveLength(729);
     for (const rows of combinations) {
       const app = resolveFlags(rows);
       expect(resolvePivotFlags(rows), JSON.stringify(rows)).toEqual({
@@ -37,6 +37,7 @@ describe("scripts/lib/pivot-flags.mjs", () => {
         "persona_chat.enabled": app.personaChat,
         "persona_autopost.enabled": app.personaAutopost,
         "share_win.enabled": app.shareWin,
+        "beta_full_access.enabled": app.betaFullAccess,
       });
     }
   });
@@ -48,7 +49,17 @@ describe("scripts/lib/pivot-flags.mjs", () => {
       { key: "persona_chat.enabled", value: false, source: "explicit (true), forced off by pivot_a.enabled" },
       { key: "persona_autopost.enabled", value: false, source: "default" },
       { key: "share_win.enabled", value: false, source: "explicit" },
+      { key: "beta_full_access.enabled", value: false, source: "default" },
     ]);
+  });
+
+  it("notes that beta full access does nothing while Pivot A is off", () => {
+    expect(describePivotFlags({ "beta_full_access.enabled": true }).at(-1)).toEqual({
+      key: "beta_full_access.enabled", value: true, source: "explicit, no effect until pivot_a.enabled is on",
+    });
+    expect(describePivotFlags({ "pivot_a.enabled": true, "beta_full_access.enabled": true }).at(-1)).toEqual({
+      key: "beta_full_access.enabled", value: true, source: "explicit",
+    });
   });
 
   it("parses list, set and unset, and refuses unknown keys and values", () => {
@@ -56,6 +67,7 @@ describe("scripts/lib/pivot-flags.mjs", () => {
     expect(parseFlagCommand(["set", "social_feed.enabled", "true"])).toEqual({ command: "set", key: "social_feed.enabled", value: true });
     expect(parseFlagCommand(["set", "pivot_a.enabled", "false"])).toEqual({ command: "set", key: "pivot_a.enabled", value: false });
     expect(parseFlagCommand(["unset", "share_win.enabled"])).toEqual({ command: "unset", key: "share_win.enabled" });
+    expect(parseFlagCommand(["set", "beta_full_access.enabled", "true"])).toEqual({ command: "set", key: "beta_full_access.enabled", value: true });
 
     expect(() => parseFlagCommand(["set", "AI_PERSONA_LIKES", "true"])).toThrow(/Unknown flag/);
     expect(() => parseFlagCommand(["unset", "pivot_a"])).toThrow(/Unknown flag/);

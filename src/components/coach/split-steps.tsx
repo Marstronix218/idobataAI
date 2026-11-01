@@ -6,6 +6,7 @@ import { TASK_SPLIT_ERROR_CODES, type ReactionCharacter, type TaskSplitResult } 
 import { CharacterAvatar } from "@/components/coach/character-picker";
 import { TypingIndicator } from "@/components/coach/reaction-bubble";
 import { CrisisCard } from "@/components/safety/crisis-card";
+import { recordPaywallView } from "@/lib/client/analytics";
 
 type Outcome =
   | { kind: "split"; result: Extract<TaskSplitResult, { kind: "split" }> }
@@ -48,7 +49,13 @@ export function SplitSteps({ request, character = null, onDismiss, id, className
     let latest = true;
     request.then(
       (result) => { if (latest) setSettled({ request, outcome: resultOutcome(result) }); },
-      (error: unknown) => { if (latest) setSettled({ request, outcome: failureOutcome(error) }); },
+      (error: unknown) => {
+        if (!latest) return;
+        const outcome = failureOutcome(error);
+        setSettled({ request, outcome });
+        // The Plus notice is about to show (SPEC Phase 7 paywall_viewed).
+        if (outcome.kind === "plan_required") recordPaywallView("split");
+      },
     );
     return () => { latest = false; };
   }, [request]);

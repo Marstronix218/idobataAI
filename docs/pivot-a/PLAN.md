@@ -13,7 +13,7 @@
 - [x] Phase 4: story, session nudge, no-guilt streaks
 - [x] Phase 5: age gate, create/edit distress check, `/safety`
 - [~] Phase 6: billing and entitlements — skipped by founder decision (work stashed)
-- [ ] Phase 7: metrics, experiment, cost guardrail
+- [x] Phase 7: metrics, experiment, cost guardrail
 - [ ] Phase 8: retention, deletion, launch check, handoff
 
 Every phase ends with the same steps:
@@ -466,9 +466,12 @@ Naming follows the existing schema:
 
 **Skipped (founder decision, 2026-10-31).** Billing is out of scope for this pass. The unfinished Stripe work (server, paywall UI, migration, tests) is saved, uncommitted, in `git stash` as "pivot-a phase 6 billing (skipped by founder, unfinished)"; restore it with `git stash list` and `git stash apply stash@{N}`.
 
+**The founder will not charge for now; this is a free beta for testers.** A new flag, `beta_full_access.enabled` (default off, added in Phase 7), gives every user Plus-level access when on: up to 30 AI reactions a day, 10 splits a day, and all chapters, still unlocked by consistency days. Packs are not included. Caps and the spend breaker still bound cost, and the `ai_arm` experiment is unchanged. Turn the flag off when charging starts.
+
 What this means:
-- **Nothing writes `entitlements` today,** so every user is on the free tier: 3 AI reactions per 7 days, chapters 1–3, no splits, no packs. The table, `resolvePlan`, the caps and the story rules already handle Plus, trial and packs, so a later billing or App Store integration only needs to write entitlement rows.
-- **The split and story "Plus" notices** remain the Phase 3/4 placeholders, marked TODO(founder).
+- **Nothing writes `entitlements` today.** Without `beta_full_access`, every user is on the free tier: 3 AI reactions per 7 days, chapters 1–3, no splits, no packs. The table, `resolvePlan`, the caps and the story rules already handle Plus, trial and packs, so a later billing or App Store integration only needs to write entitlement rows.
+- **The split and story "Plus" notices** remain the Phase 3/4 placeholders, marked TODO(founder). They never appear while `beta_full_access` is on.
+- **The cost alert uses active users during the free beta.** With zero paying users, the $0.66 threshold applies to measured AI cost per active user over the last 30 days. A projected month-to-date figure would overstate it early in each month, while new users are still arriving. Each cron run logs which basis it used.
 - **Account deletion keeps its existing guard,** which refuses deletion whenever a Stripe or billing env var is set. Leave those unset until a cancellation step exists (§6 conflict 2).
 - **One acceptance criterion is not met by design:** "Stripe trial → paid flow writes entitlements; cancellation works". `HANDOFF.md` will record this.
 - **Phase 7 adjusts:** `trial_started` and `purchase` are recorded by a database trigger on `entitlements` inserts, so any future billing source emits them with no extra code. `paywall_viewed` is recorded when a Plus notice is shown. The cost report handles zero paying users.
@@ -503,6 +506,23 @@ The original Phase 6 plan follows for reference.
 - A test for cancellation during account deletion.
 
 ### Phase 7: metrics, experiment, cost guardrail
+
+**Phase 7 results and caveats carried forward**
+- **Events go to the existing first-party `beta_product_events`** (migration `20261031210000`).
+  - Database triggers record `task_started` and `task_finished` (source = task event id, so every finish counts), `reaction_shown` (detail `prewritten` or `ai`; session nudges are excluded), `chapter_unlocked`, and `trial_started` and `purchase` (from entitlements, source-agnostic).
+  - The server records `split_used` and `paywall_viewed` (allowlisted `POST /api/analytics/event`).
+  - `session_length` uses `fetch` with `keepalive` rather than `sendBeacon`, because a beacon can't send the bearer token. Stretches less than 30 minutes apart are merged into one session.
+  - No content is stored.
+- **Experiment:** `ai_arm` is assigned by a database trigger when a coach profile is created, and existing rows are backfilled. The hash matches between SQL and TypeScript.
+  - `npm run report:experiment` shows tasks finished per user per week and day-14 retention, by arm and tier.
+  - Day 0 is the user's first Pivot A activity. A user counts as retained with any task event or session on local days 14–20.
+  - Tier comes from entitlements, so beta testers show as free, and the report notes when `beta_full_access` was on.
+- **Cost:**
+  - `npm run report:cost` shows AI cost per paying user and per active user (30 days), plus the share of users at their caps.
+  - A daily cron, `/api/cron/pivot-a-daily` at 00:20 UTC, warns above `AI_COST_ALERT_PER_PAYING_USER_USD` (default 0.66), and per active user when nobody pays.
+  - The global breaker `AI_DAILY_SPEND_LIMIT_USD` (unset = off) switches reactions to prewritten and splits off once today's UTC spend reaches the limit. It reads a UTC ledger, `ai_spend_daily`, and safety checks keep running.
+- **`beta_full_access.enabled`:** `resolveEffectivePlan` (`src/lib/coach/plan.ts`) returns tier `plus` for everyone when this flag and Pivot A are both on. Packs are not granted.
+- **For Phase 8:** add the reaction purge and the age-token purge to the daily cron. That route is always on, so the purge keeps running with Pivot A off.
 
 **Migration**
 - New event names, all using the task-event id or a row id as `source_id`: `task_started`, `task_finished`, `reaction_shown` (with source), `split_used`, `chapter_unlocked`, `paywall_viewed`, `trial_started`, `purchase`, `session_length`.

@@ -2,11 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReactionCharacter, StoryChapterContent, StoryOverview } from "@idobata/contracts";
-import { resolvePlan, type EntitlementRow } from "@/lib/domain/plan";
+import type { EntitlementRow } from "@/lib/domain/plan";
 import { chapterLock, highestUnlockedChapter, type StoryAccess } from "@/lib/domain/story-unlock";
 import { assertDatabase } from "@/lib/server/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types";
+import { resolveEffectivePlan } from "./plan";
 
 // The story (SPEC Phase 4): the selected character's chapters, unlocked by
 // consistency days and the plan (src/lib/domain/story-unlock.ts). Everything
@@ -48,7 +49,8 @@ async function loadStoryContext(supabase: Client, userId: string, now: Date): Pr
   const character = assertDatabase(characterResult);
   if (!character) return null;
   const progress = assertDatabase(progressResult);
-  const plan = resolvePlan((assertDatabase(entitlementResult) ?? []) as EntitlementRow[], now);
+  // Entitlements, or Plus for everyone during the free beta: every chapter, still by consistency days.
+  const plan = await resolveEffectivePlan((assertDatabase(entitlementResult) ?? []) as EntitlementRow[], now);
   return {
     characterId: character.id,
     character: { id: character.id, slug: character.slug, name: character.name, artUrl: character.art_url },

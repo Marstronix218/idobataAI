@@ -8,6 +8,7 @@ export const PIVOT_FLAG_KEYS = [
   "persona_chat.enabled",
   "persona_autopost.enabled",
   "share_win.enabled",
+  "beta_full_access.enabled",
 ];
 
 /** Guardrails (D13): Pivot A forces these off whatever their row says. */
@@ -25,6 +26,8 @@ export function resolvePivotFlags(rows) {
     "persona_chat.enabled": pivot ? false : rows["persona_chat.enabled"] ?? true,
     "persona_autopost.enabled": pivot ? false : rows["persona_autopost.enabled"] ?? true,
     "share_win.enabled": rows["share_win.enabled"] ?? true,
+    // Free beta: Plus-level access for everyone while Pivot A is on. Row only, default off.
+    "beta_full_access.enabled": rows["beta_full_access.enabled"] ?? false,
   };
 }
 
@@ -41,7 +44,9 @@ export function describePivotFlags(rows) {
     if (stored !== undefined) {
       source = pivot && FORCED_OFF_UNDER_PIVOT.has(key) && stored !== effective[key]
         ? `explicit (${stored}), forced off by pivot_a.enabled`
-        : "explicit";
+        : !pivot && key === "beta_full_access.enabled" && effective[key]
+          ? "explicit, no effect until pivot_a.enabled is on"
+          : "explicit";
     }
     return { key, value: effective[key], source };
   });

@@ -5,6 +5,7 @@ import { ArrowLeft, BookOpen, LockKeyhole } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { StoryChapterContent, StoryChapterLock, StoryChapterSummary, StoryOverview } from "@idobata/contracts";
 import { CharacterAvatar } from "@/components/coach/character-picker";
+import { recordPaywallView } from "@/lib/client/analytics";
 import { apiRequest } from "@/lib/client/api";
 
 type Reader = { number: number; title: string; chapter: StoryChapterContent | null; failed: boolean };
@@ -45,7 +46,12 @@ export function StoryList() {
   useEffect(() => {
     const controller = new AbortController();
     apiRequest<StoryOverview>("/api/story", { signal: controller.signal }).then(
-      (loaded) => { setOverview(loaded); setFailed(false); },
+      (loaded) => {
+        setOverview(loaded);
+        setFailed(false);
+        // A chapter's Plus notice is about to show (SPEC Phase 7 paywall_viewed).
+        if (loaded.character && loaded.chapters.some((chapter) => !chapter.unlocked && chapter.lock?.reason === "plan")) recordPaywallView("story");
+      },
       () => { if (!controller.signal.aborted) setFailed(true); },
     );
     return () => controller.abort();

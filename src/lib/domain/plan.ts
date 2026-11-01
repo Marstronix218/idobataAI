@@ -16,6 +16,8 @@ export interface ResolvedPlan {
   tier: PlanTier;
   /** Character slugs whose pack the user owns (`pack:<slug>`, active), sorted. */
   packs: string[];
+  /** Plus only because of the free beta's full access, not an entitlement. */
+  beta?: true;
 }
 
 const PACK_PREFIX = "pack:";
@@ -46,6 +48,18 @@ export function resolvePlan(rows: readonly EntitlementRow[], now: Date): Resolve
     }
   }
   return { tier, packs: [...packs].sort() };
+}
+
+/**
+ * The free beta (founder decision 2026-10-31): while Pivot A and
+ * `beta_full_access.enabled` are both on, every user is on Plus (its daily AI
+ * caps, the splitter, every chapter by consistency days), marked `beta`.
+ * Owned packs stay as they are; Plus does not include packs, so none are
+ * granted. src/lib/coach/plan.ts applies it with the live flags.
+ */
+export function withBetaFullAccess(plan: ResolvedPlan, flags: { pivotA: boolean; betaFullAccess: boolean }): ResolvedPlan {
+  if (!flags.pivotA || !flags.betaFullAccess || (plan.tier === "plus" && !plan.beta)) return plan;
+  return { tier: "plus", packs: plan.packs, beta: true };
 }
 
 /** Plus and trial users are treated alike for AI caps and the splitter. */

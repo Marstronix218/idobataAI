@@ -11,6 +11,7 @@ import {
   type AiMessageResult,
 } from "@/lib/ai/anthropic";
 import { CHARACTER_EVENTS } from "@/lib/characters/content-schema";
+import { resolveEffectivePlan } from "@/lib/coach/plan";
 import { recordUnlockedThrough } from "@/lib/coach/story";
 import { assignAiArm, type AiArm } from "@/lib/domain/ai-arm";
 import { AI_DISCLOSURE } from "@/lib/domain/ai-disclosure";
@@ -18,7 +19,7 @@ import { readDisclosureMaxGapHours, shouldShowDisclosure } from "@/lib/domain/di
 import { chooseLineEvent, consecutiveDayStreak, daysSinceLatest, lineEventFallbacks, type LineEventInput } from "@/lib/domain/line-event";
 import { fillTaskToken, selectLineWithFallback, taskAgeBucket, taskAgeDays, RECENT_LINE_WINDOW, type SelectableLine } from "@/lib/domain/line-selection";
 import { localDate, resolveTimeZone, timeOfDay } from "@/lib/domain/local-day";
-import { resolvePlan, type EntitlementRow, type ResolvedPlan } from "@/lib/domain/plan";
+import type { EntitlementRow, ResolvedPlan } from "@/lib/domain/plan";
 import { reactionReservation, readAiCaps } from "@/lib/domain/reaction-caps";
 import { validateAiReaction } from "@/lib/domain/reaction-validator";
 import { chapterUnlockedByLatestDay, highestUnlockedChapter, type ChapterRule } from "@/lib/domain/story-unlock";
@@ -34,6 +35,7 @@ import { hasDistressKeyword } from "@/lib/safety/keywords";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordAiUsage, releaseAiUsage, reserveAiUsage } from "./metering";
 import { PROMPT_RECENT_TEXTS, buildReactionRequest, buildReactionSystemPrompt, parsePromptSheet, promptTaskTitle } from "./prompt";
+import { isAiSpendLimitReached } from "./spend-breaker";
 
 // getReaction (SPEC Phase 3): the character's line when a task is started or
 // finished. It never blocks the UI and never throws.
@@ -44,9 +46,11 @@ import { PROMPT_RECENT_TEXTS, buildReactionRequest, buildReactionSystemPrompt, p
 //    hit in the title or note returns the crisis card at once; otherwise the
 //    model distress check starts (D3: every reaction, nothing stored).
 // 3. Pick the prewritten line, so falling back is instant.
-// 4. If the arm, plan and config allow AI, reserve a slot atomically
+// 4. If the arm, plan and config allow AI and the global daily spend limit
+//    (AI_DAILY_SPEND_LIMIT_USD) is not reached, reserve a slot atomically
 //    (reserve_ai_usage) and make the AI call, in parallel with the distress
-//    check, inside AI_REACTION_TIMEOUT_MS from the start of the request.
+//    check, inside AI_REACTION_TIMEOUT_MS from the start of the request. The
+//    spend limit never stops the distress check.
 // 5. Crisis (distress possible/high, or the model answering SAFETY_ESCALATE):
 //    count it once, store nothing, return { kind: "crisis" }.
 // 6. Otherwise a valid AI line, else the prewritten one. The first reaction of
@@ -185,6 +189,8 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
   const today = localDate(now, timeZone);
   const characterId = profile?.selected_character_id ?? null;
   const arm: AiArm = profile?.ai_arm ?? assignAiArm(userId);
+  // Read alongside round 2 so it adds no latency; cached for a minute, never throws.
+  const spendLimitReached = isAiSpendLimitReached(admin, now);
 
   // Round 2: what depends on the event or the profile.
   const storyCharacterId = event.type === "finished" ? characterId : null;
@@ -262,7 +268,8 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
     const lastReactionDate = recent[0] ? localDate(new Date(recent[0].created_at), timeZone) : null;
     const ageDays = taskAgeDays(task.created_at, now);
     const ageBucket = taskAgeBucket(ageDays);
-    const plan = resolvePlan(entitlements, now);
+    // Entitlements, or Plus for everyone during the free beta (src/lib/coach/plan.ts).
+    const plan = await resolveEffectivePlan(entitlements, now);
     const story = isFinish && character ? storyAfterFinish(progress, chapters, plan, character.slug, event.local_date) : null;
     const lineInput: LineEventInput = {
       eventType: event.type,
@@ -290,7 +297,7 @@ async function react(userId: string, taskEventId: string, startedAt: number, saf
       : null;
     // Reserve only when the call will be made, so every reservation (and the
     // attempt it counts) corresponds to a real model call.
-    if (reservation && promptCharacter && remaining() >= MIN_AI_WINDOW_MS) {
+    if (reservation && promptCharacter && remaining() >= MIN_AI_WINDOW_MS && !(await spendLimitReached)) {
       reserved = (await reserveAiUsage(admin, userId, today, reservation)) === true;
       if (reserved) {
         aiPromise = createMessageWithin(

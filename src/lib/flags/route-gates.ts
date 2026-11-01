@@ -23,6 +23,9 @@ export const ROUTE_GATES = {
   // Muting keeps a persona out of the feed and notifications, so it stays
   // reachable as a safety control whatever else is switched off.
   "api/companion-mutes": "always",
+  // The daily Pivot A job: the cost report and alerts today, and in Phase 8
+  // the 30-day reaction purge, which must also run with Pivot A switched off.
+  "api/cron/pivot-a-daily": "always",
   "api/cron/rollover": "always",
   "api/feedback": "always",
   "api/health": "always",
@@ -39,6 +42,9 @@ export const ROUTE_GATES = {
   "api/auth/age-check": "always",
 
   // Character Coach: only exist while Pivot A is on.
+  // Pivot A's client events (a Plus notice shown, a session's length).
+  "api/analytics/event": "pivot_a",
+  "api/analytics/session": "pivot_a",
   "api/characters": "pivot_a",
   "api/coach": "pivot_a",
   "api/story": "pivot_a",

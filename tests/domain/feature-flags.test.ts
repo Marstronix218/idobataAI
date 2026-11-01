@@ -11,6 +11,8 @@ const EXPECTED: Record<Exclude<PivotFlagKey, "pivot_a.enabled">, { field: keyof 
   "persona_chat.enabled": { field: "personaChat", off: { absent: true, true: true, false: false }, on: { absent: false, true: false, false: false } },
   "persona_autopost.enabled": { field: "personaAutopost", off: { absent: true, true: true, false: false }, on: { absent: false, true: false, false: false } },
   "share_win.enabled": { field: "shareWin", off: { absent: true, true: true, false: false }, on: { absent: true, true: true, false: false } },
+  // The free beta's full access: its row alone, off when absent, whatever Pivot A says.
+  "beta_full_access.enabled": { field: "betaFullAccess", off: { absent: false, true: true, false: false }, on: { absent: false, true: true, false: false } },
 };
 
 function rowsFor(pivot: Stored, key?: PivotFlagKey, stored?: Stored) {
@@ -29,6 +31,7 @@ describe("resolveFlags", () => {
       personaAutopost: true,
       shareWin: true,
       sharePeopleOnly: false,
+      betaFullAccess: false,
     });
     expect(LEGACY_FLAGS).toEqual(resolveFlags({}));
     expect(Object.isFrozen(LEGACY_FLAGS)).toBe(true);
@@ -82,12 +85,24 @@ describe("resolveFlags", () => {
       personaAutopost: false,
       shareWin: true,
       sharePeopleOnly: false,
+      betaFullAccess: false,
     });
     expect(Object.isFrozen(FAILSAFE_FLAGS)).toBe(true);
   });
 
-  it("lists exactly the five Pivot A keys", () => {
+  it("is never switched on by Pivot A or any other row", () => {
+    expect(resolveFlags({
+      "pivot_a.enabled": true,
+      "social_feed.enabled": true,
+      "persona_chat.enabled": true,
+      "persona_autopost.enabled": true,
+      "share_win.enabled": true,
+    }).betaFullAccess).toBe(false);
+  });
+
+  it("lists exactly the six Pivot A keys", () => {
     expect([...PIVOT_FLAG_KEYS].sort()).toEqual([
+      "beta_full_access.enabled",
       "persona_autopost.enabled",
       "persona_chat.enabled",
       "pivot_a.enabled",
