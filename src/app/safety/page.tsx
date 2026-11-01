@@ -48,7 +48,8 @@ export default async function SafetyPage() {
         <section aria-labelledby="safety-kept" className="space-y-2">
           <h2 id="safety-kept" className="display text-lg font-bold text-ink">What is kept</h2>
           <p>Only an aggregate daily count of crisis cards shown is kept, with no task text and no user id. Nothing about the check’s result is stored with your tasks.</p>
-          {/* The 30-day limit on stored reaction text is stated here again once Phase 8's purge job exists. */}
+          {/* The daily retention purge (purge_pivot_a_expired, run by /api/cron/pivot-a-daily) deletes reactions older than 30 days. */}
+          <p>Character reactions, including their text, are deleted once they are 30 days old. A job removes them once a day.</p>
         </section>
         <section aria-labelledby="safety-help" className="space-y-2">
           <h2 id="safety-help" className="display text-lg font-bold text-ink">Getting help</h2>

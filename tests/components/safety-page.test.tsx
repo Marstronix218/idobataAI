@@ -84,8 +84,10 @@ describe("/safety under Pivot A", () => {
     const kept = screen.getByRole("region", { name: "What is kept" });
     expect(kept).toHaveTextContent("aggregate daily count of crisis cards shown");
     expect(kept).toHaveTextContent("no task text and no user id");
-    // The 30-day reaction retention line waits for Phase 8's purge job.
-    expect(container).not.toHaveTextContent(/30 days/);
+    // The daily purge (supabase/migrations/20261031220000_pivot_a_retention.sql)
+    // deletes reactions older than 30 days, so the page may say exactly that.
+    expect(kept).toHaveTextContent("Character reactions, including their text, are deleted once they are 30 days old. A job removes them once a day.");
+    expect(container.textContent?.match(/30 days/g)).toHaveLength(1);
   });
 
   it("has no automated accessibility violations", async () => {

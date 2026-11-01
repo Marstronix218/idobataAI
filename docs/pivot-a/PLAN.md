@@ -1,6 +1,6 @@
 # Pivot A, "Character Coach": implementation plan
 
-**Status:** draft for founder review. No application code has changed yet.
+**Status:** implemented on `pivot-a/character-coach` (Phases 0–5, 7, 8; Phase 6 billing skipped by founder decision). See [HANDOFF.md](HANDOFF.md).
 **Spec:** [SPEC.md](SPEC.md), a verbatim copy of the brief.
 **Branch:** `pivot-a/character-coach`, cut from `main` in Phase 0. Nothing is pushed (see Q1).
 
@@ -14,7 +14,7 @@
 - [x] Phase 5: age gate, create/edit distress check, `/safety`
 - [~] Phase 6: billing and entitlements — skipped by founder decision (work stashed)
 - [x] Phase 7: metrics, experiment, cost guardrail
-- [ ] Phase 8: retention, deletion, launch check, handoff
+- [x] Phase 8: retention, deletion, launch check, handoff
 
 Every phase ends with the same steps:
 1. Run `npm run typecheck`, `npm run lint` and `npm test`, and get them green.
@@ -546,6 +546,15 @@ The original Phase 6 plan follows for reference.
 - Recurring tasks are counted every time they are finished.
 
 ### Phase 8: retention, deletion, launch check, handoff
+
+**Phase 8 results**
+- **Purge:** `purge_pivot_a_expired()` (migration `20261031220000`) runs as the first step of `/api/cron/pivot-a-daily`, in batches and bounded by count and time. It reads no flags and is independent of the analytics steps. It deletes reactions older than 30 days and age tokens that expired more than a day ago. `/safety` now states the 30-day deletion again.
+- **Grants for fresh projects:** a fresh Supabase project no longer grants `service_role` access to legacy tables by default. The same migration grants the minimum Pivot A and account deletion need: SELECT on `tasks`, and SELECT, INSERT and UPDATE on `account_deletion_requests`. Other legacy tables are listed in `HANDOFF.md` §9.
+- **Account deletion:** pgTAP covers every Pivot A user table, leaves aggregates untouched, and requires every foreign key to a user to cascade or set null.
+- **`npm run launch-check`:** a plain-Node script with fixture tests and no network or database access. It fails today, listing what to fix; see `HANDOFF.md` §7.
+- **End-to-end test:** `npm run test:e2e` runs the onboarding flow against the real local stack: age gate, real sign-up, character pick, first task, start, finish, a reaction naming the task, and the Plus notice with its `paywall_viewed` event. It also covers the under-18 path and beta full access.
+- **CI:** a new `database-contract` job runs on every PR and push, with no secrets: `supabase start`, pgTAP, then the end-to-end test. The migration deploy job now waits for it.
+- **Handoff:** [HANDOFF.md](HANDOFF.md).
 
 **Purge**
 - A migration adds `purge_expired_character_reactions()`.

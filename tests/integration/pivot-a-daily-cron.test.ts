@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LEGACY_FLAGS } from "@/lib/domain/feature-flags";
 import { createFakeSupabase, type DbError, type FakeSupabase, type Row } from "../helpers/fake-supabase";
 
-const { createAdminClient } = vi.hoisted(() => ({ createAdminClient: vi.fn() }));
+const { createAdminClient, getFlags } = vi.hoisted(() => ({ createAdminClient: vi.fn(), getFlags: vi.fn() }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
+// The job is always on: nothing in it may depend on a flag.
+vi.mock("@/lib/flags", () => ({ getFlags }));
 
 import { GET, POST, maxDuration } from "@/app/api/cron/pivot-a-daily/route";
 
@@ -34,13 +37,43 @@ const reportRow = (overrides: Row = {}): Row => ({
   ...overrides,
 });
 
-function useDatabase(row: Row, spend: Row[] = [], failures: { report?: DbError; spend?: DbError } = {}) {
+/** One purge_pivot_a_expired() answer. */
+const purged = (overrides: Row = {}): Row => ({ character_reactions: 0, age_verification_tokens: 0, more: false, ...overrides });
+
+type PurgeAnswer = Row | null | { error: DbError };
+
+/**
+ * `purges` answers the purge calls in order; the last one repeats. A null
+ * answer is a function that returned nothing; `{ error }` is a failed call.
+ * Each purge call takes `purgeMs` of (fake) wall-clock time.
+ */
+function useDatabase(
+  row: Row,
+  spend: Row[] = [],
+  failures: { report?: DbError; spend?: DbError; purge?: DbError } = {},
+  purges: PurgeAnswer[] = [purged()],
+  purgeMs = 0,
+) {
+  let purgeCalls = 0;
   db = createFakeSupabase({ ai_spend_daily: spend }, {
     errors: failures.spend ? { ai_spend_daily: failures.spend } : undefined,
-    rpc: (name) => (name === "report_ai_cost" ? (failures.report ? { data: null, error: failures.report } : { data: [row], error: null }) : undefined),
+    rpc: (name) => {
+      if (name === "purge_pivot_a_expired") {
+        if (failures.purge) return { data: null, error: failures.purge };
+        const answer = purges[Math.min(purgeCalls, purges.length - 1)];
+        purgeCalls += 1;
+        if (purgeMs) vi.setSystemTime(Date.now() + purgeMs);
+        if (answer && "error" in answer) return { data: null, error: answer.error as DbError };
+        return { data: answer, error: null };
+      }
+      if (name === "report_ai_cost") return failures.report ? { data: null, error: failures.report } : { data: [row], error: null };
+      return undefined;
+    },
   });
   createAdminClient.mockReturnValue(db);
 }
+
+const purgeCalls = () => db.rpc.mock.calls.filter(([name]) => name === "purge_pivot_a_expired");
 
 const request = (method = "GET", authorization: string | null = `Bearer ${CRON_SECRET}`) =>
   new Request("http://localhost/api/cron/pivot-a-daily", { method, headers: authorization ? { authorization } : {} });
@@ -87,7 +120,7 @@ describe("/api/cron/pivot-a-daily", () => {
     expect(createAdminClient).not.toHaveBeenCalled();
   });
 
-  it("allows two minutes, for every step including Phase 8's purge", () => {
+  it("allows two minutes, for every step including the retention purge", () => {
     expect(maxDuration).toBe(120);
   });
 
@@ -109,6 +142,7 @@ describe("/api/cron/pivot-a-daily", () => {
     expect(db.from.mock.results[0].value.eq).toHaveBeenCalledWith("date", "2026-10-31");
     expect(body.data).toEqual({
       steps: {
+        retention_purge: { characterReactions: 0, ageVerificationTokens: 0, calls: 1, complete: true },
         ai_cost_report: {
           asOf: "2026-10-30",
           month: "2026-10-01",
@@ -243,7 +277,140 @@ describe("/api/cron/pivot-a-daily", () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
+  describe("retention purge", () => {
+    it("runs first, before any analytics read, with batches of 5,000", async () => {
+      await run();
+
+      expect(db.rpc.mock.calls[0]).toEqual(["purge_pivot_a_expired", { p_batch_size: 5000 }]);
+      const purgeOrder = db.rpc.mock.invocationCallOrder[0];
+      const reportOrder = db.rpc.mock.invocationCallOrder[db.rpc.mock.calls.findIndex(([name]) => name === "report_ai_cost")];
+      expect(purgeOrder).toBeLessThan(reportOrder);
+      expect(purgeOrder).toBeLessThan(db.from.mock.invocationCallOrder[0]);
+    });
+
+    it("calls again while a batch comes back full, and adds up the counts", async () => {
+      useDatabase(reportRow(), [], {}, [
+        purged({ character_reactions: 5000, age_verification_tokens: 12, more: true }),
+        purged({ character_reactions: 5000, age_verification_tokens: 0, more: true }),
+        purged({ character_reactions: 321, age_verification_tokens: 0, more: false }),
+      ]);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(200);
+      expect(purgeCalls()).toHaveLength(3);
+      expect(body.data.steps.retention_purge).toEqual({ characterReactions: 10_321, ageVerificationTokens: 12, calls: 3, complete: true });
+      expect(body.data.warnings).toEqual([]);
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("stops after 40 calls, leaves the rest for the next run, and says so with counts only", async () => {
+      useDatabase(reportRow(), [], {}, [purged({ character_reactions: 5000, more: true })]);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(200);
+      expect(purgeCalls()).toHaveLength(40);
+      expect(body.data.steps.retention_purge).toEqual({ characterReactions: 200_000, ageVerificationTokens: 0, calls: 40, complete: false });
+      expect(body.data.warnings).toEqual(["retention_purge_incomplete"]);
+      expect(warnings()).toEqual([expect.objectContaining({ level: "warn", scope: "retention", alert: "retention_purge_incomplete", characterReactions: 200_000, calls: 40 })]);
+      // The other steps still ran.
+      expect(body.data.steps.ai_cost_report).not.toBeNull();
+      expect(body.data.steps.daily_spend).not.toBeNull();
+    });
+
+    it("starts no new call after 60 seconds, and leaves the rest for the next run", async () => {
+      // Each call takes 25 s: calls start at 0, 25 and 50 s; at 75 s the budget is spent.
+      useDatabase(reportRow(), [], {}, [purged({ character_reactions: 5000, more: true })], 25_000);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(200);
+      expect(purgeCalls()).toHaveLength(3);
+      expect(body.data.steps.retention_purge).toEqual({ characterReactions: 15_000, ageVerificationTokens: 0, calls: 3, complete: false });
+      expect(body.data.warnings).toEqual(["retention_purge_incomplete"]);
+      expect(warnings()).toEqual([expect.objectContaining({ scope: "retention", alert: "retention_purge_incomplete", calls: 3, elapsedMs: 75_000 })]);
+      // The analytics steps still ran afterwards.
+      expect(body.data.steps.ai_cost_report).not.toBeNull();
+      expect(body.data.steps.daily_spend).not.toBeNull();
+    });
+
+    it("reports what earlier calls deleted when a later call fails", async () => {
+      useDatabase(reportRow(), [], {}, [
+        purged({ character_reactions: 5000, age_verification_tokens: 3, more: true }),
+        purged({ character_reactions: 5000, more: true }),
+        { error: { message: "canceling statement due to statement timeout", code: "57014" } },
+      ]);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(500);
+      expect(purgeCalls()).toHaveLength(3);
+      expect(body.data.failedSteps).toEqual(["retention_purge"]);
+      const partial = { characterReactions: 10_000, ageVerificationTokens: 3, calls: 2, complete: false };
+      expect(body.data.steps.retention_purge).toEqual(partial);
+      const errors = vi.mocked(console.error).mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(errors.filter((line) => line.scope === "cron")).toEqual([expect.objectContaining({ job: "pivot-a-daily", step: "retention_purge", partial })]);
+      // The other steps still ran.
+      expect(body.data.steps.ai_cost_report).not.toBeNull();
+      expect(body.data.steps.daily_spend).not.toBeNull();
+    });
+
+    it("runs whatever the flags say: the job never reads them", async () => {
+      getFlags.mockResolvedValue(LEGACY_FLAGS);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(200);
+      expect(purgeCalls()).toHaveLength(1);
+      expect(body.data.steps.retention_purge).toMatchObject({ complete: true });
+      expect(getFlags).not.toHaveBeenCalled();
+    });
+
+    it("counts a missing answer as a failed step, with nothing partial to report on the first call", async () => {
+      useDatabase(reportRow(), [], {}, [null]);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(500);
+      expect(body.data.failedSteps).toEqual(["retention_purge"]);
+      expect(body.data.steps.retention_purge).toBeNull();
+      const errors = vi.mocked(console.error).mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(errors).toEqual([expect.objectContaining({ step: "retention_purge", message: "purge_pivot_a_expired returned no counts" })]);
+      expect(errors[0]).not.toHaveProperty("partial");
+    });
+  });
+
   describe("independent steps", () => {
+    it("still runs the cost report and the spend check when the purge fails, then answers 500", async () => {
+      vi.stubEnv("AI_DAILY_SPEND_LIMIT_USD", "10");
+      useDatabase(reportRow({ projected_cost_per_paying_user_usd: 0.9 }), [{ date: "2026-10-31", est_cost_usd: 9 }], { purge: { message: "canceling statement due to lock timeout", code: "55P03" } });
+
+      const { status, body } = await run();
+
+      expect(status).toBe(500);
+      expect(body.data.failedSteps).toEqual(["retention_purge"]);
+      expect(body.data.steps.retention_purge).toBeNull();
+      expect(body.data.steps.ai_cost_report).toMatchObject({ alertValueUsd: 0.9 });
+      expect(body.data.steps.daily_spend).toEqual({ date: "2026-10-31", spendUsd: 9, limitUsd: 10 });
+      expect(body.data.warnings).toEqual(["cost_per_user", "daily_spend_near_limit"]);
+      const errors = vi.mocked(console.error).mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(errors.filter((line) => line.scope === "cron")).toEqual([expect.objectContaining({ level: "error", job: "pivot-a-daily", step: "retention_purge" })]);
+    });
+
+    it("purges even when both analytics steps fail", async () => {
+      useDatabase(reportRow(), [], {
+        report: { message: "boom", code: "XX000" },
+        spend: { message: "boom", code: "XX000" },
+      }, [purged({ character_reactions: 7, age_verification_tokens: 2 })]);
+
+      const { status, body } = await run();
+
+      expect(status).toBe(500);
+      expect(body.data.failedSteps).toEqual(["ai_cost_report", "daily_spend"]);
+      expect(body.data.steps.retention_purge).toEqual({ characterReactions: 7, ageVerificationTokens: 2, calls: 1, complete: true });
+    });
+
     it("still checks the spend when the cost report fails, then answers 500", async () => {
       vi.stubEnv("AI_DAILY_SPEND_LIMIT_USD", "10");
       useDatabase(reportRow(), [{ date: "2026-10-31", est_cost_usd: 9 }], { report: { message: "statement timeout", code: "57014" } });

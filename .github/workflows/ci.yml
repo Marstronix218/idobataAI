@@ -30,9 +30,35 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
 
+  # The schema on a fresh local stack (PLAN §2, D8): every migration from
+  # scratch (a fresh `supabase start` applies them all, then supabase/seed.sql),
+  # the pgTAP files, and the end-to-end onboarding flow. No secrets.
+  database-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+      # -x (--exclude) takes a comma-separated list of containers not to start.
+      # Only Postgres, auth (gotrue), rest (postgrest) and the API gateway
+      # (kong) are needed.
+      - run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - run: supabase test db
+      - run: npm run test:e2e
+      - if: always()
+        run: supabase stop
+
   database:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: application
+    # Never deploy a migration that fails pgTAP or the flow test on a fresh stack.
+    needs: [application, database-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -53,10 +79,10 @@ jobs:
 
   release-ready:
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    needs: [application, database]
+    needs: [application, database-contract, database]
     runs-on: ubuntu-latest
     steps:
-      - name: Require successful application and database jobs
-        if: needs.application.result != 'success' || needs.database.result != 'success'
+      - name: Require successful application, database contract and database jobs
+        if: needs.application.result != 'success' || needs.database-contract.result != 'success' || needs.database.result != 'success'
         run: exit 1
-      - run: echo "Application checks passed and the remote schema is deployed."
+      - run: echo "Application and database contract checks passed and the remote schema is deployed."

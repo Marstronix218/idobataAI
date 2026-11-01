@@ -23,8 +23,8 @@ export const ROUTE_GATES = {
   // Muting keeps a persona out of the feed and notifications, so it stays
   // reachable as a safety control whatever else is switched off.
   "api/companion-mutes": "always",
-  // The daily Pivot A job: the cost report and alerts today, and in Phase 8
-  // the 30-day reaction purge, which must also run with Pivot A switched off.
+  // The daily Pivot A job: the 30-day reaction purge, which must also run
+  // with Pivot A switched off, then the cost report and alerts.
   "api/cron/pivot-a-daily": "always",
   "api/cron/rollover": "always",
   "api/feedback": "always",

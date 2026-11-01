@@ -1,5 +1,7 @@
 // Which deployment this is, for rules that differ in production. Kept free of
-// "server-only" so the Phase 8 launch check (a Node script) can share the rule.
+// "server-only". `npm run launch-check` runs on plain Node with a copy of this
+// rule, scripts/lib/age-environment.mjs; tests/domain/age-environment-script.test.ts
+// keeps the two identical.
 
 type Environment = Record<string, string | undefined>;
 

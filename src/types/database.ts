@@ -620,6 +620,13 @@ export interface AICostReportRow {
   beta_full_access: boolean;
 }
 
+/** One call of purge_pivot_a_expired(): rows deleted per table; `more` when a batch came back full. */
+export interface PivotARetentionPurge {
+  character_reactions: number;
+  age_verification_tokens: number;
+  more: boolean;
+}
+
 /** Pivot A age gate: the hash of a single-use sign-up token. No user id and no date of birth. Service role and the auth hook only. */
 export interface AgeVerificationToken {
   token_hash: string;
@@ -866,6 +873,7 @@ export interface Database {
         };
         Returns: AICostReportRow[];
       };
+      purge_pivot_a_expired: { Args: { p_batch_size?: number }; Returns: PivotARetentionPurge };
     };
     Enums: {
       task_visibility: TaskVisibility;

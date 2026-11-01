@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { authed, createAdminClient, deleteUser } = vi.hoisted(() => ({
   authed: vi.fn(),
@@ -29,15 +29,18 @@ function adminFixture(options: { anonymizationError?: Error; authError?: Error; 
   const events: string[] = [];
   const removed: string[] = [];
   let updateCall = 0;
-  const from = vi.fn(() => ({
-    insert: () => ({ select: () => ({ single: async () => { events.push("request-recorded"); return { data: { id: "deletion-id" }, error: null }; } }) }),
-    update: (value: { status: string }) => ({ eq: async () => {
-      updateCall += 1;
-      events.push(value.status);
-      const error = updateCall === 1 ? options.anonymizationError : value.status === "completed" ? options.finalizationError : null;
-      return { data: null, error: error ?? null };
-    } }),
-  }));
+  const from = vi.fn((table: string) => {
+    void table;
+    return {
+      insert: () => ({ select: () => ({ single: async () => { events.push("request-recorded"); return { data: { id: "deletion-id" }, error: null }; } }) }),
+      update: (value: { status: string }) => ({ eq: async () => {
+        updateCall += 1;
+        events.push(value.status);
+        const error = updateCall === 1 ? options.anonymizationError : value.status === "completed" ? options.finalizationError : null;
+        return { data: null, error: error ?? null };
+      } }),
+    };
+  });
   // Erasure has to reach storage too: deleting the auth user cascades away
   // social_posts, and image_paths is the only record of which objects exist.
   const storage = {
@@ -64,6 +67,10 @@ describe("account deletion route", () => {
     authed.mockResolvedValue({ user: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } });
     process.env.BILLING_PROVIDER = "none";
     process.env.ACCOUNT_DELETION_AUDIT_SALT = "test-audit-salt";
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("pseudonymizes the audit before deleting Auth and marks completion", async () => {
@@ -127,5 +134,40 @@ describe("account deletion route", () => {
 
     expect((await DELETE(new Request("http://localhost/api/account", { method: "DELETE" }))).status).toBe(409);
     expect(fixture.events).toEqual([]);
+  });
+
+  // Billing is skipped for the free beta, so the guard stays: either Stripe key
+  // alone also refuses (npm run launch-check reports these variables).
+  it.each(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"])("refuses deletion before any write while %s is set", async (name) => {
+    vi.stubEnv(name, "set-in-this-test");
+    const fixture = adminFixture();
+    createAdminClient.mockReturnValue(fixture.client);
+
+    const response = await DELETE(new Request("http://localhost/api/account", { method: "DELETE" }));
+
+    expect(response.status).toBe(409);
+    expect(fixture.events).toEqual([]);
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  // Pivot A rows (coach profile, task events, reactions, AI usage, story
+  // progress, entitlements, consistency dates, product events) are removed by
+  // the foreign-key cascade from auth.users, which
+  // supabase/tests/pivot_a_account_deletion.sql checks on a real database. The
+  // route's part is to hard-delete the auth user: a soft delete keeps the
+  // auth.users row, and then nothing cascades.
+  it("leaves Pivot A data to the cascade: it touches only the audit table, then hard-deletes the auth user", async () => {
+    const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const fixture = adminFixture();
+    const rpc = vi.fn();
+    createAdminClient.mockReturnValue({ ...fixture.client, rpc });
+
+    const response = await DELETE(new Request("http://localhost/api/account", { method: "DELETE", headers: { authorization: "Bearer token" } }));
+
+    expect(response.status).toBe(204);
+    expect(deleteUser).toHaveBeenCalledExactlyOnceWith(userId, false);
+    expect(new Set(fixture.client.from.mock.calls.map(([table]) => table))).toEqual(new Set(["account_deletion_requests"]));
+    expect(rpc).not.toHaveBeenCalled();
+    expect(fixture.events).toEqual(["request-recorded", "auth_delete_pending", "auth-deleted", "completed"]);
   });
 });
