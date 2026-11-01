@@ -12,7 +12,7 @@
 - [x] Phase 3: reaction engine, splitter, plan resolution, crisis routing
 - [x] Phase 4: story, session nudge, no-guilt streaks
 - [x] Phase 5: age gate, create/edit distress check, `/safety`
-- [ ] Phase 6: billing and entitlements
+- [~] Phase 6: billing and entitlements — skipped by founder decision (work stashed)
 - [ ] Phase 7: metrics, experiment, cost guardrail
 - [ ] Phase 8: retention, deletion, launch check, handoff
 
@@ -463,6 +463,17 @@ Naming follows the existing schema:
 - The task routes show the crisis card and increment the counter with no text stored.
 
 ### Phase 6: billing and entitlements
+
+**Skipped (founder decision, 2026-10-31).** Billing is out of scope for this pass. The unfinished Stripe work (server, paywall UI, migration, tests) is saved, uncommitted, in `git stash` as "pivot-a phase 6 billing (skipped by founder, unfinished)"; restore it with `git stash list` and `git stash apply stash@{N}`.
+
+What this means:
+- **Nothing writes `entitlements` today,** so every user is on the free tier: 3 AI reactions per 7 days, chapters 1–3, no splits, no packs. The table, `resolvePlan`, the caps and the story rules already handle Plus, trial and packs, so a later billing or App Store integration only needs to write entitlement rows.
+- **The split and story "Plus" notices** remain the Phase 3/4 placeholders, marked TODO(founder).
+- **Account deletion keeps its existing guard,** which refuses deletion whenever a Stripe or billing env var is set. Leave those unset until a cancellation step exists (§6 conflict 2).
+- **One acceptance criterion is not met by design:** "Stripe trial → paid flow writes entitlements; cancellation works". `HANDOFF.md` will record this.
+- **Phase 7 adjusts:** `trial_started` and `purchase` are recorded by a database trigger on `entitlements` inserts, so any future billing source emits them with no extra code. `paywall_viewed` is recorded when a Plus notice is shown. The cost report handles zero paying users.
+
+The original Phase 6 plan follows for reference.
 
 **New dependency:** `stripe`. I'll check the current Stripe guidance first.
 
