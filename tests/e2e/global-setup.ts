@@ -3,16 +3,17 @@
 // 1. finds the LOCAL Supabase stack (env vars, else `supabase status`) and
 //    refuses anything that is not localhost or 127.0.0.1;
 // 2. checks that the API gateway, auth and rest answer;
-// 3. seeds the sample character with the real content seeder;
+// 3. seeds the sample character with the real content seeder, then makes it
+//    active and a launch character (its sheet retires it from the picker);
 // 4. turns pivot_a.enabled on and beta_full_access.enabled off.
 // Any failure throws, so the suite fails (never skips) without a local stack.
-// The teardown puts the two flags back as they were.
+// The teardown puts the two flags and the sample character back as they were.
 
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TestProject } from "vitest/node";
-import { E2E_FLAG_KEYS, assertLocalSupabaseUrl, createServiceClient, setFlags, type E2eFlagKey, type LocalSupabase } from "./local-stack";
+import { E2E_FLAG_KEYS, assertLocalSupabaseUrl, createServiceClient, setFlags, type E2eFlagKey, type LocalSupabase, type ServiceClient } from "./local-stack";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // The CLI version CI installs (.github/workflows/ci.yml).
@@ -94,6 +95,21 @@ function seedSampleCharacter(stack: LocalSupabase) {
   }
 }
 
+type CharacterState = { active: boolean; is_launch: boolean };
+
+/**
+ * The sample's sheet says `"active": false`, so the seed leaves it out of the
+ * picker. The flow picks it, so turn it on for the run. Returns the state the
+ * seed left, for the teardown.
+ */
+async function activateSampleCharacter(admin: ServiceClient): Promise<CharacterState> {
+  const { data, error } = await admin.from("characters").select("active, is_launch").eq("slug", SEED_CHARACTER).single();
+  if (error) fail(`could not read ${SEED_CHARACTER}: ${error.message}`);
+  const { error: updateError } = await admin.from("characters").update({ active: true, is_launch: true }).eq("slug", SEED_CHARACTER);
+  if (updateError) fail(`could not activate ${SEED_CHARACTER}: ${updateError.message}`);
+  return data as CharacterState;
+}
+
 export default async function setup(project: TestProject) {
   const stack = readLocalStack();
   assertLocalSupabaseUrl(stack.url);
@@ -107,6 +123,7 @@ export default async function setup(project: TestProject) {
   seedSampleCharacter(stack);
 
   const admin = createServiceClient(stack);
+  const seededSample = await activateSampleCharacter(admin);
   const { data, error } = await admin.from("app_feature_flags").select("key, enabled").in("key", [...E2E_FLAG_KEYS]);
   if (error) fail(`could not read feature flags: ${error.message}`);
   const previous = new Map((data ?? []).map((row) => [row.key as E2eFlagKey, row.enabled as boolean]));
@@ -124,5 +141,7 @@ export default async function setup(project: TestProject) {
       const { error: deleteError } = await admin.from("app_feature_flags").delete().in("key", unset);
       if (deleteError) console.warn(`test:e2e: could not unset ${unset.join(", ")}: ${deleteError.message}`);
     }
+    const { error: sampleError } = await admin.from("characters").update(seededSample).eq("slug", SEED_CHARACTER);
+    if (sampleError) console.warn(`test:e2e: could not restore ${SEED_CHARACTER}: ${sampleError.message}`);
   };
 }

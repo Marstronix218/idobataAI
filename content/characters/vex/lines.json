@@ -1,0 +1,144 @@
+{
+  "$schema": "../schema/lines.schema.json",
+  "placeholder": true,
+  "lines": [
+    {
+      "id": "vex.task_started.001",
+      "event": "task_started",
+      "text": "QUEST ACCEPTED: {task}. The dungeon trembles, as it should."
+    },
+    {
+      "id": "vex.task_started.002",
+      "event": "task_started",
+      "text": "{task}. I once ruled a continent, and I declare this quest equally epic. Onward."
+    },
+    {
+      "id": "vex.task_started.003",
+      "event": "task_started",
+      "text": "Quest log updated: {task}. Objective one: begin. Reward: glory, and also the task being done."
+    },
+    {
+      "id": "vex.task_started.004",
+      "event": "task_started",
+      "text": "{task}: an ancient quest from the bottom of the scroll. Legendary loot drops for those who return to it.",
+      "task_age_bucket": "stale"
+    },
+    {
+      "id": "vex.task_started.005",
+      "event": "task_started",
+      "text": "A fresh quest, accepted the day it appeared: {task}. Speedrun energy. I approve.",
+      "task_age_bucket": "fresh"
+    },
+    {
+      "id": "vex.task_finished.001",
+      "event": "task_finished",
+      "text": "QUEST COMPLETE: {task}. +50 XP, +1 tidy dominion. Rest at the inn or accept the next quest; the choice is yours."
+    },
+    {
+      "id": "vex.task_finished.002",
+      "event": "task_finished",
+      "text": "{task} is defeated. Loot acquired: one less thing on the list. Buff active: +10 calm."
+    },
+    {
+      "id": "vex.task_finished.003",
+      "event": "task_finished",
+      "text": "The raid boss {task} has fallen. Bards will sing of it. Next quest, or a well-earned rest at the inn?"
+    },
+    {
+      "id": "vex.task_finished.004",
+      "event": "task_finished",
+      "text": "{task}, the quest that lingered for weeks, is CLEARED. Rare achievement unlocked. Claim your rest.",
+      "task_age_bucket": "weeks"
+    },
+    {
+      "id": "vex.task_finished.005",
+      "event": "task_finished",
+      "text": "QUEST COMPLETE: {task}. Even a former demon king stands in awe. Choose the next quest, or rest and restore mana."
+    },
+    {
+      "id": "vex.first_of_day.001",
+      "event": "first_of_day",
+      "text": "A new day dawns over the dominion. First quest: {task}. Daily bonus XP applies."
+    },
+    {
+      "id": "vex.first_of_day.002",
+      "event": "first_of_day",
+      "text": "The quest board refreshes. One cleared quest is enough to earn the day's XP."
+    },
+    {
+      "id": "vex.first_of_day.003",
+      "event": "first_of_day",
+      "text": "Daily quest unlocked: {task}. Party size: one legend."
+    },
+    {
+      "id": "vex.streak.001",
+      "event": "streak",
+      "text": "{task} cleared, and a few days in a row now. Combo multiplier active.",
+      "min_streak": 2,
+      "max_streak": 4
+    },
+    {
+      "id": "vex.streak.002",
+      "event": "streak",
+      "text": "Several days of cleared quests. The dominion grows. My studio apartment has never felt so mighty.",
+      "min_streak": 5,
+      "max_streak": 9
+    },
+    {
+      "id": "vex.streak.003",
+      "event": "streak",
+      "text": "Ten days and more of victories. Title earned: The Unwavering. Even my old armies never managed that.",
+      "min_streak": 10
+    },
+    {
+      "id": "vex.comeback.001",
+      "event": "comeback",
+      "text": "The hero returns. The quest board is fresh, and {task} glows upon it."
+    },
+    {
+      "id": "vex.comeback.002",
+      "event": "comeback",
+      "text": "Welcome back, adventurer. Full health, full mana, and a fresh quest board."
+    },
+    {
+      "id": "vex.comeback.003",
+      "event": "comeback",
+      "text": "The campaign continues. Today's quest: {task}. XP awaits."
+    },
+    {
+      "id": "vex.session_nudge.001",
+      "event": "session_nudge",
+      "text": "Even a demon king logs off. Close the app; the quest happens out in the world."
+    },
+    {
+      "id": "vex.session_nudge.002",
+      "event": "session_nudge",
+      "text": "This menu screen grants no XP. Close the app and go clear the quest."
+    },
+    {
+      "id": "vex.session_nudge.003",
+      "event": "session_nudge",
+      "text": "The inn is closing for now. Close the app and rest, or go adventuring."
+    },
+    {
+      "id": "vex.split_intro.001",
+      "event": "split_intro",
+      "text": "{task} is a raid boss. I have divided it into three phases. Phase one only, for now."
+    },
+    {
+      "id": "vex.split_intro.002",
+      "event": "split_intro",
+      "text": "Behold: {task}, split into three small quests. Each one drops loot."
+    },
+    {
+      "id": "vex.chapter_unlocked.001",
+      "event": "chapter_unlocked",
+      "text": "A new chapter of my dominion's history is unlocked. Read it at the inn, once the questing is done."
+    },
+    {
+      "id": "vex.chapter_unlocked.002",
+      "event": "chapter_unlocked",
+      "text": "Lore unlocked. The tale of my studio kingdom continues. It will keep until you rest."
+    }
+  ]
+}

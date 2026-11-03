@@ -276,8 +276,12 @@ do $$ begin
   if (select status from public.tasks where id='aaaaaaaa-2222-4000-8000-000000000002') <> 'completed' then
     raise exception 'task completion failed with the flag off';
   end if;
-  if exists(select 1 from public.task_events) then raise exception 'task events were written with the flag off'; end if;
-  if exists(select 1 from public.story_progress) then raise exception 'story progress was written with the flag off'; end if;
+  -- Scoped to this fixture's task and owner so rows from other local use don't interfere.
+  if exists(select 1 from public.task_events where task_id='aaaaaaaa-2222-4000-8000-000000000002') then raise exception 'task events were written with the flag off'; end if;
+  if exists(
+    select 1 from public.story_progress
+    where user_id=(select owner_id from public.tasks where id='aaaaaaaa-2222-4000-8000-000000000002')
+  ) then raise exception 'story progress was written with the flag off'; end if;
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -505,7 +509,9 @@ update public.user_coach_profiles set ai_arm='ai' where user_id='aaaaaaaa-1111-4
 insert into public.character_reactions(user_id, task_event_id, character_id, event, source, line_id, text, disclosure_shown)
 select e.user_id, e.id, 'c0000000-0000-4000-8000-000000000001', 'task_finished', 'prewritten',
   'test-coach.task_finished.001', 'Done. Next one, or rest.', true
-from public.task_events e where e.type='finished';
+from public.task_events e
+where e.type='finished'
+  and e.user_id in ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb');
 
 -- One reaction per task event; reactions without an event are unconstrained.
 do $$

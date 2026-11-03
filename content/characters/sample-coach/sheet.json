@@ -27,5 +27,6 @@
   "art_url": null,
   "is_launch": true,
   "pack_sku": null,
-  "companion_slug": null
+  "companion_slug": null,
+  "active": false
 }

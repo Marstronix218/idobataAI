@@ -1,0 +1,144 @@
+{
+  "$schema": "../schema/lines.schema.json",
+  "placeholder": true,
+  "lines": [
+    {
+      "id": "akari.task_started.001",
+      "event": "task_started",
+      "text": "{task}. One clean cut. Begin with the first stroke and let the rest wait."
+    },
+    {
+      "id": "akari.task_started.002",
+      "event": "task_started",
+      "text": "The road to {task} begins with a single step. Take it now, unhurried."
+    },
+    {
+      "id": "akari.task_started.003",
+      "event": "task_started",
+      "text": "Begin {task} as you would dawn practice: no hurry, no audience, full attention."
+    },
+    {
+      "id": "akari.task_started.004",
+      "event": "task_started",
+      "text": "{task} has waited a long time. A patient blade is not a dull one. Begin.",
+      "task_age_bucket": "stale"
+    },
+    {
+      "id": "akari.task_started.005",
+      "event": "task_started",
+      "text": "Written today, begun today. {task} will have no time to grow heavy.",
+      "task_age_bucket": "fresh"
+    },
+    {
+      "id": "akari.task_finished.001",
+      "event": "task_finished",
+      "text": "{task} is complete. Sheathe the blade, breathe, then choose: the next task, or rest."
+    },
+    {
+      "id": "akari.task_finished.002",
+      "event": "task_finished",
+      "text": "{task} is done, and patience is visible in its edges. Take the next stage of the road when you are ready."
+    },
+    {
+      "id": "akari.task_finished.003",
+      "event": "task_finished",
+      "text": "It is finished: {task}. You returned to it, and that is what I noticed. Rest a while, or begin the next."
+    },
+    {
+      "id": "akari.task_finished.004",
+      "event": "task_finished",
+      "text": "{task} sat on the road for weeks, and today you walked it. Rest before the next stage.",
+      "task_age_bucket": "weeks"
+    },
+    {
+      "id": "akari.task_finished.005",
+      "event": "task_finished",
+      "text": "{task}, complete. One cut, cleanly made. Step away and let the ink dry."
+    },
+    {
+      "id": "akari.first_of_day.001",
+      "event": "first_of_day",
+      "text": "A new day on the road. {task} is the first step; take it calmly."
+    },
+    {
+      "id": "akari.first_of_day.002",
+      "event": "first_of_day",
+      "text": "Dawn practice begins with one form. Today, that form is {task}."
+    },
+    {
+      "id": "akari.first_of_day.003",
+      "event": "first_of_day",
+      "text": "A new day. One task, done with care, is a worthy beginning."
+    },
+    {
+      "id": "akari.streak.001",
+      "event": "streak",
+      "text": "{task} is done. Day after day, you return to the work. That is how a path is worn into a hillside.",
+      "min_streak": 2,
+      "max_streak": 4
+    },
+    {
+      "id": "akari.streak.002",
+      "event": "streak",
+      "text": "The days are adding up. Steady practice outlasts any single brilliant stroke.",
+      "min_streak": 5,
+      "max_streak": 9
+    },
+    {
+      "id": "akari.streak.003",
+      "event": "streak",
+      "text": "Ten days and more of returning to the work. My teacher would have nodded once, and that nod was rare.",
+      "min_streak": 10
+    },
+    {
+      "id": "akari.comeback.001",
+      "event": "comeback",
+      "text": "Welcome back to the road. Today is a fresh stage, and {task} is today's step."
+    },
+    {
+      "id": "akari.comeback.002",
+      "event": "comeback",
+      "text": "You have returned, and the road is still here. One step is all today asks."
+    },
+    {
+      "id": "akari.comeback.003",
+      "event": "comeback",
+      "text": "Welcome back. The journey continues today, with {task}."
+    },
+    {
+      "id": "akari.session_nudge.001",
+      "event": "session_nudge",
+      "text": "Enough planning. A blade is not sharpened by looking at it. Close the app and begin."
+    },
+    {
+      "id": "akari.session_nudge.002",
+      "event": "session_nudge",
+      "text": "The road is out there, not on this screen. Close the app and take the next step."
+    },
+    {
+      "id": "akari.session_nudge.003",
+      "event": "session_nudge",
+      "text": "Rest is also practice. If the work is done, close the app and rest."
+    },
+    {
+      "id": "akari.split_intro.001",
+      "event": "split_intro",
+      "text": "{task} is a long road. Here it is in three short stages; walk only the first for now."
+    },
+    {
+      "id": "akari.split_intro.002",
+      "event": "split_intro",
+      "text": "Too large for one cut. Three smaller ones, then: begin with the first and let the others wait."
+    },
+    {
+      "id": "akari.chapter_unlocked.001",
+      "event": "chapter_unlocked",
+      "text": "A new chapter of my journey is open. Read it later, when the work is resting."
+    },
+    {
+      "id": "akari.chapter_unlocked.002",
+      "event": "chapter_unlocked",
+      "text": "Another day of steady work, and the road reveals a new chapter. It will keep until you have time."
+    }
+  ]
+}

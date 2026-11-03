@@ -137,6 +137,8 @@ Before any **production** use, a real age-verification provider is required. Pro
   - The seed runs the same linter as the tests.
   - It upserts characters, lines and chapters, and retires anything removed. It never deletes.
   - It refuses to send placeholder characters to a non-local database unless you pass `--allow-placeholder`. Use that only for a staging beta.
+  - The launch cast is Akari, North, Ember, Kage and Vex, reusing the existing personas' art (`companion_slug`). Their copy is a DRAFT (`"placeholder": true`) awaiting founder review, so seeding staging needs `--allow-placeholder` until it is final.
+  - `sample-coach` is retired (`"active": false`). The e2e setup turns it back on, on the local stack only.
 - **Writing real characters:** the content format and lint rules are in [content/characters/README.md](../../content/characters/README.md). The spec asks for 300+ lines and 30 chapters per character, and a launch cast of 3–5 picked from the existing personas.
 
 ---
@@ -157,7 +159,7 @@ The daily cron logs a structured warning when cost goes above the alert threshol
 
 ## 7. `npm run launch-check`
 
-It fails today with **49 items**, grouped as:
+It fails today with **53 items**, grouped as:
 
 | Group | Items |
 |---|---|
@@ -165,7 +167,7 @@ It fails today with **49 items**, grouped as:
 | Age verification still self-attested | 3 |
 | `/safety` still a placeholder | 3 |
 | `TODO(founder)` markers anywhere in app, mobile, content and Pivot A migration code (§8) | 30 |
-| Placeholder sample character still active | 1 |
+| Launch characters still on draft (placeholder) copy | 5 |
 | Unticked manual confirmations in [LAUNCH_CONFIRMATIONS.md](LAUNCH_CONFIRMATIONS.md) | 8 |
 
 Run it any time for the exact list with file and line numbers. It makes no network or database calls.
@@ -179,7 +181,7 @@ Run it any time for the exact list with file and line numbers. It makes no netwo
 - Decide on a policy for existing accounts that turn out to be under 18 (`src/components/onboarding/pivot-onboarding.tsx:66`).
 - Get a clinical review of the distress protocol: keywords, the model check, refusals counted as "possible", and the 300-per-day cap on model checks (`src/lib/safety/distress.ts:23`, `src/lib/safety/keywords.ts:5`).
 - Have counsel confirm the AI reminder wording and cadence for New York (`src/lib/reactions/engine.ts:373`).
-- Write the final character copy and choose the launch cast. `content/characters/sample-coach` is a placeholder.
+- Review and expand the launch cast's copy. The cast is Akari, North, Ember, Kage and Vex (`content/characters/<slug>/`), with DRAFT copy (`"placeholder": true`, 26 lines and 3 chapters each). The spec asks for 300+ lines and 30 chapters each. Set `"placeholder": false` in all three files once the copy is final.
 - Set up Stripe and App Store products. This is deferred, since billing was skipped. The stashed Phase 6 work (§9) includes a draft `docs/pivot-a/IOS_ENTITLEMENTS.md` describing how App Store purchases would write the same `entitlements` table.
 - Decide whether to purge or keep the legacy persona chat transcripts (D14).
 

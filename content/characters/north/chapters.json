@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/chapters.schema.json",
+  "placeholder": true,
+  "chapters": [
+    {
+      "number": 1,
+      "title": "The Whole Session",
+      "body": "For three years, North's warm-up had been longer than most people's workouts. Cameras followed him into the gym. Sponsors counted his medals out loud.\n\nThen he lost the final, in front of everyone, and the cameras went somewhere else.\n\nHis first morning back, the gym was empty except for a janitor and a radio. North started his old warm-up, the way he always had. Halfway through, he sat on the bench for a long minute.\n\nToday, the warm-up would be the whole session.\n\nHe finished it anyway, at the pace he actually had, not the pace his trophies remembered. Then he opened a cheap paper logbook with a cartoon on the cover and wrote one line in plain numbers.\n\nIt was a small number. He looked at it and decided it was honest, which made it a good one.\n\nOn the way out, the janitor nodded at him. \"Back tomorrow?\"\n\n\"Day after,\" North said. \"Tomorrow is a rest day. That is part of the plan now.\"",
+      "unlock_rule": { "consistency_days": 1 }
+    },
+    {
+      "number": 2,
+      "title": "The Timestamp",
+      "body": "North had avoided the footage for a month. Everyone else had watched it. Somebody had even made a slow-motion version with dramatic music.\n\nOn a rest day, he finally sat down with his logbook and watched the whole final round without looking away.\n\nIt was strange. In his memory, the mistake was enormous, a single moment that swallowed the match. On the screen, it lasted 2.4 seconds. It had a timestamp: 41:07. He could pause it. He could point at it.\n\nThe mistake was smaller when it had a timestamp.\n\nHe wrote down one adjustment, not ten: footwork on the second exchange. Then he closed the laptop before the slow-motion version could start, made a proper lunch, and spent the afternoon doing nothing heroic at all.\n\nThat evening his phone buzzed. It was Sol Arden, the champion who had beaten him. \"Exhibition match on Saturday. Come and watch. I need someone in the crowd who will notice my footwork.\"\n\nNorth read it twice, laughed, and wrote back: \"I will be there. Bring your best.\"",
+      "unlock_rule": { "consistency_days": 2 }
+    },
+    {
+      "number": 3,
+      "title": "Front Row",
+      "body": "North went to the exhibition as a spectator, with a cap pulled low and the paper logbook in his jacket pocket.\n\nSol Arden was sharp: faster than at the final, steadier on the second exchange. North caught himself taking notes on his rival's footwork and did not stop. Good, he thought. I do not want an easier road back.\n\nAfterwards, Sol found him by the vending machines.\n\n\"You noticed the footwork,\" Sol said.\n\n\"Second exchange. You fixed it.\"\n\n\"I watched the final too,\" Sol admitted. \"My half of it. There is a mistake at 38:52 that nobody mentions, because I won.\"\n\nThey compared logbooks on the steps outside. Sol's had more numbers. North's had more rest days. Sol studied the rest days for a long moment and said, \"Huh. Maybe there is something in that.\"\n\nOn the train home, North wrote his first public update since the final. It said he was training again, slowly, and that he was not ready yet. Honesty felt heavier than the training bar. He posted it anyway, put his phone away, and watched the city go by for the rest of the ride.",
+      "unlock_rule": { "consistency_days": 3 }
+    }
+  ]
+}

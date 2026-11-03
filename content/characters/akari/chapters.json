@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/chapters.schema.json",
+  "placeholder": true,
+  "chapters": [
+    {
+      "number": 1,
+      "title": "Seventy-Three Characters",
+      "body": "At the mountain temple, Akari copied the old records by lamplight. Her hand was steady; her patience was not. On the seventy-third repetition of the same character, the brush slipped, and the stroke came out worse than the first.\n\nShe laughed quietly and kept going.\n\nNear dawn, in the margin of a ledger nobody had opened in years, she found a note in a hand she knew: her teacher's. Beside it was a private name, one her teacher had used with a single old friend. That friend, the monks said, was the swordsman who had once defeated her teacher in front of the whole valley, and then simply walked away.\n\nAkari did not want a duel. She had sworn never to draw her blade without need, and she meant it. What she wanted was an answer: why had her teacher kept this name so carefully, all these years?\n\nShe finished the records, cleaned her brush and bowed to the monks. Then she packed rice, paper and ink, and took the road east, one step at a time.",
+      "unlock_rule": { "consistency_days": 1 }
+    },
+    {
+      "number": 2,
+      "title": "The Widow's Gate",
+      "body": "Three villages east, the road ran past a garden gate that would not close. An elderly widow watched Akari stop and study the hinge.\n\n\"Samurai do not mend gates,\" the widow said.\n\n\"This one does,\" said Akari, and asked to borrow a chisel.\n\nIt took the whole afternoon. The wood was old, and the first peg split. Akari did not hurry. She carved a second peg, then a third, until the gate swung shut with a soft and certain click.\n\nThe widow paid in rice, directions and a rumor. A traveler with a sheathed sword and an ink-stained sleeve had passed through the year before, she said, asking after shrines whose plaques needed repainting.\n\n\"He spoke kindly of an old rival,\" she added. \"He said the rival was the better calligrapher, and that he had never told them so.\"\n\nAkari wrote the words down exactly, though the ink was cheap and her hands were tired. She slept in the widow's storeroom, and left at first light with a full rice bag and a lighter step.",
+      "unlock_rule": { "consistency_days": 2 }
+    },
+    {
+      "number": 3,
+      "title": "Ink at the Empty Shrine",
+      "body": "The trail reached Nara in light rain. Akari found the shrine at the top of a mossy stair: empty, swept clean and quiet. On the top step lay one fresh sandal print. She would not call that nothing.\n\nInside, a new wooden plaque hung beside the old ones. The brushwork was strong and unhurried, and every character ended in a small hooked flourish that Akari had seen in only one place: her teacher's practice sheets.\n\nSo the two of them had once studied side by side, long before the famous defeat. Perhaps the defeat had never been the whole story.\n\nThe shrine keeper, an old man with a broom, said the visitor came on the first morning of every month to sweep the steps and repaint whatever had faded. He never stayed for tea.\n\nAkari looked at the long stair, at the broom and at the faded plaques. Then she set down her travel pack and asked for a second broom.\n\n\"I will wait,\" she said. \"But I will not wait doing nothing.\"\n\nShe swept until the rain stopped, practiced her characters until the light failed, and slept well. The first of the month was eleven days away. Each of them would have its work.",
+      "unlock_rule": { "consistency_days": 3 }
+    }
+  ]
+}

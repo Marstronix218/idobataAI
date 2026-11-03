@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/chapters.schema.json",
+  "placeholder": true,
+  "chapters": [
+    {
+      "number": 1,
+      "title": "Operation White Shirt",
+      "body": "Mission file 06. Objective: laundry extraction.\n\nKage entered the laundry room of his apartment building at 06:00, when the machines were cold and the corridor was empty. He moved without sound. The detergent was measured precisely. The white shirt went in with the whites, and only the whites.\n\nHe waited beside the machine for thirty-eight minutes, perfectly still, in case it attempted anything.\n\nIt did not.\n\nThe extraction went cleanly. The shirt emerged bright. Kage folded it into a square so exact that a neighbor passing with a basket of towels stopped to look.\n\n\"Wow,\" said the neighbor.\n\nKage said nothing. Silence is the only acceptable mission report.\n\nBack in his apartment, he counted the socks. Nine. Nine is not a number that socks come in.\n\nHe checked the drum. He checked the lint trap. He checked behind the machine with a flashlight. The tenth sock was not there.\n\nHe wrote the debrief in a small black notebook: Operation White Shirt, complete. Sock count: nine. Assessment: another operative is likely involved.\n\nThen he went to bed at a sensible hour. A good operative rests. But he left the notebook open.",
+      "unlock_rule": { "consistency_days": 1 }
+    },
+    {
+      "number": 2,
+      "title": "The Kettle Problem",
+      "body": "Mission file 07. Objective: prepare tea without waking the kettle.\n\nAt 00:14, Kage required tea. This was not the problem. The kettle was the problem.\n\nThe kettle whistled. Loudly, every time, as if reporting Kage's position to the entire building. In all of his training, Kage had never met an operative so loud.\n\nHe tried filling it halfway. It whistled. He tried lifting it off the heat a few seconds early. It sighed in a way that was somehow louder than whistling. He tried standing next to it and staring at it with great seriousness. This had no effect, but it felt correct.\n\nFinally, he lifted the little whistle cap off the spout and set it on the counter.\n\nThe water boiled in perfect silence.\n\nKage poured the tea and sat by the window in the dark, drinking it slowly while the city hummed below. The kettle sat on the stove, uncapped and quiet, looking, if a kettle can look like anything, outmaneuvered.\n\nHe wrote in the notebook: Tea brewed at 00:14. The kettle was the loudest operative. It will be retrained.\n\nThen he washed the cup, dried it, and went to sleep.",
+      "unlock_rule": { "consistency_days": 2 }
+    },
+    {
+      "number": 3,
+      "title": "The Front Desk",
+      "body": "Mission file 08. Objective: recover the package from the front desk.\n\nThe package had arrived on Tuesday. The front desk was staffed by Mrs. Oda, the building concierge, who noticed everything.\n\nKage approached at 14:00, when the lobby was quiet. He walked close to the wall. He did not brush the potted fern. He arrived at the desk without a sound.\n\n\"Hello, Kage,\" said Mrs. Oda, without looking up.\n\nHe froze. Eye contact had been made. Operational stealth required review.\n\n\"Package for you,\" she said, sliding a box across the counter. \"And this turned up in the laundry room lost-and-found. It's yours, isn't it?\"\n\nOn top of the box sat a single gray sock. The tenth sock.\n\nKage looked at the sock. He looked at Mrs. Oda. She was smiling slightly, the way an operative smiles when a mission has gone exactly to plan.\n\n\"Thank you,\" he said. It was the longest sentence he had spoken all week.\n\nUpstairs, he matched the sock to its partner and closed two files at once. Mission 06: sock count ten, complete. Mission 08: package secured.\n\nAssessment: the other operative had been on our side all along.",
+      "unlock_rule": { "consistency_days": 3 }
+    }
+  ]
+}

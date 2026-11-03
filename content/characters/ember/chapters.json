@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/chapters.schema.json",
+  "placeholder": true,
+  "chapters": [
+    {
+      "number": 1,
+      "title": "Twenty-Three Croissants",
+      "body": "Ember's bakery opened at six, which meant Ember's ovens opened at four, which meant Ember was up at half past three, warming her hands over a flame she had made herself.\n\nFire mages, the guild had promised her, make perfect bakers. Perfect heat, every time.\n\nThe guild had never met Ember's croissants.\n\nThis morning's scorecard, chalked on the board behind the counter, read: Croissants: 23. Perfectly golden: 22. Accidentally incinerated: 1. Ember underlined the 22 twice and drew a small, sympathetic face next to the 1.\n\n\"We are improving,\" she told Pip, her apprentice, who was fanning smoke away from the alarm with a baking tray.\n\n\"You say that every day,\" said Pip.\n\n\"And every day it is true.\"\n\nThe first customer was Mr. Haddad from the flower shop, who bought two croissants and pointed at the burn mark on the awning outside. \"Is that new?\"\n\n\"That,\" said Ember, \"is branding.\"\n\nHe liked that so much he told the whole street. By noon, three people had asked whether the scorch mark was a logo. By closing time, Ember had decided it was.",
+      "unlock_rule": { "consistency_days": 1 }
+    },
+    {
+      "number": 2,
+      "title": "Ordinary Temperature",
+      "body": "The order came in on a Tuesday: chocolate truffles for the community kitchen's winter fair, two hundred of them, glossy and smooth.\n\nTempered chocolate needs gentle, exact heat. Ember's magic, on its best day, was neither gentle nor exact.\n\n\"No magic,\" she announced, rolling up her sleeves. \"We do this at ordinary temperature, like everyone else.\"\n\nIt took four tries. The first batch went dull and streaky. The second seized into something Pip described as a geological event. The third was nearly right, until Ember got excited and her fingertips began to glow.\n\nOn the fourth try, she hummed to stay calm and kept her hands well away from the bowl between steps. The chocolate turned glossy and snapped cleanly. Her pride, she told Pip, now required its own cooling rack.\n\nThey delivered forty warm rolls along with the truffles. One roll, which had been standing a little too close to Ember during the excitement, kept gently smoking in the basket. She apologized to it quietly and tucked it under a napkin.\n\nThe fair's organizer tried a truffle and closed her eyes. \"Perfect,\" she said.\n\nEmber counted that as two hundred wins and one tiny disaster. Excellent odds.",
+      "unlock_rule": { "consistency_days": 2 }
+    },
+    {
+      "number": 3,
+      "title": "The Loaf That Growls",
+      "body": "Ember's newest experiment was a sourdough that could warm itself on command. It worked wonderfully. It also growled at the bread knife.\n\n\"Partial success,\" she wrote on the chalkboard.\n\nThe neighborhood children named it Biscuit, which annoyed the loaf, because it was not a biscuit. It sat in a place of honor by the window and rumbled softly whenever anyone said the word \"slice.\"\n\nMeanwhile, Pip was finally ready to learn the ember oven, the big old one at the back that only answered to fire magic. Ember showed Pip how to read the color of the flame instead of the dial, how to wait for the hum, and when to step back. Nobody lost an eyebrow. Pip said that should not be the headline. Ember said it absolutely should.\n\nThat evening, after the last customer, Ember turned the lights down and sat on the flour sacks with a mug of something warm. The ovens ticked as they cooled. Biscuit purred in its basket. The scorecard said: Loaves: 41. Perfect: 39. Sentient: 1.\n\nShe decided that counted as a very good day, brushed the chalk off her hands, and went home to rest.",
+      "unlock_rule": { "consistency_days": 3 }
+    }
+  ]
+}

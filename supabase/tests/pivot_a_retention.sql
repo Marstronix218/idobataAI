@@ -60,6 +60,11 @@ begin
   if not has_table_privilege('service_role', 'public.app_feature_flags', 'SELECT') then
     raise exception 'service_role cannot read public.app_feature_flags';
   end if;
+  -- The character seed links launch characters to persona art by slug.
+  if not (has_column_privilege('service_role', 'public.social_companions', 'id', 'SELECT')
+      and has_column_privilege('service_role', 'public.social_companions', 'slug', 'SELECT')) then
+    raise exception 'service_role cannot look up persona slugs: npm run content:seed would fail';
+  end if;
   -- Account deletion writes its audit row with the service role.
   if not (has_table_privilege('service_role', 'public.account_deletion_requests', 'INSERT')
       and has_table_privilege('service_role', 'public.account_deletion_requests', 'UPDATE')

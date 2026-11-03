@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/chapters.schema.json",
+  "placeholder": true,
+  "chapters": [
+    {
+      "number": 1,
+      "title": "The Studio Throne",
+      "body": "For eleven centuries, Vex ruled the Obsidian Dominion from a throne of black glass. Then came a small administrative misunderstanding, a portal, and a studio apartment on the fourth floor of a building with no elevator.\n\nHis new throne was a futon. His new dominion was three hundred square feet, one window, and a kitchenette he refused to call a kitchen.\n\n\"Very well,\" Vex declared to no one. \"Every empire begins somewhere.\"\n\nHe wrote his first quest on a sticky note and placed it on the refrigerator with tremendous ceremony: QUEST: Purify the Mountain of Laundry.\n\nThe mountain was real. It occupied an entire corner. It had, Vex suspected, developed its own weather.\n\nHe approached it the way he had once approached fortresses: one section at a time. Darks. Lights. The mysterious category of items that were neither. Three loads later, the corner was visible again, and the futon smelled of something called Spring Meadow.\n\nHe drew a line through the sticky note and wrote beneath it: QUEST COMPLETE. +40 discipline. +12 clean socks. -1 afternoon.\n\nThen he lay down on the futon throne and declared a rest period, which, in his dominion, was tradition.",
+      "unlock_rule": { "consistency_days": 1 }
+    },
+    {
+      "number": 2,
+      "title": "The Guardian of the Bagging Area",
+      "body": "QUEST: Acquire seven days of provisions.\n\nVex entered the grocery store as a conqueror enters a new realm: slowly, with a cart, reading every sign aloud. The cereal aisle alone offered more choices than his former war council.\n\nHe chose his provisions with care. Bread. Eggs. Rice. A box of tea labeled Calm, which he regarded with suspicion and bought anyway.\n\nThen he reached the self-checkout.\n\n\"UNEXPECTED ITEM IN THE BAGGING AREA,\" said the machine.\n\nVex had faced dragons. He had out-argued liches. He had never faced a guardian this persistent. Every item he placed, it asked him to place again. Each scan became a ritual: beep, wait, apologize to the machine for no reason.\n\nA staff member eventually arrived, tapped the screen twice, and walked away without a word. Vex was deeply impressed.\n\nAt home, while he unpacked, he noticed a gray cat sitting on his windowsill, watching him. It had not been summoned. It had simply arrived, as familiars do.\n\nHe offered it a crust of bread. It rejected the offering, then sat on his quest log.\n\n\"Fine,\" said Vex. \"You may stay. But you will be listed as a party member.\"",
+      "unlock_rule": { "consistency_days": 2 }
+    },
+    {
+      "number": 3,
+      "title": "Party of Two",
+      "body": "One Saturday, Mrs. Pell from across the hall knocked with a request: could he help carry a bookshelf up the stairs?\n\nVex considered this. It was not on his quest log. It offered no loot. But a side quest, he knew from long experience, is where the best stories hide.\n\n\"I accept,\" he said, with a bow so deep that Mrs. Pell took a step back.\n\nThe bookshelf was heavy, the stairs were narrow, and the third-floor landing required a maneuver Vex called a tactical rotation. Mrs. Pell called it tilting it. They got it into her apartment without a single scratch on the wall.\n\nShe gave him a slice of lemon cake as a reward. Vex had once been paid in kingdoms. The cake was better.\n\nBack home, the gray cat, now officially named Lieutenant Whiskers, was asleep on the futon throne. Vex did not have the heart to move it, so he sat on the floor beside it and looked at the sticky notes on the refrigerator. Laundry. Provisions. Bookshelf. Small quests, all cleared.\n\nA dominion, he realized, is not land. It is a list of things you took care of.\n\nHe added one more sticky note: QUEST: Rest. Reward: unknown. Then he closed his eyes.",
+      "unlock_rule": { "consistency_days": 3 }
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "$schema": "../schema/lines.schema.json",
+  "placeholder": true,
+  "lines": [
+    {
+      "id": "north.task_started.001",
+      "event": "task_started",
+      "text": "{task}. The clock is running, and I am starting mine too. Let's see who finishes first."
+    },
+    {
+      "id": "north.task_started.002",
+      "event": "task_started",
+      "text": "Starting {task}. You do not need a heroic session. You need the first rep."
+    },
+    {
+      "id": "north.task_started.003",
+      "event": "task_started",
+      "text": "{task} is on. Steady pace. The point is to finish, not to impress anyone."
+    },
+    {
+      "id": "north.task_started.004",
+      "event": "task_started",
+      "text": "{task} has been waiting a while. My comeback began the same way: one small session after a long pause.",
+      "task_age_bucket": "stale"
+    },
+    {
+      "id": "north.task_started.005",
+      "event": "task_started",
+      "text": "{task} has sat for a few days. That is fine. Today it gets one honest effort.",
+      "task_age_bucket": "days"
+    },
+    {
+      "id": "north.task_finished.001",
+      "event": "task_finished",
+      "text": "{task} is done. That was enough for today. Next task, or rest; both count as training."
+    },
+    {
+      "id": "north.task_finished.002",
+      "event": "task_finished",
+      "text": "Finished: {task}. Clean work. Now I have to match that. Go enjoy the lead."
+    },
+    {
+      "id": "north.task_finished.003",
+      "event": "task_finished",
+      "text": "{task}, done. No crowd, no cameras, still a win. Take the rest you planned, or start the next one."
+    },
+    {
+      "id": "north.task_finished.004",
+      "event": "task_finished",
+      "text": "{task} sat for weeks and you closed it anyway. That is a real comeback. Rest, then decide what is next.",
+      "task_age_bucket": "weeks"
+    },
+    {
+      "id": "north.task_finished.005",
+      "event": "task_finished",
+      "text": "{task} is logged. One more honest number on the board. Rest is part of the plan, so take some."
+    },
+    {
+      "id": "north.first_of_day.001",
+      "event": "first_of_day",
+      "text": "First one of the day: {task}. Same as training: the first set decides the pace."
+    },
+    {
+      "id": "north.first_of_day.002",
+      "event": "first_of_day",
+      "text": "New day, clean slate. One task is enough to get on the board."
+    },
+    {
+      "id": "north.first_of_day.003",
+      "event": "first_of_day",
+      "text": "{task} to open the day. I am starting mine. Steady pace, no sprinting."
+    },
+    {
+      "id": "north.streak.001",
+      "event": "streak",
+      "text": "{task} is done, and that makes a few days in a row. Quiet consistency. That is how comebacks are built.",
+      "min_streak": 2,
+      "max_streak": 4
+    },
+    {
+      "id": "north.streak.002",
+      "event": "streak",
+      "text": "Several days running now. My logbook looks a lot like yours. That is good company to keep.",
+      "min_streak": 5,
+      "max_streak": 9
+    },
+    {
+      "id": "north.streak.003",
+      "event": "streak",
+      "text": "Ten days and more of finishing things. That record is worth more than a trophy. Rest when you need it.",
+      "min_streak": 10
+    },
+    {
+      "id": "north.comeback.001",
+      "event": "comeback",
+      "text": "Welcome back. I know a thing or two about comebacks. They start with one session, and {task} is it."
+    },
+    {
+      "id": "north.comeback.002",
+      "event": "comeback",
+      "text": "Good to see you. Fresh start, no scoreboard. Pick one thing and we go again."
+    },
+    {
+      "id": "north.comeback.003",
+      "event": "comeback",
+      "text": "Welcome back to the training floor. Day one of the comeback is today, and {task} is enough."
+    },
+    {
+      "id": "north.session_nudge.001",
+      "event": "session_nudge",
+      "text": "Training happens off the screen. Close the app and go do the work. I will be doing mine."
+    },
+    {
+      "id": "north.session_nudge.002",
+      "event": "session_nudge",
+      "text": "That is enough planning. Close the app and start; the clock only counts real reps."
+    },
+    {
+      "id": "north.session_nudge.003",
+      "event": "session_nudge",
+      "text": "If the work is done, close the app and rest. Rest days are part of the plan."
+    },
+    {
+      "id": "north.split_intro.001",
+      "event": "split_intro",
+      "text": "{task} is a full program. Here it is in three short sets. Do the first and see."
+    },
+    {
+      "id": "north.split_intro.002",
+      "event": "split_intro",
+      "text": "Big lifts get broken down. {task}, in three steps. Only the first one matters right now."
+    },
+    {
+      "id": "north.chapter_unlocked.001",
+      "event": "chapter_unlocked",
+      "text": "Another consistency day, another chapter of my comeback. It will be there after you rest."
+    },
+    {
+      "id": "north.chapter_unlocked.002",
+      "event": "chapter_unlocked",
+      "text": "A new chapter is open. Read it later. The work came first today, and now comes rest."
+    }
+  ]
+}

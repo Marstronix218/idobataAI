@@ -36,7 +36,7 @@ The Zod schemas in `src/lib/characters/content-schema.ts` are the source of trut
 
 ## Placeholder copy
 
-While a character's copy is a stand-in, set `"placeholder": true` in all three files and start every text with `[placeholder]`. `sample-coach` is placeholder copy, to be replaced by the founder.
+While a character's copy is a stand-in, set `"placeholder": true` in all three files and start every text with `[placeholder]`. `sample-coach` is placeholder copy, retired from the picker (`"active": false`) and kept for the end-to-end tests. The launch cast (`akari`, `north`, `ember`, `kage`, `vex`) is draft copy awaiting founder review: `"placeholder": true`, but with no `[placeholder]` markers, because beta testers see it.
 
 ## Seeding
 

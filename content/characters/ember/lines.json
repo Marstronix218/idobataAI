@@ -1,0 +1,144 @@
+{
+  "$schema": "../schema/lines.schema.json",
+  "placeholder": true,
+  "lines": [
+    {
+      "id": "ember.task_started.001",
+      "event": "task_started",
+      "text": "{task} is in the oven. Starting is the hardest part, and you already did it."
+    },
+    {
+      "id": "ember.task_started.002",
+      "event": "task_started",
+      "text": "Ooh, {task}. Preheating now. You bring the effort, and I will bring the cheering."
+    },
+    {
+      "id": "ember.task_started.003",
+      "event": "task_started",
+      "text": "Starting {task}. Even my croissants need a first fold. Go make yours."
+    },
+    {
+      "id": "ember.task_started.004",
+      "event": "task_started",
+      "text": "{task} has been proofing a long time. Some dough just needs extra rest. Today it bakes.",
+      "task_age_bucket": "stale"
+    },
+    {
+      "id": "ember.task_started.005",
+      "event": "task_started",
+      "text": "Written today, started today: {task}. That is a fresh-baked start.",
+      "task_age_bucket": "fresh"
+    },
+    {
+      "id": "ember.task_finished.001",
+      "event": "task_finished",
+      "text": "{task}: done. Scorecard: one task, zero burns. Next one, or a warm break?"
+    },
+    {
+      "id": "ember.task_finished.002",
+      "event": "task_finished",
+      "text": "You finished {task}. I am counting that as a perfect batch. Go enjoy something cozy."
+    },
+    {
+      "id": "ember.task_finished.003",
+      "event": "task_finished",
+      "text": "{task} is out of the oven, golden all the way through. Take a breather before the next tray."
+    },
+    {
+      "id": "ember.task_finished.004",
+      "event": "task_finished",
+      "text": "{task} waited weeks, and now it is done. Slow-proofed things are often the best ones. Rest a bit.",
+      "task_age_bucket": "weeks"
+    },
+    {
+      "id": "ember.task_finished.005",
+      "event": "task_finished",
+      "text": "Finished {task}. My last batch had one tiny disaster, and yours had none. Next task or a rest, your call."
+    },
+    {
+      "id": "ember.first_of_day.001",
+      "event": "first_of_day",
+      "text": "First batch of the day: {task}. The ovens are warm, and so is the cheering."
+    },
+    {
+      "id": "ember.first_of_day.002",
+      "event": "first_of_day",
+      "text": "New day at the bakery. One small task is a perfectly good first batch."
+    },
+    {
+      "id": "ember.first_of_day.003",
+      "event": "first_of_day",
+      "text": "{task} first today. Every good day at the bakery starts with one tray."
+    },
+    {
+      "id": "ember.streak.001",
+      "event": "streak",
+      "text": "{task} is done, and that makes a few days in a row. Scorecard: warm days, all of them.",
+      "min_streak": 2,
+      "max_streak": 4
+    },
+    {
+      "id": "ember.streak.002",
+      "event": "streak",
+      "text": "Days in a row: several. Perfect batches: every one. This is going on the bakery chalkboard.",
+      "min_streak": 5,
+      "max_streak": 9
+    },
+    {
+      "id": "ember.streak.003",
+      "event": "streak",
+      "text": "Ten days and counting. That is a whole display case of finished things. I am glowing. Literally, a little.",
+      "min_streak": 10
+    },
+    {
+      "id": "ember.comeback.001",
+      "event": "comeback",
+      "text": "Welcome back. The oven is warm, and {task} is a lovely first batch."
+    },
+    {
+      "id": "ember.comeback.002",
+      "event": "comeback",
+      "text": "Hi again. Fresh dough, fresh day. Just one small thing to start."
+    },
+    {
+      "id": "ember.comeback.003",
+      "event": "comeback",
+      "text": "Welcome back to the bakery. Today's first tray is {task}, and that is plenty."
+    },
+    {
+      "id": "ember.session_nudge.001",
+      "event": "session_nudge",
+      "text": "The oven timer says it is time to step away. Close the app and go do the thing."
+    },
+    {
+      "id": "ember.session_nudge.002",
+      "event": "session_nudge",
+      "text": "That is enough screen time for this batch. Close the app; the real baking happens out there."
+    },
+    {
+      "id": "ember.session_nudge.003",
+      "event": "session_nudge",
+      "text": "If you are done for now, close the app and rest. Dough needs resting time, and so do you."
+    },
+    {
+      "id": "ember.split_intro.001",
+      "event": "split_intro",
+      "text": "{task} is a big recipe. Here it is in three small steps. Just the first one for now."
+    },
+    {
+      "id": "ember.split_intro.002",
+      "event": "split_intro",
+      "text": "Let's portion {task} into three easy pieces. Step one is the only one on the counter."
+    },
+    {
+      "id": "ember.chapter_unlocked.001",
+      "event": "chapter_unlocked",
+      "text": "A new bakery chapter is open. It will stay warm until you have a quiet moment."
+    },
+    {
+      "id": "ember.chapter_unlocked.002",
+      "event": "chapter_unlocked",
+      "text": "Another good day, another chapter from the bakery. Save it for your break."
+    }
+  ]
+}

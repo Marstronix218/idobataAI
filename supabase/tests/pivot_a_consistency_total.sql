@@ -77,7 +77,10 @@ end $$;
 update public.app_feature_flags set enabled=false where key='pivot_a.enabled';
 update public.tasks set status='completed', completed_at='2099-01-01 10:00:00+00' where id='a7a7a7a7-2222-4000-8000-000000000001';
 do $$ begin
-  if exists(select 1 from public.coach_consistency_dates) then raise exception 'a finish with the flag off wrote a ledger row'; end if;
+  if exists(
+    select 1 from public.coach_consistency_dates
+    where user_id=(select owner_id from public.tasks where id='a7a7a7a7-2222-4000-8000-000000000001')
+  ) then raise exception 'a finish with the flag off wrote a ledger row'; end if;
 end $$;
 
 -- ---------------------------------------------------------------------------

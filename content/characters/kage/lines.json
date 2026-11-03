@@ -1,0 +1,144 @@
+{
+  "$schema": "../schema/lines.schema.json",
+  "placeholder": true,
+  "lines": [
+    {
+      "id": "kage.task_started.001",
+      "event": "task_started",
+      "text": "Objective: {task}. Proceed quietly."
+    },
+    {
+      "id": "kage.task_started.002",
+      "event": "task_started",
+      "text": "Operation {task} is live. Move in silence."
+    },
+    {
+      "id": "kage.task_started.003",
+      "event": "task_started",
+      "text": "{task}. Mission accepted. The shadows are in position."
+    },
+    {
+      "id": "kage.task_started.004",
+      "event": "task_started",
+      "text": "{task}: cold case, thirty days or more. Reopened. The element of surprise is yours.",
+      "task_age_bucket": "stale"
+    },
+    {
+      "id": "kage.task_started.005",
+      "event": "task_started",
+      "text": "{task} has been under observation for days. Today we move.",
+      "task_age_bucket": "days"
+    },
+    {
+      "id": "kage.task_finished.001",
+      "event": "task_finished",
+      "text": "{task}: complete. No witnesses. Stand down, or select the next objective."
+    },
+    {
+      "id": "kage.task_finished.002",
+      "event": "task_finished",
+      "text": "Mission report: {task}, done. Stealth rating acceptable. Recommended extraction: rest."
+    },
+    {
+      "id": "kage.task_finished.003",
+      "event": "task_finished",
+      "text": "{task}: secured. Next objective, or a period of silence."
+    },
+    {
+      "id": "kage.task_finished.004",
+      "event": "task_finished",
+      "text": "{task}: weeks-old file, now closed. Extraction complete. Rest is authorized.",
+      "task_age_bucket": "weeks"
+    },
+    {
+      "id": "kage.task_finished.005",
+      "event": "task_finished",
+      "text": "Objective {task}: cleared. The shadows approve. Next mission, or stand down."
+    },
+    {
+      "id": "kage.first_of_day.001",
+      "event": "first_of_day",
+      "text": "First objective of the day: {task}. Begin."
+    },
+    {
+      "id": "kage.first_of_day.002",
+      "event": "first_of_day",
+      "text": "New operational day. One objective is sufficient."
+    },
+    {
+      "id": "kage.first_of_day.003",
+      "event": "first_of_day",
+      "text": "Daily briefing. Primary objective: {task}. Secondary objective: none."
+    },
+    {
+      "id": "kage.streak.001",
+      "event": "streak",
+      "text": "{task}: complete. Consecutive operational days: a few. Pattern noted.",
+      "min_streak": 2,
+      "max_streak": 4
+    },
+    {
+      "id": "kage.streak.002",
+      "event": "streak",
+      "text": "Several consecutive days of cleared objectives. The laundry is concerned.",
+      "min_streak": 5,
+      "max_streak": 9
+    },
+    {
+      "id": "kage.streak.003",
+      "event": "streak",
+      "text": "Ten days and more of cleared objectives. File reclassified: exemplary.",
+      "min_streak": 10
+    },
+    {
+      "id": "kage.comeback.001",
+      "event": "comeback",
+      "text": "Operative returned. Mission resumes with {task}."
+    },
+    {
+      "id": "kage.comeback.002",
+      "event": "comeback",
+      "text": "Re-entry successful. Today's objective: {task}. Nothing else is on file."
+    },
+    {
+      "id": "kage.comeback.003",
+      "event": "comeback",
+      "text": "Welcome back to the shadows. Fresh file. One objective today."
+    },
+    {
+      "id": "kage.session_nudge.001",
+      "event": "session_nudge",
+      "text": "Briefing over. Close the app. The mission is out there."
+    },
+    {
+      "id": "kage.session_nudge.002",
+      "event": "session_nudge",
+      "text": "Screen time exceeds mission parameters. Close the app and move."
+    },
+    {
+      "id": "kage.session_nudge.003",
+      "event": "session_nudge",
+      "text": "A ninja does not linger. Close the app. Rest, or proceed to the objective."
+    },
+    {
+      "id": "kage.split_intro.001",
+      "event": "split_intro",
+      "text": "{task} is a large operation. Divided into three phases. Phase one only."
+    },
+    {
+      "id": "kage.split_intro.002",
+      "event": "split_intro",
+      "text": "Objective {task}: too large for one approach. Three phases follow."
+    },
+    {
+      "id": "kage.chapter_unlocked.001",
+      "event": "chapter_unlocked",
+      "text": "New mission file declassified. Review it later, after extraction."
+    },
+    {
+      "id": "kage.chapter_unlocked.002",
+      "event": "chapter_unlocked",
+      "text": "Another chapter of the file is open. It is not urgent. Rest first."
+    }
+  ]
+}
